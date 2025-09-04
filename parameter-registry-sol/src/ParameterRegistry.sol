@@ -50,15 +50,13 @@ contract ParameterRegistry is Ownable {
 
     constructor(address _owner, address _updater) Ownable(_owner) {
         if (_updater == address(0)) revert ZeroAddress();
-        updater = _updater;
-        emit UpdaterChanged(address(0), _updater);
+        emit UpdaterChanged(address(0), updater = _updater);
     }
 
     function setUpdater(address _updater) external onlyOwner {
         if (_updater == address(0)) revert ZeroAddress();
         address previousUpdater = updater;
-        updater = _updater;
-        emit UpdaterChanged(previousUpdater, _updater);
+        emit UpdaterChanged(previousUpdater, updater = _updater);
     }
 
     function setParametersForAsset(
