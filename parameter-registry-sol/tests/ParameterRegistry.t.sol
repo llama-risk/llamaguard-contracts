@@ -181,35 +181,6 @@ contract ParameterRegistryTest is Test {
         assertEq(maxApy2, 2000);
     }
 
-    function test_CalculateUpperBound() public {
-        vm.prank(updater);
-        registry.setParametersForAsset(
-            asset1,
-            "Asset One",
-            1000, // 10% APY
-            500, // 5% tolerance
-            300,
-            true,
-            true,
-            true
-        );
-
-        uint256 previousNav = 1e18; // 1 unit
-        uint256 previousTimestamp = block.timestamp - 1 days;
-
-        uint256 upperBound = registry.calculateUpperBound(asset1, previousNav, previousTimestamp);
-
-        assertTrue(upperBound > previousNav);
-    }
-
-    function test_CalculateUpperBound_RevertsIfAssetNotFound() public {
-        uint256 previousNav = 1e18;
-        uint256 previousTimestamp = block.timestamp - 1 days;
-
-        vm.expectRevert(ParameterRegistry.AssetNotFound.selector);
-        registry.calculateUpperBound(asset1, previousNav, previousTimestamp);
-    }
-
     function test_OwnershipTransfer() public {
         address newOwner = makeAddr("newOwner");
 

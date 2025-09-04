@@ -237,48 +237,4 @@ contract ParameterRegistry is Ownable {
     function assetExists(address asset) external view returns (bool) {
         return assetInfos[asset].exists;
     }
-
-    function calculateUpperBound(
-        address asset,
-        uint256 previousNav,
-        uint256 previousNavTimestamp
-    )
-        external
-        view
-        returns (uint256 upperBound)
-    {
-        if (!assetInfos[asset].exists) revert AssetNotFound();
-        require(previousNav > 0, "Previous NAV must be greater than 0");
-        require(previousNavTimestamp < block.timestamp, "Previous NAV timestamp must be in the past");
-
-        AssetParameters memory params = assetParameters[asset];
-
-        uint256 timeElapsedSeconds = block.timestamp - previousNavTimestamp;
-        uint256 timeElapsedDays = (timeElapsedSeconds * 1e18) / (24 * 60 * 60);
-
-        uint256 growthRate = calculateCompoundGrowthRate(params.maxExpectedApy, timeElapsedDays);
-
-        uint256 totalGrowthRate = growthRate + params.upperBoundTolerance;
-        upperBound = (previousNav * (10_000 + totalGrowthRate)) / 10_000;
-
-        return upperBound;
-    }
-
-    function calculateCompoundGrowthRate(
-        uint256 maxExpectedApy,
-        uint256 timeElapsedDays
-    )
-        internal
-        pure
-        returns (uint256)
-    {
-        if (timeElapsedDays == 0) return 0;
-
-        uint256 annualRate = (maxExpectedApy * 1e18) / 10_000;
-        uint256 exponent = (timeElapsedDays * 1e18) / (365 * 1e18);
-        uint256 compoundGrowth = (annualRate * exponent) / 1e18;
-        uint256 growthRateBasisPoints = (compoundGrowth * 10_000) / 1e18;
-
-        return growthRateBasisPoints;
-    }
 }
