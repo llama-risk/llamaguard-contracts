@@ -25,10 +25,10 @@ contract ParameterRegistryTest is Test {
 
         vm.prank(owner);
         registry = new ParameterRegistry(owner, updater);
-        
+
         // Deploy mock oracle
         mockOracle = new MockAggregatorV3();
-        
+
         // Set up some mock round data
         for (uint80 i = 1; i <= 100; i++) {
             mockOracle.setRoundData(
@@ -72,8 +72,15 @@ contract ParameterRegistryTest is Test {
         assertEq(registry.getAssetName(asset1), "Asset One");
         assertEq(registry.getOracle(asset1), address(mockOracle));
 
-        (uint256 maxApy, uint256 upperTol, uint256 lowerTol, uint80 lookbackWindow, bool upperEnabled, bool lowerEnabled, bool actionEnabled) =
-            registry.getParametersForAsset(asset1);
+        (
+            uint256 maxApy,
+            uint256 upperTol,
+            uint256 lowerTol,
+            uint80 lookbackWindow,
+            bool upperEnabled,
+            bool lowerEnabled,
+            bool actionEnabled
+        ) = registry.getParametersForAsset(asset1);
 
         assertEq(maxApy, 1000);
         assertEq(upperTol, 500);
@@ -89,7 +96,7 @@ contract ParameterRegistryTest is Test {
         vm.expectRevert(ParameterRegistry.OnlyUpdater.selector);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 10, true, true, true);
     }
-    
+
     function test_SetParametersForAsset_RevertsIfZeroOracle() public {
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
@@ -117,10 +124,10 @@ contract ParameterRegistryTest is Test {
 
         (,, uint256 lowerTol,,,,) = registry.getParametersForAsset(asset1);
         assertEq(lowerTol, 400);
-        
+
         vm.prank(updater);
         registry.setLookbackWindowSize(asset1, 20);
-        
+
         (,,, uint80 lookbackWindow,,,) = registry.getParametersForAsset(asset1);
         assertEq(lookbackWindow, 20);
 
@@ -235,41 +242,41 @@ contract ParameterRegistryTest is Test {
         vm.expectRevert();
         registry.setUpdater(newUpdater);
     }
-    
+
     function test_SetOracle() public {
         vm.prank(updater);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 10, true, true, true);
-        
+
         MockAggregatorV3 newOracle = new MockAggregatorV3();
-        
+
         vm.prank(updater);
         registry.setOracle(asset1, address(newOracle));
-        
+
         assertEq(registry.getOracle(asset1), address(newOracle));
     }
-    
+
     function test_SetOracle_RevertsIfAssetNotFound() public {
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.AssetNotFound.selector);
         registry.setOracle(asset1, address(mockOracle));
     }
-    
+
     function test_SetOracle_RevertsIfZeroAddress() public {
         vm.prank(updater);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 10, true, true, true);
-        
+
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
         registry.setOracle(asset1, address(0));
     }
-    
+
     function test_GetLookbackData() public {
         vm.prank(updater);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 10, true, true, true);
-        
-        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) = 
+
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             registry.getLookbackData(asset1);
-            
+
         // Latest round is 100, lookback window is 10, so we should get round 90
         assertEq(roundId, 90);
         assertEq(answer, int256(90 * 1e8));
@@ -277,27 +284,27 @@ contract ParameterRegistryTest is Test {
         assertTrue(startedAt > 0);
         assertTrue(updatedAt > 0);
     }
-    
+
     function test_GetLookbackData_RevertsIfAssetNotFound() public {
         vm.expectRevert(ParameterRegistry.AssetNotFound.selector);
         registry.getLookbackData(asset1);
     }
-    
+
     function test_GetLookbackData_RevertsIfInvalidLookbackWindow() public {
         vm.prank(updater);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 0, true, true, true);
-        
+
         vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
         registry.getLookbackData(asset1);
     }
-    
+
     function test_GetLookbackData_SuccessInitiation() public {
         vm.prank(updater);
         registry.setParametersForAsset(asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, true, true, true);
-        
-        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) = 
+
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             registry.getLookbackData(asset1);
-        
+
         assertEq(roundId, 1);
         assertEq(answer, int256(1 * 1e8));
         assertEq(answeredInRound, 1);

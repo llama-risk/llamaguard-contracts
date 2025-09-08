@@ -7,24 +7,12 @@ interface AggregatorV3Interface {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 
     function getRoundData(uint80 _roundId)
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
 /**
@@ -314,27 +302,21 @@ contract ParameterRegistry is Ownable {
     function getLookbackData(address asset)
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        
+
         address oracle = assetInfos[asset].oracle;
         if (oracle == address(0)) revert OracleNotSet();
-        
+
         uint80 lookbackWindowSize = assetParameters[asset].lookbackWindowSize;
         if (lookbackWindowSize == 0) revert InvalidLookbackWindow();
-        
+
         AggregatorV3Interface aggregator = AggregatorV3Interface(oracle);
-        
+
         // Get the latest round data
-        (uint80 latestRoundId, , , , ) = aggregator.latestRoundData();
-        
+        (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
+
         // Calculate the lookback round ID
         uint80 lookbackSubstration;
         if (latestRoundId <= lookbackWindowSize) {
@@ -343,7 +325,7 @@ contract ParameterRegistry is Ownable {
             lookbackSubstration = lookbackWindowSize;
         }
         uint80 lookbackRoundId = latestRoundId - lookbackSubstration;
-        
+
         // Get and return the lookback round data
         return aggregator.getRoundData(lookbackRoundId);
     }
