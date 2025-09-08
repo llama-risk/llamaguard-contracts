@@ -3,6 +3,18 @@ pragma solidity >=0.8.29;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
+interface AggregatorV3Interface {
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+
+    function getRoundData(uint80 _roundId)
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+}
+
 /**
  * @title ParameterRegistry
  * @dev Multi-asset parameter registry for offchain oracle network consumption
@@ -12,6 +24,7 @@ contract ParameterRegistry is Ownable {
         uint256 maxExpectedApy;
         uint256 upperBoundTolerance;
         uint256 lowerBoundTolerance;
+        uint80 lookbackWindowSize;
         bool isUpperBoundEnabled;
         bool isLowerBoundEnabled;
         bool isActionTakingEnabled;
@@ -19,6 +32,7 @@ contract ParameterRegistry is Ownable {
 
     struct AssetInfo {
         string name;
+        address oracle;
         bool exists;
     }
 
@@ -32,16 +46,21 @@ contract ParameterRegistry is Ownable {
         uint256 maxExpectedApy,
         uint256 upperBoundTolerance,
         uint256 lowerBoundTolerance,
+        uint80 lookbackWindowSize,
         bool isUpperBoundEnabled,
         bool isLowerBoundEnabled,
         bool isActionTakingEnabled
     );
     event AssetDeleted(address indexed asset);
     event AssetNameSet(address indexed asset, string name);
+    event AssetOracleSet(address indexed asset, address oracle);
+    event LookbackWindowSizeSet(address indexed asset, uint80 lookbackWindowSize);
 
     error OnlyUpdater();
     error AssetNotFound();
     error ZeroAddress();
+    error OracleNotSet();
+    error InvalidLookbackWindow();
 
     modifier onlyUpdater() {
         if (msg.sender != updater) revert OnlyUpdater();
@@ -62,9 +81,11 @@ contract ParameterRegistry is Ownable {
     function setParametersForAsset(
         address asset,
         string calldata assetName,
+        address oracle,
         uint256 maxExpectedApy,
         uint256 upperBoundTolerance,
         uint256 lowerBoundTolerance,
+        uint80 lookbackWindowSize,
         bool isUpperBoundEnabled,
         bool isLowerBoundEnabled,
         bool isActionTakingEnabled
@@ -73,24 +94,28 @@ contract ParameterRegistry is Ownable {
         onlyUpdater
     {
         if (asset == address(0)) revert ZeroAddress();
+        if (oracle == address(0)) revert ZeroAddress();
 
         assetParameters[asset] = AssetParameters({
             maxExpectedApy: maxExpectedApy,
             upperBoundTolerance: upperBoundTolerance,
             lowerBoundTolerance: lowerBoundTolerance,
+            lookbackWindowSize: lookbackWindowSize,
             isUpperBoundEnabled: isUpperBoundEnabled,
             isLowerBoundEnabled: isLowerBoundEnabled,
             isActionTakingEnabled: isActionTakingEnabled
         });
 
-        assetInfos[asset] = AssetInfo({ name: assetName, exists: true });
+        assetInfos[asset] = AssetInfo({ name: assetName, oracle: oracle, exists: true });
 
         emit AssetNameSet(asset, assetName);
+        emit AssetOracleSet(asset, oracle);
         emit AssetParametersSet(
             asset,
             maxExpectedApy,
             upperBoundTolerance,
             lowerBoundTolerance,
+            lookbackWindowSize,
             isUpperBoundEnabled,
             isLowerBoundEnabled,
             isActionTakingEnabled
@@ -107,6 +132,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -123,6 +149,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -139,6 +166,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -155,6 +183,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -171,6 +200,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -187,10 +217,36 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
         );
+    }
+
+    function setLookbackWindowSize(address asset, uint80 _lookbackWindowSize) external onlyUpdater {
+        if (!assetInfos[asset].exists) revert AssetNotFound();
+        AssetParameters storage params = assetParameters[asset];
+        params.lookbackWindowSize = _lookbackWindowSize;
+
+        emit LookbackWindowSizeSet(asset, _lookbackWindowSize);
+        emit AssetParametersSet(
+            asset,
+            params.maxExpectedApy,
+            params.upperBoundTolerance,
+            params.lowerBoundTolerance,
+            params.lookbackWindowSize,
+            params.isUpperBoundEnabled,
+            params.isLowerBoundEnabled,
+            params.isActionTakingEnabled
+        );
+    }
+
+    function setOracle(address asset, address oracle) external onlyUpdater {
+        if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (oracle == address(0)) revert ZeroAddress();
+        assetInfos[asset].oracle = oracle;
+        emit AssetOracleSet(asset, oracle);
     }
 
     function deleteAsset(address asset) external onlyUpdater {
@@ -209,6 +265,7 @@ contract ParameterRegistry is Ownable {
             uint256 maxExpectedApy,
             uint256 upperBoundTolerance,
             uint256 lowerBoundTolerance,
+            uint80 lookbackWindowSize,
             bool isUpperBoundEnabled,
             bool isLowerBoundEnabled,
             bool isActionTakingEnabled
@@ -221,6 +278,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
             params.isActionTakingEnabled
@@ -234,5 +292,41 @@ contract ParameterRegistry is Ownable {
 
     function assetExists(address asset) external view returns (bool) {
         return assetInfos[asset].exists;
+    }
+
+    function getOracle(address asset) external view returns (address) {
+        if (!assetInfos[asset].exists) revert AssetNotFound();
+        return assetInfos[asset].oracle;
+    }
+
+    function getLookbackData(address asset)
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+    {
+        if (!assetInfos[asset].exists) revert AssetNotFound();
+
+        address oracle = assetInfos[asset].oracle;
+        if (oracle == address(0)) revert OracleNotSet();
+
+        uint80 lookbackWindowSize = assetParameters[asset].lookbackWindowSize;
+        if (lookbackWindowSize == 0) revert InvalidLookbackWindow();
+
+        AggregatorV3Interface aggregator = AggregatorV3Interface(oracle);
+
+        // Get the latest round data
+        (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
+
+        // Calculate the lookback round ID
+        uint80 lookbackSubstration;
+        if (latestRoundId <= lookbackWindowSize) {
+            lookbackSubstration = latestRoundId - 1;
+        } else {
+            lookbackSubstration = lookbackWindowSize;
+        }
+        uint80 lookbackRoundId = latestRoundId - lookbackSubstration;
+
+        // Get and return the lookback round data
+        return aggregator.getRoundData(lookbackRoundId);
     }
 }
