@@ -24,6 +24,7 @@ contract ParameterRegistry is Ownable {
         uint256 maxExpectedApy;
         uint256 upperBoundTolerance;
         uint256 lowerBoundTolerance;
+        uint256 maxDiscount;
         uint80 lookbackWindowSize;
         bool isUpperBoundEnabled;
         bool isLowerBoundEnabled;
@@ -46,6 +47,7 @@ contract ParameterRegistry is Ownable {
         uint256 maxExpectedApy,
         uint256 upperBoundTolerance,
         uint256 lowerBoundTolerance,
+        uint256 maxDiscount,
         uint80 lookbackWindowSize,
         bool isUpperBoundEnabled,
         bool isLowerBoundEnabled,
@@ -85,6 +87,7 @@ contract ParameterRegistry is Ownable {
         uint256 maxExpectedApy,
         uint256 upperBoundTolerance,
         uint256 lowerBoundTolerance,
+        uint256 maxDiscount,
         uint80 lookbackWindowSize,
         bool isUpperBoundEnabled,
         bool isLowerBoundEnabled,
@@ -100,6 +103,7 @@ contract ParameterRegistry is Ownable {
             maxExpectedApy: maxExpectedApy,
             upperBoundTolerance: upperBoundTolerance,
             lowerBoundTolerance: lowerBoundTolerance,
+            maxDiscount: maxDiscount,
             lookbackWindowSize: lookbackWindowSize,
             isUpperBoundEnabled: isUpperBoundEnabled,
             isLowerBoundEnabled: isLowerBoundEnabled,
@@ -115,6 +119,7 @@ contract ParameterRegistry is Ownable {
             maxExpectedApy,
             upperBoundTolerance,
             lowerBoundTolerance,
+            maxDiscount,
             lookbackWindowSize,
             isUpperBoundEnabled,
             isLowerBoundEnabled,
@@ -132,6 +137,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -149,6 +155,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -166,6 +173,25 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
+            params.lookbackWindowSize,
+            params.isUpperBoundEnabled,
+            params.isLowerBoundEnabled,
+            params.isActionTakingEnabled
+        );
+    }
+
+    function setMaxDiscount(address asset, uint256 _maxDiscount) external onlyUpdater {
+        if (!assetInfos[asset].exists) revert AssetNotFound();
+        AssetParameters storage params = assetParameters[asset];
+        params.maxDiscount = _maxDiscount;
+
+        emit AssetParametersSet(
+            asset,
+            params.maxExpectedApy,
+            params.upperBoundTolerance,
+            params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -183,6 +209,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -200,6 +227,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -217,6 +245,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -235,6 +264,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
@@ -265,6 +295,7 @@ contract ParameterRegistry is Ownable {
             uint256 maxExpectedApy,
             uint256 upperBoundTolerance,
             uint256 lowerBoundTolerance,
+            uint256 maxDiscount,
             uint80 lookbackWindowSize,
             bool isUpperBoundEnabled,
             bool isLowerBoundEnabled,
@@ -278,6 +309,7 @@ contract ParameterRegistry is Ownable {
             params.maxExpectedApy,
             params.upperBoundTolerance,
             params.lowerBoundTolerance,
+            params.maxDiscount,
             params.lookbackWindowSize,
             params.isUpperBoundEnabled,
             params.isLowerBoundEnabled,
