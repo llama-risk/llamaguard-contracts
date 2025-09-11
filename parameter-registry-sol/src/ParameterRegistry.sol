@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.8.29;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 interface AggregatorV3Interface {
     function latestRoundData()
@@ -19,7 +19,7 @@ interface AggregatorV3Interface {
  * @title ParameterRegistry
  * @dev Multi-asset parameter registry for offchain oracle network consumption
  */
-contract ParameterRegistry is Ownable {
+contract ParameterRegistry is Ownable2Step {
     struct AssetParameters {
         uint256 maxExpectedApy;
         uint256 upperBoundTolerance;
