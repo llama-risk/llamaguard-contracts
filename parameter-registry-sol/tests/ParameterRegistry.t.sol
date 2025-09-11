@@ -4,6 +4,7 @@ pragma solidity >=0.8.29 <0.9.0;
 import { Test } from "forge-std/src/Test.sol";
 import { ParameterRegistry } from "../src/ParameterRegistry.sol";
 import { MockAggregatorV3 } from "./mocks/MockAggregatorV3.sol";
+import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 contract ParameterRegistryTest is Test {
     ParameterRegistry internal registry;
@@ -247,11 +248,25 @@ contract ParameterRegistryTest is Test {
     function test_OwnershipTransfer() public {
         address newOwner = makeAddr("newOwner");
 
+        // Step 1: Current owner initiates transfer
         vm.prank(owner);
         registry.transferOwnership(newOwner);
 
-        assertEq(registry.owner(), newOwner);
+        // Owner should still be the original owner
+        assertEq(registry.owner(), owner);
 
+        // Check that pending owner is set
+        assertEq(registry.pendingOwner(), newOwner);
+
+        // Step 2: New owner accepts ownership
+        vm.prank(newOwner);
+        registry.acceptOwnership();
+
+        // Now ownership should be transferred
+        assertEq(registry.owner(), newOwner);
+        assertEq(registry.pendingOwner(), address(0));
+
+        // Verify new owner can perform owner actions
         address newerUpdater = makeAddr("newerUpdater");
         vm.prank(newOwner);
         registry.setUpdater(newerUpdater);
@@ -267,6 +282,65 @@ contract ParameterRegistryTest is Test {
         address newUpdater = makeAddr("newUpdater");
         vm.expectRevert();
         registry.setUpdater(newUpdater);
+    }
+
+    function test_AcceptOwnership_RevertsIfNotPendingOwner() public {
+        address newOwner = makeAddr("newOwner");
+        address randomUser = makeAddr("randomUser");
+
+        // Step 1: Current owner initiates transfer
+        vm.prank(owner);
+        registry.transferOwnership(newOwner);
+
+        // Step 2: Random user tries to accept ownership
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, randomUser));
+        registry.acceptOwnership();
+    }
+
+    function test_TransferOwnership_CanBeCancelled() public {
+        address newOwner = makeAddr("newOwner");
+
+        // Step 1: Current owner initiates transfer
+        vm.prank(owner);
+        registry.transferOwnership(newOwner);
+        assertEq(registry.pendingOwner(), newOwner);
+
+        // Step 2: Current owner cancels by transferring to address(0)
+        vm.prank(owner);
+        registry.transferOwnership(address(0));
+        assertEq(registry.pendingOwner(), address(0));
+
+        // Step 3: Original new owner can't accept anymore
+        vm.prank(newOwner);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, newOwner));
+        registry.acceptOwnership();
+    }
+
+    function test_TransferOwnership_CanBeChangedBeforeAcceptance() public {
+        address newOwner1 = makeAddr("newOwner1");
+        address newOwner2 = makeAddr("newOwner2");
+
+        // Step 1: Current owner initiates transfer to newOwner1
+        vm.prank(owner);
+        registry.transferOwnership(newOwner1);
+        assertEq(registry.pendingOwner(), newOwner1);
+
+        // Step 2: Current owner changes to newOwner2
+        vm.prank(owner);
+        registry.transferOwnership(newOwner2);
+        assertEq(registry.pendingOwner(), newOwner2);
+
+        // Step 3: newOwner1 can't accept anymore
+        vm.prank(newOwner1);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, newOwner1));
+        registry.acceptOwnership();
+
+        // Step 4: newOwner2 can accept
+        vm.prank(newOwner2);
+        registry.acceptOwnership();
+        assertEq(registry.owner(), newOwner2);
+        assertEq(registry.pendingOwner(), address(0));
     }
 
     function test_SetOracle() public {
