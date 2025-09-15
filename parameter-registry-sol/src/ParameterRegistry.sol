@@ -21,10 +21,10 @@ interface AggregatorV3Interface {
  */
 contract ParameterRegistry is Ownable2Step {
     struct AssetParameters {
-        uint256 maxExpectedApy;
-        uint256 upperBoundTolerance;
-        uint256 lowerBoundTolerance;
-        uint256 maxDiscount;
+        uint256 maxExpectedApy; // BPS format (basis points, e.g., 500 = 5%)
+        uint256 upperBoundTolerance; // BPS format (basis points, e.g., 100 = 1%)
+        uint256 lowerBoundTolerance; // BPS format (basis points, e.g., 50 = 0.5%)
+        uint256 maxDiscount; // BPS format (basis points, e.g., 2000 = 20%)
         uint80 lookbackWindowSize;
         bool isUpperBoundEnabled;
         bool isLowerBoundEnabled;
@@ -63,6 +63,7 @@ contract ParameterRegistry is Ownable2Step {
     error ZeroAddress();
     error OracleNotSet();
     error InvalidLookbackWindow();
+    error MaxExpectedApyTooHigh(uint256 value);
 
     modifier onlyUpdater() {
         if (msg.sender != updater) revert OnlyUpdater();
@@ -98,6 +99,7 @@ contract ParameterRegistry is Ownable2Step {
     {
         if (asset == address(0)) revert ZeroAddress();
         if (oracle == address(0)) revert ZeroAddress();
+        if (maxExpectedApy >= 20_000) revert MaxExpectedApyTooHigh(maxExpectedApy); // Max 200% (20000 BPS)
 
         assetParameters[asset] = AssetParameters({
             maxExpectedApy: maxExpectedApy,
@@ -129,6 +131,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxExpectedApy(address asset, uint256 _maxExpectedApy) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_maxExpectedApy >= 20_000) revert MaxExpectedApyTooHigh(_maxExpectedApy); // Max 200% (20000 BPS)
         AssetParameters storage params = assetParameters[asset];
         params.maxExpectedApy = _maxExpectedApy;
 
