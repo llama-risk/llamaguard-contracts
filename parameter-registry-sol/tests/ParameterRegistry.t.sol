@@ -68,7 +68,7 @@ contract ParameterRegistryTest is Test {
     function test_SetParametersForAsset_OnlyUpdater() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         assertTrue(registry.assetExists(asset1));
@@ -87,8 +87,8 @@ contract ParameterRegistryTest is Test {
         ) = registry.getParametersForAsset(asset1);
 
         assertEq(maxApy, 1000);
-        assertEq(upperTol, 500);
-        assertEq(lowerTol, 300);
+        assertEq(upperTol, 250);
+        assertEq(lowerTol, 200);
         assertEq(maxDiscount, 200);
         assertEq(lookbackWindow, 10);
         assertTrue(upperEnabled);
@@ -100,20 +100,20 @@ contract ParameterRegistryTest is Test {
         vm.prank(nonUpdater);
         vm.expectRevert(ParameterRegistry.OnlyUpdater.selector);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
     }
 
     function test_SetParametersForAsset_RevertsIfZeroOracle() public {
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
-        registry.setParametersForAsset(asset1, "Asset One", address(0), 1000, 500, 300, 200, 10, true, true, true);
+        registry.setParametersForAsset(asset1, "Asset One", address(0), 1000, 250, 200, 200, 10, true, true, true);
     }
 
     function test_SetIndividualParameters() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         vm.prank(updater);
@@ -123,16 +123,16 @@ contract ParameterRegistryTest is Test {
         assertEq(maxApy, 2000);
 
         vm.prank(updater);
-        registry.setUpperBoundTolerance(asset1, 600);
+        registry.setUpperBoundTolerance(asset1, 240);
 
         (, uint256 upperTol,,,,,,) = registry.getParametersForAsset(asset1);
-        assertEq(upperTol, 600);
+        assertEq(upperTol, 240);
 
         vm.prank(updater);
-        registry.setLowerBoundTolerance(asset1, 400);
+        registry.setLowerBoundTolerance(asset1, 220);
 
         (,, uint256 lowerTol,,,,,) = registry.getParametersForAsset(asset1);
-        assertEq(lowerTol, 400);
+        assertEq(lowerTol, 220);
 
         vm.prank(updater);
         registry.setMaxDiscount(asset1, 150);
@@ -175,10 +175,158 @@ contract ParameterRegistryTest is Test {
         registry.setMaxDiscount(asset1, 150);
     }
 
+    function test_SetUpperBoundTolerance_RevertsIfExceedsLimit() public {
+        // First create an asset
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 100, 100, 10, true, true, true
+        );
+
+        // Test that 250 BPS (2.5%) is accepted
+        vm.prank(updater);
+        registry.setUpperBoundTolerance(asset1, 250);
+        (, uint256 upperTol,,,,,,) = registry.getParametersForAsset(asset1);
+        assertEq(upperTol, 250);
+
+        // Test that 251 BPS is rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.UpperBoundToleranceTooHigh.selector, 251));
+        registry.setUpperBoundTolerance(asset1, 251);
+
+        // Test that much higher values are rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.UpperBoundToleranceTooHigh.selector, 1000));
+        registry.setUpperBoundTolerance(asset1, 1000);
+    }
+
+    function test_SetLowerBoundTolerance_RevertsIfExceedsLimit() public {
+        // First create an asset
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 100, 100, 10, true, true, true
+        );
+
+        // Test that 250 BPS (2.5%) is accepted
+        vm.prank(updater);
+        registry.setLowerBoundTolerance(asset1, 250);
+        (,, uint256 lowerTol,,,,,) = registry.getParametersForAsset(asset1);
+        assertEq(lowerTol, 250);
+
+        // Test that 251 BPS is rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.LowerBoundToleranceTooHigh.selector, 251));
+        registry.setLowerBoundTolerance(asset1, 251);
+
+        // Test that much higher values are rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.LowerBoundToleranceTooHigh.selector, 500));
+        registry.setLowerBoundTolerance(asset1, 500);
+    }
+
+    function test_SetMaxDiscount_RevertsIfExceedsLimit() public {
+        // First create an asset
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 100, 100, 10, true, true, true
+        );
+
+        // Test that 250 BPS (2.5%) is accepted
+        vm.prank(updater);
+        registry.setMaxDiscount(asset1, 250);
+        (,,, uint256 maxDiscount,,,,) = registry.getParametersForAsset(asset1);
+        assertEq(maxDiscount, 250);
+
+        // Test that 251 BPS is rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxDiscountTooHigh.selector, 251));
+        registry.setMaxDiscount(asset1, 251);
+
+        // Test that much higher values are rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxDiscountTooHigh.selector, 10_000));
+        registry.setMaxDiscount(asset1, 10_000);
+    }
+
+    function test_SetParametersForAsset_RevertsIfUpperBoundToleranceExceedsLimit() public {
+        // Test that 251 BPS upper bound tolerance is rejected during asset creation
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.UpperBoundToleranceTooHigh.selector, 251));
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 251, 100, 100, 10, true, true, true
+        );
+
+        // Test that 250 BPS is accepted
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 250, 100, 100, 10, true, true, true
+        );
+        assertTrue(registry.assetExists(asset1));
+    }
+
+    function test_SetParametersForAsset_RevertsIfLowerBoundToleranceExceedsLimit() public {
+        // Test that 251 BPS lower bound tolerance is rejected during asset creation
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.LowerBoundToleranceTooHigh.selector, 251));
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 251, 100, 10, true, true, true
+        );
+
+        // Test that 250 BPS is accepted
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 250, 100, 10, true, true, true
+        );
+        assertTrue(registry.assetExists(asset1));
+    }
+
+    function test_SetParametersForAsset_RevertsIfMaxDiscountExceedsLimit() public {
+        // Test that 251 BPS max discount is rejected during asset creation
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxDiscountTooHigh.selector, 251));
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 100, 251, 10, true, true, true
+        );
+
+        // Test that 250 BPS is accepted
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 1000, 100, 100, 250, 10, true, true, true
+        );
+        assertTrue(registry.assetExists(asset1));
+    }
+
+    function test_SetParametersForAsset_AllLimitsAtMaximum() public {
+        // Test that all parameters can be set to their maximum allowed values
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracle), 19_999, 250, 250, 250, 10, true, true, true
+        );
+
+        (
+            uint256 maxApy,
+            uint256 upperTol,
+            uint256 lowerTol,
+            uint256 maxDiscount,
+            uint80 lookbackWindow,
+            bool upperEnabled,
+            bool lowerEnabled,
+            bool actionEnabled
+        ) = registry.getParametersForAsset(asset1);
+
+        assertEq(maxApy, 19_999);
+        assertEq(upperTol, 250);
+        assertEq(lowerTol, 250);
+        assertEq(maxDiscount, 250);
+        assertEq(lookbackWindow, 10);
+        assertTrue(upperEnabled);
+        assertTrue(lowerEnabled);
+        assertTrue(actionEnabled);
+    }
+
     function test_DeleteAsset() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         assertTrue(registry.assetExists(asset1));
@@ -195,7 +343,7 @@ contract ParameterRegistryTest is Test {
     function test_DeleteAsset_RevertsIfNotUpdater() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         vm.prank(nonUpdater);
@@ -223,11 +371,11 @@ contract ParameterRegistryTest is Test {
         vm.startPrank(updater);
 
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         registry.setParametersForAsset(
-            asset2, "Asset Two", address(mockOracle), 2000, 600, 400, 250, 20, false, true, false
+            asset2, "Asset Two", address(mockOracle), 2000, 240, 230, 250, 20, false, true, false
         );
 
         vm.stopPrank();
@@ -346,7 +494,7 @@ contract ParameterRegistryTest is Test {
     function test_SetOracle() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         MockAggregatorV3 newOracle = new MockAggregatorV3();
@@ -366,7 +514,7 @@ contract ParameterRegistryTest is Test {
     function test_SetOracle_RevertsIfZeroAddress() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         vm.prank(updater);
@@ -377,7 +525,7 @@ contract ParameterRegistryTest is Test {
     function test_GetLookbackData() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 10, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 10, true, true, true
         );
 
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -399,7 +547,7 @@ contract ParameterRegistryTest is Test {
     function test_GetLookbackData_RevertsIfInvalidLookbackWindow() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 0, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 0, true, true, true
         );
 
         vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
@@ -409,7 +557,7 @@ contract ParameterRegistryTest is Test {
     function test_GetLookbackData_SuccessInitiation() public {
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracle), 1000, 500, 300, 200, 1, true, true, true
+            asset1, "Asset One", address(mockOracle), 1000, 250, 200, 200, 1, true, true, true
         );
 
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =

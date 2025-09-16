@@ -64,6 +64,9 @@ contract ParameterRegistry is Ownable2Step {
     error OracleNotSet();
     error InvalidLookbackWindow();
     error MaxExpectedApyTooHigh(uint256 value);
+    error UpperBoundToleranceTooHigh(uint256 value);
+    error LowerBoundToleranceTooHigh(uint256 value);
+    error MaxDiscountTooHigh(uint256 value);
 
     modifier onlyUpdater() {
         if (msg.sender != updater) revert OnlyUpdater();
@@ -100,6 +103,9 @@ contract ParameterRegistry is Ownable2Step {
         if (asset == address(0)) revert ZeroAddress();
         if (oracle == address(0)) revert ZeroAddress();
         if (maxExpectedApy >= 20_000) revert MaxExpectedApyTooHigh(maxExpectedApy); // Max 200% (20000 BPS)
+        if (upperBoundTolerance > 250) revert UpperBoundToleranceTooHigh(upperBoundTolerance); // Max 2.5% (250 BPS)
+        if (lowerBoundTolerance > 250) revert LowerBoundToleranceTooHigh(lowerBoundTolerance); // Max 2.5% (250 BPS)
+        if (maxDiscount > 250) revert MaxDiscountTooHigh(maxDiscount); // Max 2.5% (250 BPS)
 
         assetParameters[asset] = AssetParameters({
             maxExpectedApy: maxExpectedApy,
@@ -150,6 +156,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setUpperBoundTolerance(address asset, uint256 _upperBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_upperBoundTolerance > 250) revert UpperBoundToleranceTooHigh(_upperBoundTolerance); // Max 2.5% (250 BPS)
         AssetParameters storage params = assetParameters[asset];
         params.upperBoundTolerance = _upperBoundTolerance;
 
@@ -168,6 +175,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setLowerBoundTolerance(address asset, uint256 _lowerBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_lowerBoundTolerance > 250) revert LowerBoundToleranceTooHigh(_lowerBoundTolerance); // Max 2.5% (250 BPS)
         AssetParameters storage params = assetParameters[asset];
         params.lowerBoundTolerance = _lowerBoundTolerance;
 
@@ -186,6 +194,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxDiscount(address asset, uint256 _maxDiscount) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_maxDiscount > 250) revert MaxDiscountTooHigh(_maxDiscount); // Max 2.5% (250 BPS)
         AssetParameters storage params = assetParameters[asset];
         params.maxDiscount = _maxDiscount;
 
