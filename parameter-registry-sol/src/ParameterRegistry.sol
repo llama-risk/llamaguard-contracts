@@ -20,11 +20,16 @@ interface AggregatorV3Interface {
  * @dev Multi-asset parameter registry for offchain oracle network consumption
  */
 contract ParameterRegistry is Ownable2Step {
+    uint256 public constant MAX_EXPECTED_APY_LIMIT = 20_000; // Max 200% (20000 BPS)
+    uint256 public constant MAX_UPPER_BOUND_TOLERANCE = 250; // Max 2.5% (250 BPS)
+    uint256 public constant MAX_LOWER_BOUND_TOLERANCE = 250; // Max 2.5% (250 BPS)
+    uint256 public constant MAX_DISCOUNT_LIMIT = 250; // Max 2.5% (250 BPS)
+
     struct AssetParameters {
-        uint256 maxExpectedApy;
-        uint256 upperBoundTolerance;
-        uint256 lowerBoundTolerance;
-        uint256 maxDiscount;
+        uint256 maxExpectedApy; // BPS format (basis points, e.g., 500 = 5%)
+        uint256 upperBoundTolerance; // BPS format (basis points, e.g., 100 = 1%)
+        uint256 lowerBoundTolerance; // BPS format (basis points, e.g., 50 = 0.5%)
+        uint256 maxDiscount; // BPS format (basis points, e.g., 2000 = 20%)
         uint80 lookbackWindowSize;
         bool isUpperBoundEnabled;
         bool isLowerBoundEnabled;
@@ -63,6 +68,10 @@ contract ParameterRegistry is Ownable2Step {
     error ZeroAddress();
     error OracleNotSet();
     error InvalidLookbackWindow();
+    error MaxExpectedApyTooHigh(uint256 value);
+    error UpperBoundToleranceTooHigh(uint256 value);
+    error LowerBoundToleranceTooHigh(uint256 value);
+    error MaxDiscountTooHigh(uint256 value);
 
     modifier onlyUpdater() {
         if (msg.sender != updater) revert OnlyUpdater();
@@ -98,6 +107,10 @@ contract ParameterRegistry is Ownable2Step {
     {
         if (asset == address(0)) revert ZeroAddress();
         if (oracle == address(0)) revert ZeroAddress();
+        if (maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(maxExpectedApy);
+        if (upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(upperBoundTolerance);
+        if (lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(lowerBoundTolerance);
+        if (maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(maxDiscount);
 
         assetParameters[asset] = AssetParameters({
             maxExpectedApy: maxExpectedApy,
@@ -129,6 +142,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxExpectedApy(address asset, uint256 _maxExpectedApy) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(_maxExpectedApy);
         AssetParameters storage params = assetParameters[asset];
         params.maxExpectedApy = _maxExpectedApy;
 
@@ -147,6 +161,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setUpperBoundTolerance(address asset, uint256 _upperBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(_upperBoundTolerance);
         AssetParameters storage params = assetParameters[asset];
         params.upperBoundTolerance = _upperBoundTolerance;
 
@@ -165,6 +180,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setLowerBoundTolerance(address asset, uint256 _lowerBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(_lowerBoundTolerance);
         AssetParameters storage params = assetParameters[asset];
         params.lowerBoundTolerance = _lowerBoundTolerance;
 
@@ -183,6 +199,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxDiscount(address asset, uint256 _maxDiscount) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (_maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(_maxDiscount);
         AssetParameters storage params = assetParameters[asset];
         params.maxDiscount = _maxDiscount;
 
