@@ -20,6 +20,11 @@ interface AggregatorV3Interface {
  * @dev Multi-asset parameter registry for offchain oracle network consumption
  */
 contract ParameterRegistry is Ownable2Step {
+    uint256 public constant MAX_EXPECTED_APY_LIMIT = 20_000; // Max 200% (20000 BPS)
+    uint256 public constant MAX_UPPER_BOUND_TOLERANCE = 250; // Max 2.5% (250 BPS)
+    uint256 public constant MAX_LOWER_BOUND_TOLERANCE = 250; // Max 2.5% (250 BPS)
+    uint256 public constant MAX_DISCOUNT_LIMIT = 250; // Max 2.5% (250 BPS)
+
     struct AssetParameters {
         uint256 maxExpectedApy; // BPS format (basis points, e.g., 500 = 5%)
         uint256 upperBoundTolerance; // BPS format (basis points, e.g., 100 = 1%)
@@ -102,10 +107,10 @@ contract ParameterRegistry is Ownable2Step {
     {
         if (asset == address(0)) revert ZeroAddress();
         if (oracle == address(0)) revert ZeroAddress();
-        if (maxExpectedApy >= 20_000) revert MaxExpectedApyTooHigh(maxExpectedApy); // Max 200% (20000 BPS)
-        if (upperBoundTolerance > 250) revert UpperBoundToleranceTooHigh(upperBoundTolerance); // Max 2.5% (250 BPS)
-        if (lowerBoundTolerance > 250) revert LowerBoundToleranceTooHigh(lowerBoundTolerance); // Max 2.5% (250 BPS)
-        if (maxDiscount > 250) revert MaxDiscountTooHigh(maxDiscount); // Max 2.5% (250 BPS)
+        if (maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(maxExpectedApy);
+        if (upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(upperBoundTolerance);
+        if (lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(lowerBoundTolerance);
+        if (maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(maxDiscount);
 
         assetParameters[asset] = AssetParameters({
             maxExpectedApy: maxExpectedApy,
@@ -137,7 +142,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxExpectedApy(address asset, uint256 _maxExpectedApy) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        if (_maxExpectedApy >= 20_000) revert MaxExpectedApyTooHigh(_maxExpectedApy); // Max 200% (20000 BPS)
+        if (_maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(_maxExpectedApy);
         AssetParameters storage params = assetParameters[asset];
         params.maxExpectedApy = _maxExpectedApy;
 
@@ -156,7 +161,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setUpperBoundTolerance(address asset, uint256 _upperBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        if (_upperBoundTolerance > 250) revert UpperBoundToleranceTooHigh(_upperBoundTolerance); // Max 2.5% (250 BPS)
+        if (_upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(_upperBoundTolerance);
         AssetParameters storage params = assetParameters[asset];
         params.upperBoundTolerance = _upperBoundTolerance;
 
@@ -175,7 +180,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setLowerBoundTolerance(address asset, uint256 _lowerBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        if (_lowerBoundTolerance > 250) revert LowerBoundToleranceTooHigh(_lowerBoundTolerance); // Max 2.5% (250 BPS)
+        if (_lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(_lowerBoundTolerance);
         AssetParameters storage params = assetParameters[asset];
         params.lowerBoundTolerance = _lowerBoundTolerance;
 
@@ -194,7 +199,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setMaxDiscount(address asset, uint256 _maxDiscount) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        if (_maxDiscount > 250) revert MaxDiscountTooHigh(_maxDiscount); // Max 2.5% (250 BPS)
+        if (_maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(_maxDiscount);
         AssetParameters storage params = assetParameters[asset];
         params.maxDiscount = _maxDiscount;
 
