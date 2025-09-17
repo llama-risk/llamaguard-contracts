@@ -138,6 +138,39 @@ contract DeployConfig {
         return assets;
     }
 
+    /// @notice Returns configuration for Sepolia testnet
+    /// @return config The deployment configuration
+    function getSepoliaConfig() public pure returns (Config memory) {
+        return Config({
+            owner: 0xb0AD0E3A19490E9145bE9Ad45F7B285eb71756F6,
+            updater: 0xb0AD0E3A19490E9145bE9Ad45F7B285eb71756F6,
+            networkName: "sepolia"
+        });
+    }
+
+    /// @notice Returns single asset configuration for Sepolia testnet
+    /// @return assets Array containing single asset configuration
+    function getSepoliaAssets() public pure returns (AssetConfig[] memory) {
+        AssetConfig[] memory assets = new AssetConfig[](1);
+
+        // Single test asset configuration for Sepolia
+        assets[0] = AssetConfig({
+            assetAddress: 0x14d60E7FDC0D71d8611742720E4C50E7a974020c,
+            assetName: "USCC",
+            oracle: 0x4C94259d3DAd2DC4AA3Ca127E7266235e6E55015,
+            maxExpectedApy: 2500, // 25% max APY
+            upperBoundTolerance: 50, // 0.5% tolerance
+            lowerBoundTolerance: 10, // 0.1% tolerance
+            maxDiscount: 40, // 0.4% max discount
+            lookbackWindowSize: 7,
+            isUpperBoundEnabled: true,
+            isLowerBoundEnabled: true,
+            isActionTakingEnabled: false
+        });
+
+        return assets;
+    }
+
     /// @notice Returns configuration for local Anvil network
     /// @return config The deployment configuration
     function getAnvilConfig() public pure returns (Config memory) {
@@ -207,7 +240,13 @@ contract DeployConfig {
     /// @param chainId The chain ID of the target network
     /// @return config The deployment configuration
     function getConfigByChainId(uint256 chainId) public pure returns (Config memory) {
-        if (chainId == 8453) {
+        if (chainId == 1) {
+            // Ethereum mainnet
+            return getEthereumMainnetConfig();
+        } else if (chainId == 11_155_111) {
+            // Sepolia testnet
+            return getSepoliaConfig();
+        } else if (chainId == 8453) {
             // Base mainnet
             return getBaseMainnetConfig();
         } else if (chainId == 84_532) {
@@ -225,7 +264,10 @@ contract DeployConfig {
     /// @param chainId The chain ID of the target network
     /// @return assets Array of asset configurations
     function getAssetsByChainId(uint256 chainId) public pure returns (AssetConfig[] memory) {
-        if (chainId == 8453) {
+        if (chainId == 11_155_111) {
+            // Sepolia testnet
+            return getSepoliaAssets();
+        } else if (chainId == 8453) {
             // Base mainnet
             return getBaseMainnetAssets();
         } else if (chainId == 84_532) {
