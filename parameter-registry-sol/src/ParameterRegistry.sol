@@ -66,6 +66,13 @@ contract ParameterRegistry is Ownable2Step {
     event AssetNameSet(address indexed asset, string name);
     event AssetOracleSet(address indexed asset, address oracle);
     event LookbackWindowSizeSet(address indexed asset, uint80 lookbackWindowSize);
+    event MaxExpectedApySet(address indexed asset, uint256 maxExpectedApy);
+    event UpperBoundToleranceSet(address indexed asset, uint256 upperBoundTolerance);
+    event LowerBoundToleranceSet(address indexed asset, uint256 lowerBoundTolerance);
+    event MaxDiscountSet(address indexed asset, uint256 maxDiscount);
+    event IsUpperBoundEnabledSet(address indexed asset, bool isUpperBoundEnabled);
+    event IsLowerBoundEnabledSet(address indexed asset, bool isLowerBoundEnabled);
+    event IsActionTakingEnabledSet(address indexed asset, bool isActionTakingEnabled);
 
     error OnlyUpdater();
     error AssetNotFound();
@@ -147,150 +154,53 @@ contract ParameterRegistry is Ownable2Step {
     function setMaxExpectedApy(address asset, uint256 _maxExpectedApy) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
         if (_maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(_maxExpectedApy);
-        AssetParameters storage params = assetParameters[asset];
-        params.maxExpectedApy = _maxExpectedApy;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].maxExpectedApy = _maxExpectedApy;
+        emit MaxExpectedApySet(asset, _maxExpectedApy);
     }
 
     function setUpperBoundTolerance(address asset, uint256 _upperBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
         if (_upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(_upperBoundTolerance);
-        AssetParameters storage params = assetParameters[asset];
-        params.upperBoundTolerance = _upperBoundTolerance;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].upperBoundTolerance = _upperBoundTolerance;
+        emit UpperBoundToleranceSet(asset, _upperBoundTolerance);
     }
 
     function setLowerBoundTolerance(address asset, uint256 _lowerBoundTolerance) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
         if (_lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(_lowerBoundTolerance);
-        AssetParameters storage params = assetParameters[asset];
-        params.lowerBoundTolerance = _lowerBoundTolerance;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].lowerBoundTolerance = _lowerBoundTolerance;
+        emit LowerBoundToleranceSet(asset, _lowerBoundTolerance);
     }
 
     function setMaxDiscount(address asset, uint256 _maxDiscount) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
         if (_maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(_maxDiscount);
-        AssetParameters storage params = assetParameters[asset];
-        params.maxDiscount = _maxDiscount;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].maxDiscount = _maxDiscount;
+        emit MaxDiscountSet(asset, _maxDiscount);
     }
 
     function setIsUpperBoundEnabled(address asset, bool _isUpperBoundEnabled) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        AssetParameters storage params = assetParameters[asset];
-        params.isUpperBoundEnabled = _isUpperBoundEnabled;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].isUpperBoundEnabled = _isUpperBoundEnabled;
+        emit IsUpperBoundEnabledSet(asset, _isUpperBoundEnabled);
     }
 
     function setIsLowerBoundEnabled(address asset, bool _isLowerBoundEnabled) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        AssetParameters storage params = assetParameters[asset];
-        params.isLowerBoundEnabled = _isLowerBoundEnabled;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].isLowerBoundEnabled = _isLowerBoundEnabled;
+        emit IsLowerBoundEnabledSet(asset, _isLowerBoundEnabled);
     }
 
     function setIsActionTakingEnabled(address asset, bool _isActionTakingEnabled) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        AssetParameters storage params = assetParameters[asset];
-        params.isActionTakingEnabled = _isActionTakingEnabled;
-
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
+        assetParameters[asset].isActionTakingEnabled = _isActionTakingEnabled;
+        emit IsActionTakingEnabledSet(asset, _isActionTakingEnabled);
     }
 
     function setLookbackWindowSize(address asset, uint80 _lookbackWindowSize) external onlyUpdater {
         if (!assetInfos[asset].exists) revert AssetNotFound();
-        AssetParameters storage params = assetParameters[asset];
-        params.lookbackWindowSize = _lookbackWindowSize;
-
+        assetParameters[asset].lookbackWindowSize = _lookbackWindowSize;
         emit LookbackWindowSizeSet(asset, _lookbackWindowSize);
-        emit AssetParametersSet(
-            asset,
-            params.maxExpectedApy,
-            params.upperBoundTolerance,
-            params.lowerBoundTolerance,
-            params.maxDiscount,
-            params.lookbackWindowSize,
-            params.isUpperBoundEnabled,
-            params.isLowerBoundEnabled,
-            params.isActionTakingEnabled
-        );
     }
 
     function setOracle(address asset, address oracle) external onlyUpdater {
