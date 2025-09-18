@@ -38,9 +38,9 @@ contract ParameterRegistry is Ownable2Step {
         uint32 lowerBoundTolerance; // 4 bytes (BPS format, max ~42949672 = 429496.72%)
         uint32 upperBoundTolerance; // 4 bytes (BPS format, max ~42949672 = 429496.72%)
         uint32 maxDiscount; // 4 bytes (BPS format, max ~42949672 = 429496.72%)
-        bool isUpperBoundEnabled; // 1 bit
-        bool isLowerBoundEnabled; // 1 bit
-        bool isActionTakingEnabled; // 1 bit
+        bool isUpperBoundEnabled; // 1 byte
+        bool isLowerBoundEnabled; // 1 byte
+        bool isActionTakingEnabled; // 1 byte
     }
 
     address public updater;
@@ -283,7 +283,7 @@ contract ParameterRegistry is Ownable2Step {
         (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
 
         uint80 lookbackRoundId = latestRoundId <= assetConfigs[asset].lookbackWindowSize
-            ? (latestRoundId == 0 ? 0 : latestRoundId - 1)
+            ? (latestRoundId == 0 ? 0 : latestRoundId == 1 ? 1 : latestRoundId - 1)
             : latestRoundId - assetConfigs[asset].lookbackWindowSize;
 
         return aggregator.getRoundData(lookbackRoundId);
