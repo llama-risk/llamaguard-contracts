@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.29 <0.9.0;
+pragma solidity >=0.8.26 <0.9.0;
 
 import { Test } from "forge-std/src/Test.sol";
 import { ParameterRegistry } from "../src/ParameterRegistry.sol";

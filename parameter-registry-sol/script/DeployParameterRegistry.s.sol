@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.29 <0.9.0;
+pragma solidity >=0.8.26 <0.9.0;
 
 import { ParameterRegistry } from "../src/ParameterRegistry.sol";
 import { BaseScript } from "./Base.s.sol";
