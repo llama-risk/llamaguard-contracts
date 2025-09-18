@@ -157,7 +157,7 @@ contract DeployConfig {
         assets[0] = AssetConfig({
             assetAddress: 0x14d60E7FDC0D71d8611742720E4C50E7a974020c,
             assetName: "USCC",
-            oracle: 0x4C94259d3DAd2DC4AA3Ca127E7266235e6E55015,
+            oracle: 0xE38b0917888d0d5d8d03B7371d5214A1aF8e1892,
             maxExpectedApy: 2500, // 25% max APY
             upperBoundTolerance: 50, // 0.5% tolerance
             lowerBoundTolerance: 10, // 0.1% tolerance
@@ -240,10 +240,7 @@ contract DeployConfig {
     /// @param chainId The chain ID of the target network
     /// @return config The deployment configuration
     function getConfigByChainId(uint256 chainId) public pure returns (Config memory) {
-        if (chainId == 1) {
-            // Ethereum mainnet
-            return getEthereumMainnetConfig();
-        } else if (chainId == 11_155_111) {
+        if (chainId == 11_155_111) {
             // Sepolia testnet
             return getSepoliaConfig();
         } else if (chainId == 8453) {
