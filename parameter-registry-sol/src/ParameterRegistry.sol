@@ -15,6 +15,10 @@ interface AggregatorV3Interface {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
+interface OracleProxyInterface {
+    function aggregator() external view returns (address);
+}
+
 /**
  * @title ParameterRegistry
  * @dev Multi-asset parameter registry for offchain oracle network consumption
@@ -354,32 +358,29 @@ contract ParameterRegistry is Ownable2Step {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         if (!assetInfos[asset].exists) revert AssetNotFound();
+        if (assetParameters[asset].lookbackWindowSize == 0) revert InvalidLookbackWindow();
+        if (assetInfos[asset].oracle == address(0)) revert OracleNotSet();
 
-        address oracle = assetInfos[asset].oracle;
-        if (oracle == address(0)) revert OracleNotSet();
-
-        uint80 lookbackWindowSize = assetParameters[asset].lookbackWindowSize;
-        if (lookbackWindowSize == 0) revert InvalidLookbackWindow();
-
-        AggregatorV3Interface aggregator = AggregatorV3Interface(oracle);
+        address aggregatorAddress;
+        address oracleProxy = assetInfos[asset].oracle;
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x245a7bfc00000000000000000000000000000000000000000000000000000000) // aggregator() selector
+            let success := staticcall(gas(), oracleProxy, ptr, 4, ptr, 32)
+            if iszero(success) { revert(0, 0) }
+            aggregatorAddress := mload(ptr)
+        }
+        
+        AggregatorV3Interface aggregator = AggregatorV3Interface(aggregatorAddress);
 
         // Get the latest round data
         (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
 
-        // Calculate the lookback round ID
-        uint80 lookbackSubstration;
-        if (latestRoundId <= lookbackWindowSize) {
-            if (latestRoundId == 0) {
-                lookbackSubstration = 0;
-            } else {
-                lookbackSubstration = latestRoundId - 1;
-            }
-        } else {
-            lookbackSubstration = lookbackWindowSize;
-        }
-        uint80 lookbackRoundId = latestRoundId - lookbackSubstration;
-
-        // Get and return the lookback round data
+        uint80 lookbackRoundId = latestRoundId <= assetParameters[asset].lookbackWindowSize 
+            ? (latestRoundId == 0 ? 0 : latestRoundId - 1)
+            : latestRoundId - assetParameters[asset].lookbackWindowSize;
+            
         return aggregator.getRoundData(lookbackRoundId);
     }
 }
+
