@@ -283,7 +283,7 @@ contract ParameterRegistry is Ownable2Step {
         (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
 
         uint80 lookbackRoundId = latestRoundId <= assetConfigs[asset].lookbackWindowSize
-            ? (latestRoundId == 0 ? 0 : latestRoundId == 1 ? 1 : latestRoundId - 1)
+            ? (latestRoundId == 0 ? 0 : 1)
             : latestRoundId - assetConfigs[asset].lookbackWindowSize;
 
         return aggregator.getRoundData(lookbackRoundId);
