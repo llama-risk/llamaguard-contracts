@@ -30,7 +30,7 @@ contract ParameterRegistry is Ownable2Step {
     uint32 public constant MAX_DISCOUNT_LIMIT = 250; // Max 2.5% (250 BPS)
 
     struct AssetConfig {
-        string name; // Dynamic storage slot
+        string name;
         address oracle; // 20 bytes
         bool exists; // 1 byte
         uint80 lookbackWindowSize; // 10 bytes (up to 1.2M blocks)
