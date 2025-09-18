@@ -370,17 +370,16 @@ contract ParameterRegistry is Ownable2Step {
             if iszero(success) { revert(0, 0) }
             aggregatorAddress := mload(ptr)
         }
-        
+
         AggregatorV3Interface aggregator = AggregatorV3Interface(aggregatorAddress);
 
         // Get the latest round data
         (uint80 latestRoundId,,,,) = aggregator.latestRoundData();
 
-        uint80 lookbackRoundId = latestRoundId <= assetParameters[asset].lookbackWindowSize 
+        uint80 lookbackRoundId = latestRoundId <= assetParameters[asset].lookbackWindowSize
             ? (latestRoundId == 0 ? 0 : latestRoundId - 1)
             : latestRoundId - assetParameters[asset].lookbackWindowSize;
-            
+
         return aggregator.getRoundData(lookbackRoundId);
     }
 }
-
