@@ -369,7 +369,11 @@ contract ParameterRegistry is Ownable2Step {
         // Calculate the lookback round ID
         uint80 lookbackSubstration;
         if (latestRoundId <= lookbackWindowSize) {
-            lookbackSubstration = latestRoundId - 1;
+            if (latestRoundId == 0) {
+                lookbackSubstration = 0;
+            } else {
+                lookbackSubstration = latestRoundId - 1;
+            }
         } else {
             lookbackSubstration = lookbackWindowSize;
         }

@@ -9,6 +9,7 @@ import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2St
 contract ParameterRegistryTest is Test {
     ParameterRegistry internal registry;
     MockAggregatorV3 internal mockOracle;
+    MockAggregatorV3 internal mockOracleWithZeroRoundId;
     address internal owner;
     address internal updater;
     address internal asset1;
@@ -29,6 +30,7 @@ contract ParameterRegistryTest is Test {
 
         // Deploy mock oracle
         mockOracle = new MockAggregatorV3();
+        mockOracleWithZeroRoundId = new MockAggregatorV3();
 
         // Set up some mock round data
         for (uint80 i = 1; i <= 100; i++) {
@@ -40,6 +42,8 @@ contract ParameterRegistryTest is Test {
                 i // answeredInRound
             );
         }
+
+        mockOracleWithZeroRoundId.setRoundData(0, int256(uint256(1) * 1e8), block.timestamp, block.timestamp, 0);
     }
 
     function test_ConstructorSetsOwnerAndUpdater() public view {
@@ -552,6 +556,22 @@ contract ParameterRegistryTest is Test {
 
         vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
         registry.getLookbackData(asset1);
+    }
+
+    function test_GetLookbackData_SuccessWithZeroRoundId() public {
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleWithZeroRoundId), 1000, 250, 200, 200, 7, true, true, true
+        );
+
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            registry.getLookbackData(asset1);
+
+        assertEq(roundId, 0);
+        assertEq(answer, int256(1 * 1e8));
+        assertEq(answeredInRound, 0);
+        assertTrue(startedAt > 0);
+        assertTrue(updatedAt > 0);
     }
 
     function test_GetLookbackData_SuccessInitiation() public {
