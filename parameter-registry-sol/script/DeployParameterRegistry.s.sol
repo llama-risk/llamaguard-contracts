@@ -44,9 +44,6 @@ contract DeployParameterRegistry is BaseScript {
         address initialOwner = broadcaster;
         address initialUpdater = broadcaster;
 
-        require(config.pendingOwner != address(0), "Initial owner cannot be zero");
-        require(config.pendingOwner != broadcaster, "Initial owner cannot be the same as the deployer");
-
         // Log deployment parameters
         console2.log("Network:", config.networkName);
         console2.log("Deployer (initial owner/updater):", broadcaster);
@@ -135,18 +132,20 @@ contract DeployParameterRegistry is BaseScript {
         }
 
         // Initiate ownership transfer (two-step process) if configured
-        console2.log("");
-        console2.log("Initiating ownership transfer (two-step process)...");
-        console2.log("  Current owner:", broadcaster);
-        console2.log("  Pending owner:", config.pendingOwner);
+        if (config.pendingOwner != address(0) && config.pendingOwner != broadcaster) {
+            console2.log("");
+            console2.log("Initiating ownership transfer (two-step process)...");
+            console2.log("  Current owner:", broadcaster);
+            console2.log("  Pending owner:", config.pendingOwner);
 
-        parameterRegistry.transferOwnership(config.pendingOwner);
+            parameterRegistry.transferOwnership(config.pendingOwner);
 
-        console2.log("  [OK] Ownership transfer initiated");
-        console2.log("  [PENDING] New owner must call acceptOwnership() to complete transfer");
+            console2.log("  [OK] Ownership transfer initiated");
+            console2.log("  [PENDING] New owner must call acceptOwnership() to complete transfer");
 
-        require(parameterRegistry.pendingOwner() == config.pendingOwner, "Pending owner not set correctly");
-        rolesTransferred = true;
+            require(parameterRegistry.pendingOwner() == config.pendingOwner, "Pending owner not set correctly");
+            rolesTransferred = true;
+        }
 
         if (rolesTransferred) {
             console2.log("");
