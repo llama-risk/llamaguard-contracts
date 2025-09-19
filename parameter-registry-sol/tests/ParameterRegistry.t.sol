@@ -556,14 +556,14 @@ contract ParameterRegistryTest is Test {
         registry.getLookbackData(asset1);
     }
 
-    function test_GetLookbackData_RevertsIfInvalidLookbackWindow() public {
-        vm.prank(updater);
+    function test_setLookbackWindowSize_RevertsIfInvalidLookbackWindow() public {
+        vm.startPrank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 0, true, true, true
+            asset1, "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 10, true, true, true
         );
-
         vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
-        registry.getLookbackData(asset1);
+        registry.setLookbackWindowSize(asset1, 0);
+        vm.stopPrank();
     }
 
     function test_GetLookbackData_SuccessWithZeroRoundId() public {

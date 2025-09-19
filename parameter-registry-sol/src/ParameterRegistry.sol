@@ -118,6 +118,7 @@ contract ParameterRegistry is Ownable2Step {
         if (upperBoundTolerance > MAX_UPPER_BOUND_TOLERANCE) revert UpperBoundToleranceTooHigh(upperBoundTolerance);
         if (lowerBoundTolerance > MAX_LOWER_BOUND_TOLERANCE) revert LowerBoundToleranceTooHigh(lowerBoundTolerance);
         if (maxDiscount > MAX_DISCOUNT_LIMIT) revert MaxDiscountTooHigh(maxDiscount);
+        if (lookbackWindowSize == 0) revert InvalidLookbackWindow();
 
         assetConfigs[asset] = AssetConfig({
             name: assetName,
@@ -196,6 +197,7 @@ contract ParameterRegistry is Ownable2Step {
 
     function setLookbackWindowSize(address asset, uint80 _lookbackWindowSize) external onlyUpdater {
         if (!assetConfigs[asset].exists) revert AssetNotFound();
+        if (_lookbackWindowSize == 0) revert InvalidLookbackWindow();
         assetConfigs[asset].lookbackWindowSize = _lookbackWindowSize;
         emit LookbackWindowSizeSet(asset, _lookbackWindowSize);
     }
@@ -264,7 +266,6 @@ contract ParameterRegistry is Ownable2Step {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         if (!assetConfigs[asset].exists) revert AssetNotFound();
-        if (assetConfigs[asset].lookbackWindowSize == 0) revert InvalidLookbackWindow();
         if (assetConfigs[asset].oracle == address(0)) revert OracleNotSet();
 
         address aggregatorAddress;
