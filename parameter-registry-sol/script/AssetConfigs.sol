@@ -5,7 +5,10 @@ pragma solidity >=0.8.26 <0.9.0;
 /// @notice Centralized asset configuration for all networks
 /// @dev This contract provides all asset configurations for different chains
 contract AssetConfigs {
+    /// @notice Error thrown when an unsupported chain ID is provided
+    error UnsupportedChainId();
     /// @notice Asset parameter configuration structure
+
     struct AssetConfig {
         address assetAddress;
         string assetName;
@@ -30,9 +33,9 @@ contract AssetConfigs {
         AssetConfig[] memory assets = new AssetConfig[](6);
 
         assets[0] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x5a0F93D040De44e78F251b03c43be9CF317Dcf64),
             assetName: "JAAA",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0x1E41Ef40AC148706c114534E8192Ca608f80fC48),
             maxExpectedApy: 520, // 5.2%
             upperBoundTolerance: 50, // 0.5%
             lowerBoundTolerance: 10, // 0.1%
@@ -44,9 +47,9 @@ contract AssetConfigs {
         });
 
         assets[1] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x43415eB6ff9DB7E26A15b704e7A3eDCe97d31C4e),
             assetName: "USTB",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0xde49c7B5C0E54b1624ED21C7D88bA6593d444Aa0),
             maxExpectedApy: 415, // 4.15%
             upperBoundTolerance: 15, // 0.15%
             lowerBoundTolerance: 5, // 0.05%
@@ -58,9 +61,9 @@ contract AssetConfigs {
         });
 
         assets[2] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x8c213ee79581Ff4984583C6a801e5263418C4b86),
             assetName: "JTRSY",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0x23adce82907D20c509101E2Af0723A9e16224EFb),
             maxExpectedApy: 390, // 3.9%
             upperBoundTolerance: 15, // 0.15%
             lowerBoundTolerance: 5, // 0.05%
@@ -72,7 +75,7 @@ contract AssetConfigs {
         });
 
         assets[3] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x2255718832bC9fD3bE1CaF75084F4803DA14FF01),
             assetName: "VBILL",
             oracle: address(0), // TODO: Change to actual oracle address
             maxExpectedApy: 0, // 0%
@@ -86,9 +89,9 @@ contract AssetConfigs {
         });
 
         assets[4] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x14d60E7FDC0D71d8611742720E4C50E7a974020c),
             assetName: "USCC",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0x19e2d716288751c5A59deaB61af012D5DF895962),
             maxExpectedApy: 2500, // 25%
             upperBoundTolerance: 50, // 0.5%
             lowerBoundTolerance: 10, // 0.1%
@@ -100,9 +103,9 @@ contract AssetConfigs {
         });
 
         assets[5] = AssetConfig({
-            assetAddress: address(0), // TODO: Change to actual asset address
+            assetAddress: address(0x14d60E7FDC0D71d8611742720E4C50E7a974020c),
             assetName: "USYC",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0xE8E65Fb9116875012F5990Ecaab290B3531DbeB9),
             maxExpectedApy: 420, // 4.2%
             upperBoundTolerance: 15, // 0.15%
             lowerBoundTolerance: 5, // 0.05%
@@ -218,7 +221,7 @@ contract AssetConfigs {
             // Anvil local network
             return getAnvilAssets();
         } else {
-            revert("AssetConfigs: Unsupported chain ID");
+            revert UnsupportedChainId();
         }
     }
 
