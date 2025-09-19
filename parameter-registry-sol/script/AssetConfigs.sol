@@ -231,19 +231,4 @@ contract AssetConfigs {
     function hasAssetsForChain(uint256 chainId) public pure returns (bool) {
         return chainId == 1 || chainId == 11_155_111 || chainId == 31_337;
     }
-
-    /// @notice Get the number of assets configured for a chain
-    /// @param chainId The chain ID of the target network
-    /// @return The number of assets configured
-    function getAssetCountForChain(uint256 chainId) public pure returns (uint256) {
-        if (chainId == 1) {
-            return 6; // Mainnet has 6 assets configured
-        } else if (chainId == 11_155_111) {
-            return 1; // Sepolia has 1 asset configured
-        } else if (chainId == 31_337) {
-            return 3; // Anvil has 3 assets configured
-        } else {
-            return 0;
-        }
-    }
 }

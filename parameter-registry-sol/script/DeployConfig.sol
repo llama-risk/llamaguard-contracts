@@ -117,11 +117,4 @@ contract DeployConfig {
     function hasAssetsForChain(uint256 chainId) public view returns (bool) {
         return assetConfigs.hasAssetsForChain(chainId);
     }
-
-    /// @notice Get the number of assets configured for a chain
-    /// @param chainId The chain ID of the target network
-    /// @return The number of assets configured
-    function getAssetCountForChain(uint256 chainId) public view returns (uint256) {
-        return assetConfigs.getAssetCountForChain(chainId);
-    }
 }
