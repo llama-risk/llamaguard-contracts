@@ -7,51 +7,62 @@ import { DeployConfig } from "./DeployConfig.sol";
 import { AssetConfigs } from "./AssetConfigs.sol";
 import { console2 } from "forge-std/src/console2.sol";
 
-/// @title DeployParameterRegistry
-/// @notice Universal deployment script for ParameterRegistry contract with asset parameter configuration
-/// @dev Supports deployment to Ethereum mainnet, Sepolia, and local Anvil networks with optional ownership transfer
-contract DeployParameterRegistry is BaseScript {
+/// @title DeployMainnet
+/// @notice Mainnet deployment script for ParameterRegistry with ownership transfer workflow
+/// @dev Deploys with deployer as initial owner/updater, configures assets, then transfers roles
+contract DeployMainnet is BaseScript {
     DeployConfig internal deployConfig;
 
     function setUp() public {
         deployConfig = new DeployConfig();
     }
 
-    /// @notice Main deployment function with asset parameter configuration and optional ownership transfer
+    /// @notice Main deployment function with ownership transfer workflow
+    /// @dev 1. Deploy with deployer as owner/updater
+    ///      2. Configure assets
+    ///      3. Transfer updater role
+    ///      4. Transfer ownership (two-step process)
     /// @return parameterRegistry The deployed ParameterRegistry contract
     function run() public broadcast returns (ParameterRegistry parameterRegistry) {
-        // Deploy the registry
+        require(block.chainid == 1, "Not on Ethereum mainnet");
+
+        // Step 1: Deploy the registry with deployer as initial owner and updater
         parameterRegistry = deployRegistry();
 
-        // Configure asset parameters
+        // Step 2: Configure asset parameters
         configureAssets(parameterRegistry);
 
-        // Transfer roles if configured
-        transferRolesIfNeeded(parameterRegistry);
+        // Step 3: Transfer updater role and initiate ownership transfer
+        transferRoles(parameterRegistry);
+
+        console2.log("===========================================");
+        console2.log("Mainnet deployment completed successfully!");
+        console2.log("===========================================");
+        console2.log("ParameterRegistry:", address(parameterRegistry));
+        console2.log("Current owner:", parameterRegistry.owner());
+        console2.log("Pending owner:", parameterRegistry.pendingOwner());
+        console2.log("Current updater:", parameterRegistry.updater());
+        console2.log("");
+        console2.log("IMPORTANT: The pending owner must call acceptOwnership() to complete the transfer");
+        console2.log("===========================================");
     }
 
     /// @notice Deploy the ParameterRegistry contract
     /// @return parameterRegistry The deployed contract
     function deployRegistry() internal returns (ParameterRegistry parameterRegistry) {
-        // Get the current chain ID
-        uint256 chainId = block.chainid;
-        console2.log("Deploying to chain ID:", chainId);
+        console2.log("===========================================");
+        console2.log("Deploying ParameterRegistry to Mainnet");
+        console2.log("===========================================");
 
-        // Get configuration based on deployment method
-        DeployConfig.Config memory config = getConfig(chainId);
-
-        // For initial deployment, use deployer as both owner and updater
+        // For mainnet, deployer starts as both owner and updater
         address initialOwner = broadcaster;
         address initialUpdater = broadcaster;
 
-        // Log deployment parameters
-        console2.log("Network:", config.networkName);
         console2.log("Deployer (initial owner/updater):", broadcaster);
 
         // Deploy the contract
         parameterRegistry = new ParameterRegistry(initialOwner, initialUpdater);
 
-        // Log deployment result
         console2.log("ParameterRegistry deployed at:", address(parameterRegistry));
         console2.log("Initial owner:", parameterRegistry.owner());
         console2.log("Initial updater:", parameterRegistry.updater());
@@ -64,13 +75,16 @@ contract DeployParameterRegistry is BaseScript {
     /// @notice Configure asset parameters in the registry
     /// @param parameterRegistry The deployed registry contract
     function configureAssets(ParameterRegistry parameterRegistry) internal {
-        uint256 chainId = block.chainid;
+        console2.log("");
+        console2.log("===========================================");
+        console2.log("Configuring Assets");
+        console2.log("===========================================");
 
-        // Get asset configurations for the current chain
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getAssetsByChainId(chainId);
+        // Get asset configurations for mainnet
+        AssetConfigs.AssetConfig[] memory assets = deployConfig.getMainnetAssets();
 
         if (assets.length == 0) {
-            console2.log("No assets to configure");
+            console2.log("No assets to configure (add them to DeployConfig.getMainnetAssets())");
             return;
         }
 
@@ -79,7 +93,8 @@ contract DeployParameterRegistry is BaseScript {
         for (uint256 i = 0; i < assets.length; i++) {
             AssetConfigs.AssetConfig memory asset = assets[i];
 
-            console2.log("Setting parameters for asset:", asset.assetName);
+            console2.log("");
+            console2.log("Setting parameters for asset", i + 1, ":", asset.assetName);
             console2.log("  Asset address:", asset.assetAddress);
             console2.log("  Oracle address:", asset.oracle);
 
@@ -103,23 +118,29 @@ contract DeployParameterRegistry is BaseScript {
             console2.log("  Lower Bound Tolerance:", asset.lowerBoundTolerance, "BPS");
             console2.log("  Max Discount:", asset.maxDiscount, "BPS");
             console2.log("  Lookback Window:", asset.lookbackWindowSize, "blocks");
-            console2.log("  Asset configured successfully");
+            console2.log("  Upper Bound Enabled:", asset.isUpperBoundEnabled);
+            console2.log("  Lower Bound Enabled:", asset.isLowerBoundEnabled);
+            console2.log("  Action Taking Enabled:", asset.isActionTakingEnabled);
+            console2.log("  [OK] Asset configured successfully");
         }
 
+        console2.log("");
         console2.log("All assets configured successfully!");
     }
 
-    /// @notice Transfer updater role and initiate ownership transfer if configured
+    /// @notice Transfer updater role and initiate ownership transfer
     /// @param parameterRegistry The deployed registry contract
-    function transferRolesIfNeeded(ParameterRegistry parameterRegistry) internal {
-        uint256 chainId = block.chainid;
-        DeployConfig.Config memory config = getConfig(chainId);
+    function transferRoles(ParameterRegistry parameterRegistry) internal {
+        console2.log("");
+        console2.log("===========================================");
+        console2.log("Transferring Roles");
+        console2.log("===========================================");
 
-        bool rolesTransferred = false;
+        // Get the configuration
+        DeployConfig.Config memory config = deployConfig.getMainnetConfig();
 
-        // Transfer updater role (immediate) if configured
+        // Transfer updater role (immediate)
         if (config.pendingUpdater != address(0) && config.pendingUpdater != broadcaster) {
-            console2.log("");
             console2.log("Transferring updater role...");
             console2.log("  From:", broadcaster);
             console2.log("  To:", config.pendingUpdater);
@@ -128,10 +149,11 @@ contract DeployParameterRegistry is BaseScript {
 
             console2.log("  [OK] Updater role transferred");
             require(parameterRegistry.updater() == config.pendingUpdater, "Updater not transferred correctly");
-            rolesTransferred = true;
+        } else {
+            console2.log("Updater role not transferred (pendingUpdater not set or same as deployer)");
         }
 
-        // Initiate ownership transfer (two-step process) if configured
+        // Initiate ownership transfer (two-step process)
         if (config.pendingOwner != address(0) && config.pendingOwner != broadcaster) {
             console2.log("");
             console2.log("Initiating ownership transfer (two-step process)...");
@@ -144,99 +166,51 @@ contract DeployParameterRegistry is BaseScript {
             console2.log("  [PENDING] New owner must call acceptOwnership() to complete transfer");
 
             require(parameterRegistry.pendingOwner() == config.pendingOwner, "Pending owner not set correctly");
-            rolesTransferred = true;
-        }
-
-        if (rolesTransferred) {
-            console2.log("");
-            console2.log("===========================================");
-            console2.log("Deployment completed with role transfers!");
-            console2.log("===========================================");
-            console2.log("ParameterRegistry:", address(parameterRegistry));
-            console2.log("Current owner:", parameterRegistry.owner());
-            if (parameterRegistry.pendingOwner() != address(0)) {
-                console2.log("Pending owner:", parameterRegistry.pendingOwner());
-                console2.log("IMPORTANT: Pending owner must call acceptOwnership()");
-            }
-            console2.log("Current updater:", parameterRegistry.updater());
-            console2.log("===========================================");
+        } else {
+            console2.log("Ownership transfer not initiated (pendingOwner not set or same as deployer)");
         }
     }
 
-    /// @notice Get configuration based on priority: env vars > chain-specific config
-    /// @param chainId The chain ID of the target network
-    /// @return config The deployment configuration
-    function getConfig(uint256 chainId) internal view returns (DeployConfig.Config memory config) {
-        // First, try to get configuration from environment variables
-        bool useEnvConfig = vm.envOr({ name: "USE_ENV_CONFIG", defaultValue: false });
-
-        if (useEnvConfig) {
-            console2.log("Using environment variable configuration");
-
-            address owner = vm.envOr({ name: "OWNER_ADDRESS", defaultValue: address(0) });
-            address updater = vm.envOr({ name: "UPDATER_ADDRESS", defaultValue: address(0) });
-            address pendingOwner = vm.envOr({ name: "PENDING_OWNER_ADDRESS", defaultValue: address(0) });
-            address pendingUpdater = vm.envOr({ name: "PENDING_UPDATER_ADDRESS", defaultValue: address(0) });
-
-            // If env vars are set, use them
-            if (owner != address(0) && updater != address(0)) {
-                // Try to get network name, default to chain ID string if not set
-                string memory networkName;
-                try vm.envString("NETWORK_NAME") returns (string memory name) {
-                    networkName = name;
-                } catch {
-                    networkName = string(abi.encodePacked("chain-", vm.toString(chainId)));
-                }
-
-                config = DeployConfig.Config({
-                    owner: owner,
-                    updater: updater,
-                    pendingOwner: pendingOwner,
-                    pendingUpdater: pendingUpdater,
-                    networkName: networkName
-                });
-                return config;
-            }
-        }
-
-        // Otherwise, use chain-specific configuration
-        console2.log("Using chain-specific configuration");
-        config = deployConfig.getConfigByChainId(chainId);
-    }
-
-    /// @notice Deploy only the registry without configuration
-    /// @dev Useful when you want to deploy the registry but configure assets separately
+    /// @notice Deploy only the registry without configuration or role transfers
+    /// @dev Useful for testing or when configuration will be done separately
+    /// @return parameterRegistry The deployed contract
     function deployOnly() public broadcast returns (ParameterRegistry parameterRegistry) {
+        require(block.chainid == 1, "Not on Ethereum mainnet");
         parameterRegistry = deployRegistry();
-        console2.log("Registry deployed without asset configuration");
-        console2.log("To configure assets, call configureAssetsManually() separately");
+        console2.log("");
+        console2.log("Registry deployed without configuration or role transfers");
     }
 
     /// @notice Configure assets on an already deployed registry
     /// @dev Can be called separately after deployment if needed
     /// @param registryAddress The address of the deployed ParameterRegistry
-    function configureAssetsManually(address registryAddress) public broadcast {
+    function configureAssetsOnly(address registryAddress) public broadcast {
         require(registryAddress != address(0), "Registry address cannot be zero");
+        require(block.chainid == 1, "Not on Ethereum mainnet");
+
         ParameterRegistry parameterRegistry = ParameterRegistry(registryAddress);
 
-        // Verify the registry is valid
+        // Verify the registry is valid and we have updater permissions
         require(parameterRegistry.owner() != address(0), "Invalid registry contract");
+        require(parameterRegistry.updater() == broadcaster, "Caller is not the updater");
 
-        console2.log("Configuring assets on registry at:", registryAddress);
+        console2.log("Configuring assets on existing registry at:", registryAddress);
         configureAssets(parameterRegistry);
     }
 
     /// @notice Transfer roles on an already deployed and configured registry
     /// @dev Can be called separately after deployment and configuration
     /// @param registryAddress The address of the deployed ParameterRegistry
-    function transferRolesManually(address registryAddress) public broadcast {
+    function transferRolesOnly(address registryAddress) public broadcast {
         require(registryAddress != address(0), "Registry address cannot be zero");
+        require(block.chainid == 1, "Not on Ethereum mainnet");
+
         ParameterRegistry parameterRegistry = ParameterRegistry(registryAddress);
 
         // Verify the registry is valid and we have owner permissions
         require(parameterRegistry.owner() == broadcaster, "Caller is not the owner");
 
         console2.log("Transferring roles on existing registry at:", registryAddress);
-        transferRolesIfNeeded(parameterRegistry);
+        transferRoles(parameterRegistry);
     }
 }
