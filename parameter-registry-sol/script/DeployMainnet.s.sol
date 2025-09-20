@@ -131,6 +131,12 @@ contract DeployMainnet is BaseScript {
     /// @notice Transfer updater role and initiate ownership transfer
     /// @param parameterRegistry The deployed registry contract
     function transferRoles(ParameterRegistry parameterRegistry) internal {
+        require(config.pendingUpdater != address(0), "Initial updater cannot be zero");
+        require(config.pendingUpdater != broadcaster, "Initial updater cannot be the same as the deployer");
+
+        require(config.pendingOwner != address(0), "Initial owner cannot be zero");
+        require(config.pendingOwner != broadcaster, "Initial owner cannot be the same as the deployer");
+
         console2.log("");
         console2.log("===========================================");
         console2.log("Transferring Roles");
@@ -140,35 +146,27 @@ contract DeployMainnet is BaseScript {
         DeployConfig.Config memory config = deployConfig.getMainnetConfig();
 
         // Transfer updater role (immediate)
-        if (config.pendingUpdater != address(0) && config.pendingUpdater != broadcaster) {
-            console2.log("Transferring updater role...");
-            console2.log("  From:", broadcaster);
-            console2.log("  To:", config.pendingUpdater);
+        console2.log("Transferring updater role...");
+        console2.log("  From:", broadcaster);
+        console2.log("  To:", config.pendingUpdater);
 
-            parameterRegistry.setUpdater(config.pendingUpdater);
+        parameterRegistry.setUpdater(config.pendingUpdater);
 
-            console2.log("  [OK] Updater role transferred");
-            require(parameterRegistry.updater() == config.pendingUpdater, "Updater not transferred correctly");
-        } else {
-            console2.log("Updater role not transferred (pendingUpdater not set or same as deployer)");
-        }
+        console2.log("  [OK] Updater role transferred");
+        require(parameterRegistry.updater() == config.pendingUpdater, "Updater not transferred correctly");
 
         // Initiate ownership transfer (two-step process)
-        if (config.pendingOwner != address(0) && config.pendingOwner != broadcaster) {
-            console2.log("");
-            console2.log("Initiating ownership transfer (two-step process)...");
-            console2.log("  Current owner:", broadcaster);
-            console2.log("  Pending owner:", config.pendingOwner);
+        console2.log("");
+        console2.log("Initiating ownership transfer (two-step process)...");
+        console2.log("  Current owner:", broadcaster);
+        console2.log("  Pending owner:", config.pendingOwner);
 
-            parameterRegistry.transferOwnership(config.pendingOwner);
+        parameterRegistry.transferOwnership(config.pendingOwner);
 
-            console2.log("  [OK] Ownership transfer initiated");
-            console2.log("  [PENDING] New owner must call acceptOwnership() to complete transfer");
+        console2.log("  [OK] Ownership transfer initiated");
+        console2.log("  [PENDING] New owner must call acceptOwnership() to complete transfer");
 
-            require(parameterRegistry.pendingOwner() == config.pendingOwner, "Pending owner not set correctly");
-        } else {
-            console2.log("Ownership transfer not initiated (pendingOwner not set or same as deployer)");
-        }
+        require(parameterRegistry.pendingOwner() == config.pendingOwner, "Pending owner not set correctly");
     }
 
     /// @notice Deploy only the registry without configuration or role transfers

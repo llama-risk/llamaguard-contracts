@@ -103,7 +103,7 @@ contract AssetConfigs {
         });
 
         assets[5] = AssetConfig({
-            assetAddress: address(0x14d60E7FDC0D71d8611742720E4C50E7a974020c),
+            assetAddress: address(0x136471a34f6ef19fE571EFFC1CA711fdb8E49f2b),
             assetName: "USYC",
             oracle: address(0xE8E65Fb9116875012F5990Ecaab290B3531DbeB9),
             maxExpectedApy: 420, // 4.2%
