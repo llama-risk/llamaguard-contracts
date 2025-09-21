@@ -17,6 +17,10 @@ contract DeployMainnet is BaseScript {
         deployConfig = new DeployConfig();
     }
 
+    function setDeployConfig(DeployConfig _deployConfig) public {
+        deployConfig = _deployConfig;
+    }
+
     /// @notice Main deployment function with ownership transfer workflow
     /// @dev 1. Deploy with deployer as owner/updater
     ///      2. Configure assets
@@ -131,6 +135,9 @@ contract DeployMainnet is BaseScript {
     /// @notice Transfer updater role and initiate ownership transfer
     /// @param parameterRegistry The deployed registry contract
     function transferRoles(ParameterRegistry parameterRegistry) internal {
+        // Get the configuration
+        DeployConfig.Config memory config = deployConfig.getMainnetConfig();
+
         require(config.pendingUpdater != address(0), "Initial updater cannot be zero");
         require(config.pendingUpdater != broadcaster, "Initial updater cannot be the same as the deployer");
 
@@ -141,9 +148,6 @@ contract DeployMainnet is BaseScript {
         console2.log("===========================================");
         console2.log("Transferring Roles");
         console2.log("===========================================");
-
-        // Get the configuration
-        DeployConfig.Config memory config = deployConfig.getMainnetConfig();
 
         // Transfer updater role (immediate)
         console2.log("Transferring updater role...");

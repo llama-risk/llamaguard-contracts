@@ -77,7 +77,7 @@ contract AssetConfigs {
         assets[3] = AssetConfig({
             assetAddress: address(0x2255718832bC9fD3bE1CaF75084F4803DA14FF01),
             assetName: "VBILL",
-            oracle: address(0), // TODO: Change to actual oracle address
+            oracle: address(0x0000000000000000000000000000000000000001), // TODO: Change to actual oracle address
             maxExpectedApy: 0, // 0%
             upperBoundTolerance: 10, // 0.1%
             lowerBoundTolerance: 10, // 0.1%
