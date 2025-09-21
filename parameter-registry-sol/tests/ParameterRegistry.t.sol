@@ -6,8 +6,11 @@ import { ParameterRegistry } from "../src/ParameterRegistry.sol";
 import { MockAggregatorV3 } from "./mocks/MockAggregatorV3.sol";
 import { MockOracleProxy } from "./mocks/MockOracleProxy.sol";
 import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { stdStorage, StdStorage } from "forge-std/src/StdStorage.sol";
 
 contract ParameterRegistryTest is Test {
+    using stdStorage for StdStorage;
+
     ParameterRegistry internal registry;
     MockAggregatorV3 internal mockAggregator;
     MockAggregatorV3 internal mockAggregatorWithZeroRoundId;
@@ -72,7 +75,7 @@ contract ParameterRegistryTest is Test {
         assertEq(registry.updater(), newUpdater);
 
         vm.prank(nonOwner);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, nonOwner));
         registry.setUpdater(makeAddr("anotherUpdater"));
     }
 
