@@ -30,7 +30,7 @@ contract AssetConfigs {
     /// @notice Returns asset configurations for Ethereum mainnet
     /// @return assets Array of asset configurations
     function getMainnetAssets() public pure returns (AssetConfig[] memory) {
-        AssetConfig[] memory assets = new AssetConfig[](6);
+        AssetConfig[] memory assets = new AssetConfig[](5);
 
         assets[0] = AssetConfig({
             assetAddress: address(0x5a0F93D040De44e78F251b03c43be9CF317Dcf64),
@@ -75,20 +75,6 @@ contract AssetConfigs {
         });
 
         assets[3] = AssetConfig({
-            assetAddress: address(0x2255718832bC9fD3bE1CaF75084F4803DA14FF01),
-            assetName: "VBILL",
-            oracle: address(0x0000000000000000000000000000000000000001), // TODO: Change to actual oracle address
-            maxExpectedApy: 0, // 0%
-            upperBoundTolerance: 10, // 0.1%
-            lowerBoundTolerance: 10, // 0.1%
-            maxDiscount: 0, // 0%
-            lookbackWindowSize: 4, // 1 update per day
-            isUpperBoundEnabled: true,
-            isLowerBoundEnabled: true,
-            isActionTakingEnabled: false
-        });
-
-        assets[4] = AssetConfig({
             assetAddress: address(0x14d60E7FDC0D71d8611742720E4C50E7a974020c),
             assetName: "USCC",
             oracle: address(0x19e2d716288751c5A59deaB61af012D5DF895962),
@@ -102,7 +88,7 @@ contract AssetConfigs {
             isActionTakingEnabled: false
         });
 
-        assets[5] = AssetConfig({
+        assets[4] = AssetConfig({
             assetAddress: address(0x136471a34f6ef19fE571EFFC1CA711fdb8E49f2b),
             assetName: "USYC",
             oracle: address(0xE8E65Fb9116875012F5990Ecaab290B3531DbeB9),

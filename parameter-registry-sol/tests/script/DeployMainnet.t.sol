@@ -55,7 +55,6 @@ contract DeployMainnetTest is Test {
                 })
             )
         );
-        // stdstore.target(address(deployScript)).sig("broadcaster()").checked_write(address(deployer));
 
         // Run full deployment
         ParameterRegistry registry = deployScript.run();

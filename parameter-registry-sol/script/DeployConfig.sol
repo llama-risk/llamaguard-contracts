@@ -32,8 +32,8 @@ contract DeployConfig {
         return Config({
             owner: 0x0000000000000000000000000000000000000000, // TODO: Set deployer address (initial owner)
             updater: 0x0000000000000000000000000000000000000000, // TODO: Set deployer address (initial updater)
-            pendingOwner: 0x0000000000000000000000000000000000000000, // TODO: Set final owner address
-            pendingUpdater: 0x0000000000000000000000000000000000000000, // TODO: Set final updater address
+            pendingOwner: 0xE6ec1f0Ae6Cd023bd0a9B4d0253BDC755103253c,
+            pendingUpdater: 0xE6ec1f0Ae6Cd023bd0a9B4d0253BDC755103253c,
             networkName: "mainnet"
         });
     }
