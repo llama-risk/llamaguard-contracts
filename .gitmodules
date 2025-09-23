@@ -1,3 +1,9 @@
 [submodule "parameter-registry-sol/lib/forge-std"]
 	path = parameter-registry-sol/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "llamaguard-oracle/lib/forge-std"]
+	path = llamaguard-oracle/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "llamaguard-oracle/lib/openzeppelin-contracts"]
+	path = llamaguard-oracle/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
