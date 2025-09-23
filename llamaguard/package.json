@@ -3,10 +3,11 @@
   "description": "Parameter registry for SmartNav",
   "version": "1.0.0",
   "author": {
-    "name": "zekilbuna",
-    "url": "https://github.com/zekilblue"
+    "name": "zekiblue",
+    "url": "https://github.com/zekiblue"
   },
   "dependencies": {
+    "@chainlink/contracts": "1.4.0",
     "@openzeppelin/contracts": "5.3.0"
   },
   "devDependencies": {

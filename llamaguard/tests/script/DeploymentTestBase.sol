@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.26 <0.9.0;
 
-import { Test } from "forge-std/src/Test.sol";
+import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { DeployConfig } from "../../script/DeployConfig.sol";
 import { AssetConfigs } from "../../script/AssetConfigs.sol";
