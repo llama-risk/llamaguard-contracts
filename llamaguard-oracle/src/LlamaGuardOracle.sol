@@ -7,52 +7,46 @@ import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract LlamaGuardOracle is Ownable2Step, ILlamaGuardOracle {
-  address public proxyAddress;
+    address public proxyAddress;
 
-  AggregatorV3 public aggregator;
+    AggregatorV3 public aggregator;
 
-  uint256 public supply;
-  uint256 public state;
+    uint256 public supply;
+    uint256 public state;
 
-  modifier onlyProxy() {
-    require(msg.sender == proxyAddress, "Caller is not the authorized proxy");
-    _;
-  }
+    modifier onlyProxy() {
+        require(msg.sender == proxyAddress, "Caller is not the authorized proxy");
+        _;
+    }
 
-  constructor(
-    uint8 decimals,
-    string memory description,
-    uint256 version
-  ) Ownable(msg.sender) {
-    aggregator = new AggregatorV3(decimals, description, version);
-  }
+    constructor(uint8 decimals, string memory description, uint256 version) Ownable(msg.sender) {
+        aggregator = new AggregatorV3(decimals, description, version);
+    }
 
-  function setProxyAddress(address _proxyAddress) external onlyOwner {
-    proxyAddress = _proxyAddress;
-  }
+    function setProxyAddress(address _proxyAddress) external onlyOwner {
+        proxyAddress = _proxyAddress;
+    }
 
-  /// @notice Update the data from the oracle
-  /// @param _supply The supply of the asset
-  /// @param _price The price of the asset
-  /// @param _state The state of the workflow
-  function updateData(uint256 _supply, uint256 _price, uint256 _state) external onlyProxy {
-    
-    aggregator.updateLatestRoundData(int256(_price));
-    
-    state = _state;
-    supply = _supply;
-    
-    emit UpdateReceived(_supply, _price, _state);
-  }
+    /// @notice Update the data from the oracle
+    /// @param _supply The supply of the asset
+    /// @param _price The price of the asset
+    /// @param _state The state of the workflow
+    function updateData(uint256 _supply, uint256 _price, uint256 _state) external onlyProxy {
+        aggregator.updateLatestRoundData(int256(_price));
 
-  /// @notice Get the data from the oracle
-  /// @return supply The supply of the asset in the latest round
-  /// @return state The state of the workflow
-  /// @return price The price of the asset in the latest round
-  /// @return startedAt The timestamp when the latest round started
-  function getData() public view returns (uint256, uint256, int256, uint256) {
-    (, int256 answer, uint256 startedAt, , ) =
-      aggregator.latestRoundData();
-    return (supply, state, answer, startedAt);
-  }
+        state = _state;
+        supply = _supply;
+
+        emit UpdateReceived(_supply, _price, _state);
+    }
+
+    /// @notice Get the data from the oracle
+    /// @return supply The supply of the asset in the latest round
+    /// @return state The state of the workflow
+    /// @return price The price of the asset in the latest round
+    /// @return startedAt The timestamp when the latest round started
+    function getData() public view returns (uint256, uint256, int256, uint256) {
+        (, int256 answer, uint256 startedAt,,) = aggregator.latestRoundData();
+        return (supply, state, answer, startedAt);
+    }
 }
