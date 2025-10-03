@@ -45,7 +45,104 @@ bun run test:coverage
 
 ## Deployment
 
-TODO
+### Configuration
+
+Before deploying, configure the target network in `script/DeployConfig.sol`:
+
+```solidity
+function getMainnetConfig() public pure returns (Config memory) {
+    return Config({
+        expectedAuthor: address(0x...), // Set CRE workflow author
+        expectedWorkflowName: bytes10("YOUR_FLOW"),
+        decimals: 8,
+        description: "LlamaGuard Oracle - Mainnet",
+        version: 1,
+        pendingOwner: address(0x...), // Set final owner
+        networkName: "mainnet"
+    });
+}
+```
+
+### Deployment Options
+
+#### Option 1: Deploy with Configuration (Recommended)
+
+Deploys both contracts, configures proxy, and optionally transfers ownership:
+
+```bash
+# Using chain-specific config from DeployConfig.sol
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --rpc-url mainnet \
+  --broadcast \
+  --verify
+
+# Using environment variables
+USE_ENV_CONFIG=true \
+EXPECTED_AUTHOR=0x... \
+EXPECTED_WORKFLOW_NAME=0x5445535446... \
+PENDING_OWNER=0x... \
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --rpc-url mainnet \
+  --broadcast \
+  --verify
+```
+
+#### Option 2: Mainnet-Specific Deployment
+
+Uses dedicated mainnet script with additional safety checks:
+
+```bash
+forge script script/DeployMainnet.s.sol:DeployMainnet \
+  --rpc-url mainnet \
+  --broadcast \
+  --verify
+```
+
+#### Option 3: Step-by-Step Deployment
+
+Deploy, configure, and transfer ownership separately:
+
+```bash
+# 1. Deploy only
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --sig "deployOnly()" \
+  --rpc-url mainnet \
+  --broadcast
+
+# 2. Configure with proxy
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --sig "configureManually(address,address)" <ORACLE_ADDRESS> <PROXY_ADDRESS> \
+  --rpc-url mainnet \
+  --broadcast
+
+# 3. Transfer ownership
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --sig "transferOwnershipManually(address)" <ORACLE_ADDRESS> \
+  --rpc-url mainnet \
+  --broadcast
+```
+
+### Local Testing
+
+Test deployment on Anvil:
+
+```bash
+# Start Anvil
+anvil
+
+# Deploy to local network
+forge script script/DeployLlamaGuardOracle.s.sol:DeployLlamaGuardOracle \
+  --rpc-url localhost \
+  --broadcast
+```
+
+### Post-Deployment
+
+After deployment with ownership transfer:
+
+1. **Accept Ownership**: New owner must call `acceptOwnership()` on the oracle
+2. **Verify Contracts**: Check on Etherscan that contracts are verified
+3. **Test Update**: Send a test report through the proxy to verify functionality
 
 ## Development
 
