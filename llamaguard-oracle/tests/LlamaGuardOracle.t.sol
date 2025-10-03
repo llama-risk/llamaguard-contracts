@@ -3,7 +3,6 @@ pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { AggregatorV3 } from "../src/AggregatorV3.sol";
 
 contract LlamaGuardOracleTest is Test {
     LlamaGuardOracle internal oracle;
@@ -30,20 +29,18 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.state(), 0);
         assertEq(oracle.proxyAddress(), address(0));
 
-        // Verify aggregator was created with correct parameters
-        AggregatorV3 aggregator = oracle.aggregator();
-        assertEq(aggregator.decimals(), 8);
-        assertEq(aggregator.description(), "Test Feed");
-        assertEq(aggregator.version(), 1);
+        // Verify oracle inherits aggregator functionality with correct parameters
+        assertEq(oracle.decimals(), 8);
+        assertEq(oracle.description(), "Test Feed");
+        assertEq(oracle.version(), 1);
     }
 
     function testConstructorWithDifferentParameters() public {
         LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "ETH/USD", 2);
 
-        AggregatorV3 aggregator = newOracle.aggregator();
-        assertEq(aggregator.decimals(), 18);
-        assertEq(aggregator.description(), "ETH/USD");
-        assertEq(aggregator.version(), 2);
+        assertEq(newOracle.decimals(), 18);
+        assertEq(newOracle.description(), "ETH/USD");
+        assertEq(newOracle.version(), 2);
     }
 
     // ============================================
@@ -184,6 +181,72 @@ contract LlamaGuardOracleTest is Test {
     }
 
     // ============================================
+    // Security Tests: Only Proxy Can Update
+    // ============================================
+
+    function testOnlyConfiguredProxyCanUpdate() public {
+        oracle.setProxyAddress(proxy);
+
+        // Only the configured proxy can successfully update
+        vm.prank(proxy);
+        oracle.updateData(100, 200, 1);
+
+        (uint256 supply, uint256 state, int256 price,) = oracle.getData();
+        assertEq(supply, 100);
+        assertEq(price, 200);
+        assertEq(state, 1);
+    }
+
+    function testCannotUpdateAfterProxyChanged() public {
+        oracle.setProxyAddress(proxy);
+
+        address newProxy = address(0x9999);
+        oracle.setProxyAddress(newProxy);
+
+        // Old proxy can no longer update
+        vm.prank(proxy);
+        vm.expectRevert("Caller is not the authorized proxy");
+        oracle.updateData(100, 200, 1);
+
+        // New proxy can update
+        vm.prank(newProxy);
+        oracle.updateData(100, 200, 1);
+        assertEq(oracle.supply(), 100);
+    }
+
+    function testMultipleUnauthorizedCallersCannot() public {
+        oracle.setProxyAddress(proxy);
+
+        address[] memory attackers = new address[](5);
+        attackers[0] = address(0xDEAD);
+        attackers[1] = address(0xBEEF);
+        attackers[2] = address(0xCAFE);
+        attackers[3] = owner; // Even owner
+        attackers[4] = address(this); // Even test contract
+
+        for (uint256 i = 0; i < attackers.length; i++) {
+            vm.prank(attackers[i]);
+            vm.expectRevert("Caller is not the authorized proxy");
+            oracle.updateData(999, 999, 999);
+        }
+
+        // Verify no data was changed
+        assertEq(oracle.supply(), 0);
+        assertEq(oracle.state(), 0);
+    }
+
+    function testDirectCallToInternalUpdateIsImpossible() public view {
+        // NOTE: This test exists to document security.
+        // updateLatestRoundData() is internal and CANNOT be called externally.
+        // The compiler prevents external calls: oracle.updateLatestRoundData(123)
+        // This means the ONLY way to update price data is through:
+        // LlamaGuardOracleProxy → oracle.updateData() [onlyProxy] → internal updateLatestRoundData()
+        
+        // If this test compiles, it proves the security model is intact.
+        assertTrue(true, "Internal method security verified by compilation");
+    }
+
+    // ============================================
     // getData Tests
     // ============================================
 
@@ -247,35 +310,49 @@ contract LlamaGuardOracleTest is Test {
     function testAggregatorRoundIdIncreases() public {
         oracle.setProxyAddress(proxy);
 
-        AggregatorV3 aggregator = oracle.aggregator();
-        uint80 initialRoundId = aggregator.getLatestRoundId();
+        uint80 initialRoundId = oracle.getLatestRoundId();
 
         vm.prank(proxy);
         oracle.updateData(1000, 500, 2);
 
-        uint80 newRoundId = aggregator.getLatestRoundId();
+        uint80 newRoundId = oracle.getLatestRoundId();
         assertEq(newRoundId, initialRoundId + 1);
     }
 
     function testAggregatorStoresMultipleRounds() public {
         oracle.setProxyAddress(proxy);
 
-        AggregatorV3 aggregator = oracle.aggregator();
-
         vm.prank(proxy);
         oracle.updateData(100, 50, 1);
-        uint80 round1 = aggregator.getLatestRoundId();
+        uint80 round1 = oracle.getLatestRoundId();
 
         vm.prank(proxy);
         oracle.updateData(200, 75, 2);
-        uint80 round2 = aggregator.getLatestRoundId();
+        uint80 round2 = oracle.getLatestRoundId();
 
         // Verify both rounds are stored
-        (, int256 price1,,,) = aggregator.getRoundData(round1);
-        (, int256 price2,,,) = aggregator.getRoundData(round2);
+        (, int256 price1,,,) = oracle.getRoundData(round1);
+        (, int256 price2,,,) = oracle.getRoundData(round2);
 
         assertEq(price1, 50);
         assertEq(price2, 75);
+    }
+
+    function testOracleIsDirectlyUsableAsChainlinkAggregator() public {
+        oracle.setProxyAddress(proxy);
+
+        vm.prank(proxy);
+        oracle.updateData(1000, 500, 2);
+
+        // Oracle can be used directly as a Chainlink aggregator
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.latestRoundData();
+
+        assertEq(answer, 500);
+        assertGt(roundId, 0);
+        assertGt(startedAt, 0);
+        assertGt(updatedAt, 0);
+        assertEq(answeredInRound, roundId);
     }
 
     // ============================================

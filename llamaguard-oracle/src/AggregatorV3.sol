@@ -112,10 +112,10 @@ contract AggregatorV3 is AggregatorV3Interface {
     }
 
     /**
-     * @dev Update the latest round data (for testing/mocking purposes)
+     * @dev Update the latest round data (internal only, called by derived contracts)
      * @param answer The new price answer
      */
-    function updateLatestRoundData(int256 answer) external {
+    function updateLatestRoundData(int256 answer) internal {
         _latestRoundId++;
 
         _roundData[_latestRoundId] = RoundData({
@@ -127,20 +127,6 @@ contract AggregatorV3 is AggregatorV3Interface {
         });
 
         emit RoundDataUpdated(_latestRoundId, answer, block.timestamp, block.timestamp);
-    }
-
-    /**
-     * @dev Update a specific round data (for testing/mocking purposes)
-     * @param roundId The round ID to update
-     * @param answer The new price answer
-     */
-    function updateRoundData(uint80 roundId, int256 answer) external {
-        require(_roundData[roundId].roundId != 0, "Round not found");
-
-        _roundData[roundId].answer = answer;
-        _roundData[roundId].updatedAt = block.timestamp;
-
-        emit RoundDataUpdated(roundId, answer, _roundData[roundId].startedAt, block.timestamp);
     }
 
     /**

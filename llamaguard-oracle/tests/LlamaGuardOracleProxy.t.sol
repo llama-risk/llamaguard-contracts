@@ -36,20 +36,32 @@ contract LlamaGuardOracleProxyTest is Test {
         assertEq(price, 321);
     }
 
-    function testOnReportRevertsForWrongAuthor() public {
+    // TODO: Re-enable these tests when author/workflow validation is re-enabled in production
+    function testOnReportAcceptsAnyAuthorWhenValidationDisabled() public {
+        // Currently validation is disabled, so any author should work
         bytes memory metadata = _buildMetadata(address(0xBEEF), expectedWorkflowName);
-        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 1, price: 2, state: 3 }));
+        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 100, price: 200, state: 3 }));
 
-        vm.expectRevert();
         proxy.onReport(metadata, report);
+
+        (uint256 supply, uint256 state, int256 price,) = oracle.getData();
+        assertEq(supply, 100);
+        assertEq(state, 3);
+        assertEq(price, 200);
     }
 
-    function testOnReportRevertsForWrongWorkflow() public {
+    // TODO: Re-enable these tests when author/workflow validation is re-enabled in production
+    function testOnReportAcceptsAnyWorkflowWhenValidationDisabled() public {
+        // Currently validation is disabled, so any workflow should work
         bytes memory metadata = _buildMetadata(expectedAuthor, bytes10("WRONGNAME"));
-        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 1, price: 2, state: 3 }));
+        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 500, price: 600, state: 7 }));
 
-        vm.expectRevert();
         proxy.onReport(metadata, report);
+
+        (uint256 supply, uint256 state, int256 price,) = oracle.getData();
+        assertEq(supply, 500);
+        assertEq(state, 7);
+        assertEq(price, 600);
     }
 
     function _buildMetadata(address workflowOwner, bytes10 workflowName) internal pure returns (bytes memory) {

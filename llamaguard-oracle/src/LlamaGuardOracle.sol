@@ -6,10 +6,8 @@ import { ILlamaGuardOracle } from "./ILlamaGuardOracle.sol";
 import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract LlamaGuardOracle is Ownable2Step, ILlamaGuardOracle {
+contract LlamaGuardOracle is Ownable2Step, AggregatorV3, ILlamaGuardOracle {
     address public proxyAddress;
-
-    AggregatorV3 public aggregator;
 
     uint256 public supply;
     uint256 public state;
@@ -19,9 +17,10 @@ contract LlamaGuardOracle is Ownable2Step, ILlamaGuardOracle {
         _;
     }
 
-    constructor(uint8 decimals, string memory description, uint256 version) Ownable(msg.sender) {
-        aggregator = new AggregatorV3(decimals, description, version);
-    }
+    constructor(uint8 decimals, string memory description, uint256 version)
+        Ownable(msg.sender)
+        AggregatorV3(decimals, description, version)
+    { }
 
     function setProxyAddress(address _proxyAddress) external onlyOwner {
         proxyAddress = _proxyAddress;
@@ -32,7 +31,7 @@ contract LlamaGuardOracle is Ownable2Step, ILlamaGuardOracle {
     /// @param _price The price of the asset
     /// @param _state The state of the workflow
     function updateData(uint256 _supply, uint256 _price, uint256 _state) external onlyProxy {
-        aggregator.updateLatestRoundData(int256(_price));
+        updateLatestRoundData(int256(_price));
 
         state = _state;
         supply = _supply;
@@ -46,7 +45,7 @@ contract LlamaGuardOracle is Ownable2Step, ILlamaGuardOracle {
     /// @return price The price of the asset in the latest round
     /// @return startedAt The timestamp when the latest round started
     function getData() public view returns (uint256, uint256, int256, uint256) {
-        (, int256 answer, uint256 startedAt,,) = aggregator.latestRoundData();
+        (, int256 answer, uint256 startedAt,,) = this.latestRoundData();
         return (supply, state, answer, startedAt);
     }
 }
