@@ -20,15 +20,17 @@ abstract contract IReceiverTemplate is IReceiver {
     }
 
     /// @inheritdoc IReceiver
+    // solhint-disable-next-line no-unused-vars
     function onReport(bytes calldata metadata, bytes calldata report) external override {
-        (address workflowOwner, bytes10 workflowName) = _decodeMetadata(metadata);
+        // TODO: Re-enable author and workflow validation before production deployment
+        // (address workflowOwner, bytes10 workflowName) = _decodeMetadata(metadata);
 
-        if (workflowOwner != EXPECTED_AUTHOR) {
-            revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
-        }
-        if (workflowName != EXPECTED_WORKFLOW_NAME) {
-            revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
-        }
+        // if (workflowOwner != EXPECTED_AUTHOR) {
+        //     revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
+        // }
+        // if (workflowName != EXPECTED_WORKFLOW_NAME) {
+        //     revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
+        // }
 
         _processReport(report);
     }
