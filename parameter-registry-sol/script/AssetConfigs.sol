@@ -116,9 +116,9 @@ contract AssetConfigs {
 
         // Single test asset configuration for Sepolia
         assets[0] = AssetConfig({
-            assetAddress: 0x14d60E7FDC0D71d8611742720E4C50E7a974020c,
+            assetAddress: 0x862776CC41B728c43D9375Abc65c9CEda6547E28,
             assetName: "USCC",
-            oracle: 0xE38b0917888d0d5d8d03B7371d5214A1aF8e1892,
+            oracle: 0x9dA303ac504a7bBd7B4E161Ce026fA6893cD28fD,
             maxExpectedApy: 2500, // 25% max APY
             upperBoundTolerance: 50, // 0.5% tolerance
             lowerBoundTolerance: 10, // 0.1% tolerance

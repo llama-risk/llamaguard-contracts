@@ -7,3 +7,6 @@
 [submodule "llamaguard-oracle/lib/openzeppelin-contracts"]
 	path = llamaguard-oracle/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "parameter-registry-sol/lib/openzeppelin-contracts"]
+	path = parameter-registry-sol/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
