@@ -5,15 +5,23 @@ import { AggregatorV3Interface } from "./AggregatorV3Interface.sol";
 
 /**
  * @title AggregatorV3
- * @dev Mock implementation of Chainlink's AggregatorV3Interface
- * This contract can be used for testing or as a placeholder for real oracle data
+ * @notice Implementation of Chainlink's AggregatorV3Interface
+ * 
+ * Security Model:
+ * - updateLatestRoundData() is internal - only callable by derived contracts
+ * - Derived contracts MUST implement proper access control (e.g., LlamaGuardOracle.onlyProxy)
+ * - Historical round data is immutable once created
+ * 
+ * Usage:
+ * This contract should be inherited by oracle implementations that control data updates.
+ * Do NOT deploy directly - it has no access control on its own.
  */
 contract AggregatorV3 is AggregatorV3Interface {
     uint8 private _decimals;
     string private _description;
     uint256 private _version;
 
-    // Mock data structure for round data
+    /// @notice Structure for storing round data
     struct RoundData {
         uint80 roundId;
         int256 answer;
@@ -112,7 +120,8 @@ contract AggregatorV3 is AggregatorV3Interface {
     }
 
     /**
-     * @dev Update the latest round data (internal only, called by derived contracts)
+     * @notice Update the latest round data
+     * @dev Internal function - only callable by derived contracts that implement proper access control
      * @param answer The new price answer
      */
     function updateLatestRoundData(int256 answer) internal {

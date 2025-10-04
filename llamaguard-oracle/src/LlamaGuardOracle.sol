@@ -27,16 +27,14 @@ contract LlamaGuardOracle is Ownable2Step, AggregatorV3, ILlamaGuardOracle {
     }
 
     /// @notice Update the data from the oracle
-    /// @param _supply The supply of the asset
-    /// @param _price The price of the asset
-    /// @param _state The state of the workflow
-    function updateData(uint256 _supply, uint256 _price, uint256 _state) external onlyProxy {
-        updateLatestRoundData(int256(_price));
+    /// @param data The update data containing supply, price, and state
+    function updateData(ILlamaGuardOracle.UpdateData calldata data) external onlyProxy {
+        updateLatestRoundData(int256(data.price));
 
-        state = _state;
-        supply = _supply;
+        state = data.state;
+        supply = data.supply;
 
-        emit UpdateReceived(_supply, _price, _state);
+        emit UpdateReceived(data.supply, data.price, data.state);
     }
 
     /// @notice Get the data from the oracle

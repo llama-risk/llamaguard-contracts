@@ -5,6 +5,7 @@ import { BaseScript } from "./Base.s.sol";
 import { DeployConfig } from "./DeployConfig.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../src/LlamaGuardOracleProxy.sol";
+import { EACAggregatorProxy } from "../src/EACAggregatorProxy.sol";
 import { console2 } from "forge-std/console2.sol";
 
 /// @title DeployLlamaGuardOracle
@@ -29,12 +30,23 @@ contract DeployLlamaGuardOracle is BaseScript {
     /// @notice Main deployment function with proxy setup and optional ownership transfer
     /// @return oracle The deployed LlamaGuardOracle contract
     /// @return proxy The deployed LlamaGuardOracleProxy contract
-    function run() public broadcast returns (LlamaGuardOracle oracle, LlamaGuardOracleProxy proxy) {
+    /// @return eacProxy The deployed EACAggregatorProxy (Sepolia only, otherwise address(0))
+    function run()
+        public
+        broadcast
+        returns (LlamaGuardOracle oracle, LlamaGuardOracleProxy proxy, EACAggregatorProxy eacProxy)
+    {
         // Deploy the oracle and proxy
         (oracle, proxy) = deployContracts();
 
         // Configure the oracle with proxy
         configureOracle(oracle, address(proxy));
+
+        // Deploy EACAggregatorProxy on Sepolia for testing
+        if (block.chainid == 11_155_111) {
+            // Sepolia
+            eacProxy = deployEACAggregatorProxy(oracle);
+        }
 
         // Transfer ownership if configured
         transferOwnershipIfNeeded(oracle);
@@ -93,6 +105,32 @@ contract DeployLlamaGuardOracle is BaseScript {
 
         console2.log("  [OK] Proxy address configured");
         if (oracle.proxyAddress() != proxyAddress) revert ProxyAddressNotSetCorrectly();
+    }
+
+    /// @notice Deploy an EACAggregatorProxy pointing to the oracle (for testing on Sepolia)
+    /// @param oracle The deployed oracle contract
+    /// @return eacProxy The deployed EACAggregatorProxy
+    function deployEACAggregatorProxy(LlamaGuardOracle oracle) internal returns (EACAggregatorProxy eacProxy) {
+        console2.log("");
+        console2.log("Deploying EACAggregatorProxy for testing...");
+        console2.log("  Pointing to oracle:", address(oracle));
+
+        eacProxy = new EACAggregatorProxy(address(oracle));
+
+        console2.log("  [OK] EACAggregatorProxy deployed at:", address(eacProxy));
+        console2.log("  Initial owner:", eacProxy.owner());
+        console2.log("  Aggregator:", address(eacProxy.aggregator()));
+
+        // Verify the proxy points to the oracle
+        require(address(eacProxy.aggregator()) == address(oracle), "EAC proxy not pointing to oracle");
+
+        console2.log("");
+        console2.log("===========================================");
+        console2.log("Testing Setup (Sepolia)");
+        console2.log("===========================================");
+        console2.log("Use this address for Chainlink-compatible consumers:");
+        console2.log("EACAggregatorProxy:", address(eacProxy));
+        console2.log("===========================================");
     }
 
     /// @notice Transfer ownership if configured

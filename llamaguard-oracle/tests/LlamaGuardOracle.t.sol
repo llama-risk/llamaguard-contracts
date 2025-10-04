@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
+import { ILlamaGuardOracle } from "../src/ILlamaGuardOracle.sol";
 
 contract LlamaGuardOracleTest is Test {
     LlamaGuardOracle internal oracle;
@@ -17,6 +18,15 @@ contract LlamaGuardOracleTest is Test {
 
     function setUp() public {
         oracle = new LlamaGuardOracle(8, "Test Feed", 1);
+    }
+
+    /// @dev Helper function to create UpdateData struct
+    function _createUpdateData(uint256 supply, uint256 price, uint256 state)
+        internal
+        pure
+        returns (ILlamaGuardOracle.UpdateData memory)
+    {
+        return ILlamaGuardOracle.UpdateData({ supply: supply, price: price, state: state });
     }
 
     // ============================================
@@ -83,7 +93,7 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(proxy);
         vm.expectEmit(true, true, true, true);
         emit UpdateReceived(1000, 500, 2);
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
 
         assertEq(oracle.supply(), 1000);
         assertEq(oracle.state(), 2);
@@ -98,13 +108,13 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(100, 50, 1);
+        oracle.updateData(_createUpdateData(100, 50, 1));
 
         vm.prank(proxy);
-        oracle.updateData(200, 75, 2);
+        oracle.updateData(_createUpdateData(200, 75, 2));
 
         vm.prank(proxy);
-        oracle.updateData(300, 100, 3);
+        oracle.updateData(_createUpdateData(300, 100, 3));
 
         assertEq(oracle.supply(), 300);
         assertEq(oracle.state(), 3);
@@ -119,7 +129,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(0, 0, 0);
+        oracle.updateData(_createUpdateData(0, 0, 0));
 
         assertEq(oracle.supply(), 0);
         assertEq(oracle.state(), 0);
@@ -138,7 +148,7 @@ contract LlamaGuardOracleTest is Test {
         uint256 largeState = type(uint256).max;
 
         vm.prank(proxy);
-        oracle.updateData(largeSupply, largePrice, largeState);
+        oracle.updateData(_createUpdateData(largeSupply, largePrice, largeState));
 
         assertEq(oracle.supply(), largeSupply);
         assertEq(oracle.state(), largeState);
@@ -154,13 +164,13 @@ contract LlamaGuardOracleTest is Test {
 
         vm.prank(nonAuthorized);
         vm.expectRevert("Caller is not the authorized proxy");
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
     }
 
     function testUpdateDataRevertsWhenProxyNotSet() public {
         vm.prank(proxy);
         vm.expectRevert("Caller is not the authorized proxy");
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
     }
 
     function testUpdateDataRevertsForOwner() public {
@@ -168,7 +178,7 @@ contract LlamaGuardOracleTest is Test {
 
         // Even owner cannot call updateData
         vm.expectRevert("Caller is not the authorized proxy");
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
     }
 
     function testUpdateDataEmitsEvent() public {
@@ -177,7 +187,7 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(proxy);
         vm.expectEmit(true, true, true, true);
         emit UpdateReceived(1234, 5678, 9);
-        oracle.updateData(1234, 5678, 9);
+        oracle.updateData(_createUpdateData(1234, 5678, 9));
     }
 
     // ============================================
@@ -189,7 +199,7 @@ contract LlamaGuardOracleTest is Test {
 
         // Only the configured proxy can successfully update
         vm.prank(proxy);
-        oracle.updateData(100, 200, 1);
+        oracle.updateData(_createUpdateData(100, 200, 1));
 
         (uint256 supply, uint256 state, int256 price,) = oracle.getData();
         assertEq(supply, 100);
@@ -206,11 +216,11 @@ contract LlamaGuardOracleTest is Test {
         // Old proxy can no longer update
         vm.prank(proxy);
         vm.expectRevert("Caller is not the authorized proxy");
-        oracle.updateData(100, 200, 1);
+        oracle.updateData(_createUpdateData(100, 200, 1));
 
         // New proxy can update
         vm.prank(newProxy);
-        oracle.updateData(100, 200, 1);
+        oracle.updateData(_createUpdateData(100, 200, 1));
         assertEq(oracle.supply(), 100);
     }
 
@@ -227,7 +237,7 @@ contract LlamaGuardOracleTest is Test {
         for (uint256 i = 0; i < attackers.length; i++) {
             vm.prank(attackers[i]);
             vm.expectRevert("Caller is not the authorized proxy");
-            oracle.updateData(999, 999, 999);
+            oracle.updateData(_createUpdateData(999, 999, 999));
         }
 
         // Verify no data was changed
@@ -265,7 +275,7 @@ contract LlamaGuardOracleTest is Test {
         uint256 timestampBefore = block.timestamp;
 
         vm.prank(proxy);
-        oracle.updateData(5000, 2500, 7);
+        oracle.updateData(_createUpdateData(5000, 2500, 7));
 
         (uint256 supply, uint256 state, int256 price, uint256 startedAt) = oracle.getData();
 
@@ -279,7 +289,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
 
         // Call from different addresses
         vm.prank(nonAuthorized);
@@ -313,7 +323,7 @@ contract LlamaGuardOracleTest is Test {
         uint80 initialRoundId = oracle.getLatestRoundId();
 
         vm.prank(proxy);
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
 
         uint80 newRoundId = oracle.getLatestRoundId();
         assertEq(newRoundId, initialRoundId + 1);
@@ -323,11 +333,11 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(100, 50, 1);
+        oracle.updateData(_createUpdateData(100, 50, 1));
         uint80 round1 = oracle.getLatestRoundId();
 
         vm.prank(proxy);
-        oracle.updateData(200, 75, 2);
+        oracle.updateData(_createUpdateData(200, 75, 2));
         uint80 round2 = oracle.getLatestRoundId();
 
         // Verify both rounds are stored
@@ -342,7 +352,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
 
         // Oracle can be used directly as a Chainlink aggregator
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -423,7 +433,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(1000, 500, 2);
+        oracle.updateData(_createUpdateData(1000, 500, 2));
 
         // Change proxy
         address newProxy = address(0x9999);
@@ -432,11 +442,11 @@ contract LlamaGuardOracleTest is Test {
         // Old proxy should no longer work
         vm.prank(proxy);
         vm.expectRevert("Caller is not the authorized proxy");
-        oracle.updateData(2000, 1000, 3);
+        oracle.updateData(_createUpdateData(2000, 1000, 3));
 
         // New proxy should work
         vm.prank(newProxy);
-        oracle.updateData(2000, 1000, 3);
+        oracle.updateData(_createUpdateData(2000, 1000, 3));
 
         assertEq(oracle.supply(), 2000);
     }
@@ -446,7 +456,7 @@ contract LlamaGuardOracleTest is Test {
 
         vm.startPrank(proxy);
         for (uint256 i = 1; i <= 10; i++) {
-            oracle.updateData(i * 100, i * 50, i);
+            oracle.updateData(_createUpdateData(i * 100, i * 50, i));
         }
         vm.stopPrank();
 
@@ -471,7 +481,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.setProxyAddress(proxy);
 
         vm.prank(proxy);
-        oracle.updateData(_supply, _price, _state);
+        oracle.updateData(_createUpdateData(_supply, _price, _state));
 
         assertEq(oracle.supply(), _supply);
         assertEq(oracle.state(), _state);

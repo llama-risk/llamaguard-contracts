@@ -7,12 +7,6 @@ import { IReceiverTemplate } from "./IReceiverTemplate.sol";
 contract LlamaGuardOracleProxy is IReceiverTemplate {
     ILlamaGuardOracle public s_llamaGuardOracle;
 
-    struct Update {
-        uint256 supply;
-        uint256 price;
-        uint256 state;
-    }
-
     constructor(
         address llamaGuardOracleAddress,
         address expectedAuthor,
@@ -25,7 +19,7 @@ contract LlamaGuardOracleProxy is IReceiverTemplate {
 
     /// @inheritdoc IReceiverTemplate
     function _processReport(bytes calldata report) internal override {
-        Update memory u = abi.decode(report, (Update));
-        s_llamaGuardOracle.updateData(u.supply, u.price, u.state);
+        ILlamaGuardOracle.UpdateData memory data = abi.decode(report, (ILlamaGuardOracle.UpdateData));
+        s_llamaGuardOracle.updateData(data);
     }
 }

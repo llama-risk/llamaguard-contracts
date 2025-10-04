@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import { Test } from "forge-std/Test.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../src/LlamaGuardOracleProxy.sol";
+import { ILlamaGuardOracle } from "../src/ILlamaGuardOracle.sol";
 
 contract LlamaGuardOracleProxyTest is Test {
     LlamaGuardOracle internal oracle;
@@ -25,8 +26,9 @@ contract LlamaGuardOracleProxyTest is Test {
         // Build metadata matching expected values so onReport passes in base template
         bytes memory metadata = _buildMetadata(expectedAuthor, expectedWorkflowName);
 
-        LlamaGuardOracleProxy.Update memory u = LlamaGuardOracleProxy.Update({ supply: 1000, price: 321, state: 9 });
-        bytes memory report = abi.encode(u);
+        ILlamaGuardOracle.UpdateData memory data =
+            ILlamaGuardOracle.UpdateData({ supply: 1000, price: 321, state: 9 });
+        bytes memory report = abi.encode(data);
 
         proxy.onReport(metadata, report);
 
@@ -40,7 +42,7 @@ contract LlamaGuardOracleProxyTest is Test {
     function testOnReportAcceptsAnyAuthorWhenValidationDisabled() public {
         // Currently validation is disabled, so any author should work
         bytes memory metadata = _buildMetadata(address(0xBEEF), expectedWorkflowName);
-        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 100, price: 200, state: 3 }));
+        bytes memory report = abi.encode(ILlamaGuardOracle.UpdateData({ supply: 100, price: 200, state: 3 }));
 
         proxy.onReport(metadata, report);
 
@@ -54,7 +56,7 @@ contract LlamaGuardOracleProxyTest is Test {
     function testOnReportAcceptsAnyWorkflowWhenValidationDisabled() public {
         // Currently validation is disabled, so any workflow should work
         bytes memory metadata = _buildMetadata(expectedAuthor, bytes10("WRONGNAME"));
-        bytes memory report = abi.encode(LlamaGuardOracleProxy.Update({ supply: 500, price: 600, state: 7 }));
+        bytes memory report = abi.encode(ILlamaGuardOracle.UpdateData({ supply: 500, price: 600, state: 7 }));
 
         proxy.onReport(metadata, report);
 

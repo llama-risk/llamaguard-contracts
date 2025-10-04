@@ -2,6 +2,13 @@
 pragma solidity ^0.8.26;
 
 interface ILlamaGuardOracle {
+
+    struct UpdateData {
+        uint256 supply;
+        uint256 price;
+        uint256 state;
+    }
+
     // Events
     event UpdateReceived(uint256 supply, uint256 price, uint256 state);
 
@@ -12,7 +19,7 @@ interface ILlamaGuardOracle {
 
     // Mutators
     function setProxyAddress(address _proxyAddress) external;
-    function updateData(uint256 _supply, uint256 _price, uint256 _state) external;
+    function updateData(UpdateData calldata data) external;
 
     // Views
     function getData() external view returns (uint256, uint256, int256, uint256);
