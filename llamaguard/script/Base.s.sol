@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity >=0.8.26 <0.9.0;
 
 import { Script } from "forge-std/Script.sol";
 
@@ -22,7 +22,7 @@ abstract contract BaseScript is Script {
     /// - Otherwise, derive the broadcaster address from $MNEMONIC.
     /// - If $MNEMONIC is not defined, default to a test mnemonic.
     ///
-    /// The use of $ETH_FROM prioritizes the broadcaster key provided by hardware wallets.
+    /// The use case for $ETH_FROM is to specify the broadcaster key and its address via the command line.
     constructor() {
         address from = vm.envOr({ name: "ETH_FROM", defaultValue: address(0) });
         if (from != address(0)) {

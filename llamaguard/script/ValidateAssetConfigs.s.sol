@@ -3,7 +3,7 @@
 pragma solidity >=0.8.26 <0.9.0;
 
 import { AssetConfigs } from "./AssetConfigs.sol";
-import { console2 } from "forge-std/src/console2.sol";
+import { console2 } from "forge-std/Test.sol";
 
 // Interface for ERC20 token symbol() function
 interface IERC20Symbol {

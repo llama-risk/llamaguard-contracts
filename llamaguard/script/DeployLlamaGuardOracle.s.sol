@@ -2,11 +2,11 @@
 pragma solidity ^0.8.26;
 
 import { BaseScript } from "./Base.s.sol";
-import { DeployConfig } from "./DeployConfig.sol";
+import { DeployConfig } from "./LlamaGuardDeployConfig.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../src/LlamaGuardOracleProxy.sol";
 import { EACAggregatorProxy } from "../src/EACAggregatorProxy.sol";
-import { console2 } from "forge-std/console2.sol";
+import { console2 } from "forge-std/Test.sol";
 
 /// @title DeployLlamaGuardOracle
 /// @notice Universal deployment script for LlamaGuardOracle with proxy and ownership transfer

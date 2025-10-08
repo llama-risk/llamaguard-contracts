@@ -5,7 +5,7 @@ import { ParameterRegistry } from "../src/ParameterRegistry.sol";
 import { BaseScript } from "./Base.s.sol";
 import { DeployConfig } from "./DeployConfig.sol";
 import { AssetConfigs } from "./AssetConfigs.sol";
-import { console2 } from "forge-std/src/console2.sol";
+import { console2 } from "forge-std/Test.sol";
 
 /// @title DeployParameterRegistry
 /// @notice Universal deployment script for ParameterRegistry contract with asset parameter configuration
