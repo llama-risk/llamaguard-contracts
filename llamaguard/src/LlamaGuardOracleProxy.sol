@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import { ILlamaGuardOracle } from "./ILlamaGuardOracle.sol";
-import { IReceiverTemplate } from "./IReceiverTemplate.sol";
+import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
+import { IReceiverTemplate } from "./interfaces/IReceiverTemplate.sol";
 
 contract LlamaGuardOracleProxy is IReceiverTemplate {
     ILlamaGuardOracle public s_llamaGuardOracle;

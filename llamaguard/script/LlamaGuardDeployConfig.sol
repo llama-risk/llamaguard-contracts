@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-/// @title DeployConfig
+/// @title LlamaGuardDeployConfig
 /// @notice Configuration contract for deployment parameters across different networks
 /// @dev This contract provides centralized configuration for deploying LlamaGuardOracle
-contract DeployConfig {
+contract LlamaGuardDeployConfig {
     /// @notice Deployment configuration structure
     struct Config {
         address expectedAuthor; // CRE workflow author address

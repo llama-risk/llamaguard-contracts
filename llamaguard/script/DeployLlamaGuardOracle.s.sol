@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 import { BaseScript } from "./Base.s.sol";
-import { DeployConfig } from "./LlamaGuardDeployConfig.sol";
+import { LlamaGuardDeployConfig } from "./LlamaGuardDeployConfig.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../src/LlamaGuardOracleProxy.sol";
 import { EACAggregatorProxy } from "../src/EACAggregatorProxy.sol";
@@ -21,10 +21,10 @@ contract DeployLlamaGuardOracle is BaseScript {
     error AddressCannotBeZero();
     error CallerIsNotOwner();
 
-    DeployConfig internal deployConfig;
+    LlamaGuardDeployConfig internal deployConfig;
 
     function setUp() public {
-        deployConfig = new DeployConfig();
+        deployConfig = new LlamaGuardDeployConfig();
     }
 
     /// @notice Main deployment function with proxy setup and optional ownership transfer
@@ -61,7 +61,7 @@ contract DeployLlamaGuardOracle is BaseScript {
         console2.log("Deploying to chain ID:", chainId);
 
         // Get configuration based on deployment method
-        DeployConfig.Config memory config = getConfig(chainId);
+        LlamaGuardDeployConfig.Config memory config = getConfig(chainId);
 
         // Validate configuration
         if (config.expectedAuthor == address(0)) revert ExpectedAuthorNotConfigured();
@@ -137,7 +137,7 @@ contract DeployLlamaGuardOracle is BaseScript {
     /// @param oracle The deployed oracle contract
     function transferOwnershipIfNeeded(LlamaGuardOracle oracle) internal {
         uint256 chainId = block.chainid;
-        DeployConfig.Config memory config = getConfig(chainId);
+        LlamaGuardDeployConfig.Config memory config = getConfig(chainId);
 
         // Initiate ownership transfer (two-step process) if configured
         if (config.pendingOwner != address(0) && config.pendingOwner != broadcaster) {
@@ -178,7 +178,7 @@ contract DeployLlamaGuardOracle is BaseScript {
     /// @notice Get configuration based on priority: env vars > chain-specific config
     /// @param chainId The chain ID of the target network
     /// @return config The deployment configuration
-    function getConfig(uint256 chainId) internal view returns (DeployConfig.Config memory config) {
+    function getConfig(uint256 chainId) internal view returns (LlamaGuardDeployConfig.Config memory config) {
         // First, try to get configuration from environment variables
         bool useEnvConfig = vm.envOr({ name: "USE_ENV_CONFIG", defaultValue: false });
 
@@ -202,7 +202,7 @@ contract DeployLlamaGuardOracle is BaseScript {
                     networkName = string(abi.encodePacked("chain-", vm.toString(chainId)));
                 }
 
-                config = DeployConfig.Config({
+                config = LlamaGuardDeployConfig.Config({
                     expectedAuthor: expectedAuthor,
                     expectedWorkflowName: expectedWorkflowName,
                     decimals: decimals,

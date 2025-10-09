@@ -4,3 +4,9 @@
 [submodule "llamaguard/lib/openzeppelin-contracts"]
 	path = llamaguard/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "llamaguard/lib/chainlink"]
+	path = llamaguard/lib/chainlink
+	url = https://github.com/smartcontractkit/chainlink
+[submodule "llamaguard/lib/chainlink-brownie-contracts"]
+	path = llamaguard/lib/chainlink-brownie-contracts
+	url = https://github.com/smartcontractkit/chainlink-brownie-contracts

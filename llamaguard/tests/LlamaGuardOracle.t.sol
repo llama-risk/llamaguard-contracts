@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { ILlamaGuardOracle } from "../src/ILlamaGuardOracle.sol";
+import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
 
 contract LlamaGuardOracleTest is Test {
     LlamaGuardOracle internal oracle;
