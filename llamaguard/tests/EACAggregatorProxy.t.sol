@@ -157,4 +157,3 @@ contract EACAggregatorProxyTest is Test {
         assertEq(answer, 250); // 5 * 50
     }
 }
-

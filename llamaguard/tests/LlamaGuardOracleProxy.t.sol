@@ -26,8 +26,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Build metadata matching expected values so onReport passes in base template
         bytes memory metadata = _buildMetadata(expectedAuthor, expectedWorkflowName);
 
-        ILlamaGuardOracle.UpdateData memory data =
-            ILlamaGuardOracle.UpdateData({ supply: 1000, price: 321, state: 9 });
+        ILlamaGuardOracle.UpdateData memory data = ILlamaGuardOracle.UpdateData({ supply: 1000, price: 321, state: 9 });
         bytes memory report = abi.encode(data);
 
         proxy.onReport(metadata, report);

@@ -6,12 +6,12 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/inte
 /**
  * @title AggregatorV3
  * @notice Implementation of Chainlink's AggregatorV3Interface
- * 
+ *
  * Security Model:
  * - updateLatestRoundData() is internal - only callable by derived contracts
  * - Derived contracts MUST implement proper access control (e.g., LlamaGuardOracle.onlyProxy)
  * - Historical round data is immutable once created
- * 
+ *
  * Usage:
  * This contract should be inherited by oracle implementations that control data updates.
  * Do NOT deploy directly - it has no access control on its own.

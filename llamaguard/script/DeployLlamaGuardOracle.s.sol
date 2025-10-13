@@ -260,4 +260,3 @@ contract DeployLlamaGuardOracle is BaseScript {
         transferOwnershipIfNeeded(oracle);
     }
 }
-

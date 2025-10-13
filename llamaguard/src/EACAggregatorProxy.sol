@@ -8,7 +8,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
  * @title EACAggregatorProxy
  * @notice Proxy contract for Chainlink-style aggregators (Ethereum Aggregator Contract Abstraction)
  * @dev This proxy allows upgrading the underlying aggregator implementation while maintaining the same address
- * 
+ *
  * Based on Chainlink's EACAggregatorProxy pattern:
  * - Consumers always interact with the proxy address
  * - Owner can update the underlying aggregator
@@ -86,4 +86,3 @@ contract EACAggregatorProxy is Ownable, AggregatorV3Interface {
         return address(aggregator);
     }
 }
-

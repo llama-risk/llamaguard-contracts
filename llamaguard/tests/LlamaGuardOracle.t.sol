@@ -21,7 +21,11 @@ contract LlamaGuardOracleTest is Test {
     }
 
     /// @dev Helper function to create UpdateData struct
-    function _createUpdateData(uint256 supply, uint256 price, uint256 state)
+    function _createUpdateData(
+        uint256 supply,
+        uint256 price,
+        uint256 state
+    )
         internal
         pure
         returns (ILlamaGuardOracle.UpdateData memory)
@@ -251,7 +255,7 @@ contract LlamaGuardOracleTest is Test {
         // The compiler prevents external calls: oracle.updateLatestRoundData(123)
         // This means the ONLY way to update price data is through:
         // LlamaGuardOracleProxy → oracle.updateData() [onlyProxy] → internal updateLatestRoundData()
-        
+
         // If this test compiles, it proves the security model is intact.
         assertTrue(true, "Internal method security verified by compilation");
     }

@@ -5,7 +5,7 @@ import { IReceiver } from "@chainlink/contracts/src/v0.8/keystone/interfaces/IRe
 import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 /// @title IReceiverTemplate - Abstract receiver with workflow validation and metadata decoding
-abstract contract IReceiverTemplate is IReceiver, IERC165 {
+abstract contract IReceiverTemplate is IReceiver {
     // Immutable expected values
     address public EXPECTED_AUTHOR;
     bytes10 public EXPECTED_WORKFLOW_NAME;
@@ -22,15 +22,14 @@ abstract contract IReceiverTemplate is IReceiver, IERC165 {
     /// @inheritdoc IReceiver
     // solhint-disable-next-line no-unused-vars
     function onReport(bytes calldata metadata, bytes calldata report) external override {
-        // TODO: Re-enable author and workflow validation before production deployment
-        // (address workflowOwner, bytes10 workflowName) = _decodeMetadata(metadata);
+        (address workflowOwner, bytes10 workflowName) = _decodeMetadata(metadata);
 
-        // if (workflowOwner != EXPECTED_AUTHOR) {
-        //     revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
-        // }
-        // if (workflowName != EXPECTED_WORKFLOW_NAME) {
-        //     revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
-        // }
+        if (workflowOwner != EXPECTED_AUTHOR) {
+            revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
+        }
+        if (workflowName != EXPECTED_WORKFLOW_NAME) {
+            revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
+        }
 
         _processReport(report);
     }
@@ -60,7 +59,6 @@ abstract contract IReceiverTemplate is IReceiver, IERC165 {
     /// @param report The report calldata
     function _processReport(bytes calldata report) internal virtual;
 
-    /// @inheritdoc IERC165
     function supportsInterface(bytes4 interfaceId) public pure virtual override returns (bool) {
         return interfaceId == type(IReceiver).interfaceId || interfaceId == type(IERC165).interfaceId;
     }

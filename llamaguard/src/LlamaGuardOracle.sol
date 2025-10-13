@@ -17,7 +17,11 @@ contract LlamaGuardOracle is Ownable2Step, AggregatorV3, ILlamaGuardOracle {
         _;
     }
 
-    constructor(uint8 decimals, string memory description, uint256 version)
+    constructor(
+        uint8 decimals,
+        string memory description,
+        uint256 version
+    )
         Ownable(msg.sender)
         AggregatorV3(decimals, description, version)
     { }

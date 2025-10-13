@@ -6,7 +6,11 @@ import { AggregatorV3 } from "../src/AggregatorV3.sol";
 
 /// @notice Test helper contract that exposes internal methods for testing
 contract TestableAggregatorV3 is AggregatorV3 {
-    constructor(uint8 decimals_, string memory description_, uint256 version_)
+    constructor(
+        uint8 decimals_,
+        string memory description_,
+        uint256 version_
+    )
         AggregatorV3(decimals_, description_, version_)
     { }
 

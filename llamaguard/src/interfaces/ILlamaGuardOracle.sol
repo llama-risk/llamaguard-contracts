@@ -2,7 +2,6 @@
 pragma solidity ^0.8.26;
 
 interface ILlamaGuardOracle {
-
     struct UpdateData {
         uint256 supply;
         uint256 price;
