@@ -8,7 +8,6 @@ import { DeployMainnet } from "../../script/DeployMainnet.s.sol";
 import { DeployConfig } from "../../script/DeployConfig.sol";
 import { AssetConfigs } from "../../script/AssetConfigs.sol";
 import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title ParameterRegistryDeploymentTest
 /// @notice Comprehensive test suite for ParameterRegistry deployment scenarios

@@ -5,7 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../src/ParameterRegistry.sol";
 import { MockAggregatorV3 } from "./mocks/MockAggregatorV3.sol";
 import { MockOracleProxy } from "./mocks/MockOracleProxy.sol";
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
 
 contract ParameterRegistryTest is Test {

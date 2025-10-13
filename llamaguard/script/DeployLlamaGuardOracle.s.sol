@@ -45,7 +45,7 @@ contract DeployLlamaGuardOracle is BaseScript {
         // Deploy EACAggregatorProxy on Sepolia for testing
         if (block.chainid == 11_155_111) {
             // Sepolia
-            eacProxy = deployEACAggregatorProxy(oracle);
+            eacProxy = deployEacAggregatorProxy(oracle);
         }
 
         // Transfer ownership if configured
@@ -90,7 +90,7 @@ contract DeployLlamaGuardOracle is BaseScript {
 
         // Verify deployment
         if (oracle.owner() != broadcaster) revert OwnerNotSetCorrectly();
-        if (address(proxy.s_llamaGuardOracle()) != address(oracle)) revert ProxyOracleNotSetCorrectly();
+        if (address(proxy.llamaguardOracle()) != address(oracle)) revert ProxyOracleNotSetCorrectly();
     }
 
     /// @notice Configure the oracle with the proxy address
@@ -110,7 +110,7 @@ contract DeployLlamaGuardOracle is BaseScript {
     /// @notice Deploy an EACAggregatorProxy pointing to the oracle (for testing on Sepolia)
     /// @param oracle The deployed oracle contract
     /// @return eacProxy The deployed EACAggregatorProxy
-    function deployEACAggregatorProxy(LlamaGuardOracle oracle) internal returns (EACAggregatorProxy eacProxy) {
+    function deployEacAggregatorProxy(LlamaGuardOracle oracle) internal returns (EACAggregatorProxy eacProxy) {
         console2.log("");
         console2.log("Deploying EACAggregatorProxy for testing...");
         console2.log("  Pointing to oracle:", address(oracle));

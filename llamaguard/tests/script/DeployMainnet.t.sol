@@ -7,7 +7,7 @@ import { DeployConfig } from "../../script/DeployConfig.sol";
 import { AssetConfigs } from "../../script/AssetConfigs.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 contract DeployMainnetTest is Test {
     DeployMainnet internal deployScript;
