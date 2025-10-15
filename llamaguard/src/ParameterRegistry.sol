@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.26;
 
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 interface OracleProxyInterface {
     function aggregator() external view returns (address);
@@ -97,10 +97,7 @@ contract ParameterRegistry is Ownable2Step {
         bool isUpperBoundEnabled,
         bool isLowerBoundEnabled,
         bool isActionTakingEnabled
-    )
-        external
-        onlyUpdater
-    {
+    ) external onlyUpdater {
         if (asset == address(0)) revert ZeroAddress();
         if (oracle == address(0)) revert ZeroAddress();
         if (maxExpectedApy > MAX_EXPECTED_APY_LIMIT) revert MaxExpectedApyTooHigh(maxExpectedApy);

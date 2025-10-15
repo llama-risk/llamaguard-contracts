@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import { IReceiver } from "@chainlink/contracts/src/v0.8/keystone/interfaces/IReceiver.sol";
-import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {IReceiver} from "@chainlink/contracts/src/v0.8/keystone/interfaces/IReceiver.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 /// @title IReceiverTemplate - Abstract receiver with workflow validation and metadata decoding
-abstract contract IReceiverTemplate is IReceiver {
+abstract contract ICreReceiver is IReceiver {
     // Immutable expected values
     address public EXPECTED_AUTHOR;
     bytes10 public EXPECTED_WORKFLOW_NAME;
