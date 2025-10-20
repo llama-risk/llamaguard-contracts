@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {SimpleWriteAccessController} from "@chainlink/contracts/src/v0.8/shared/access/SimpleWriteAccessController.sol";
 
 /**
  * @title AggregatorV3
@@ -16,7 +17,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  * This contract should be inherited by oracle implementations that control data updates.
  * Do NOT deploy directly - it has no access control on its own.
  */
-contract AggregatorV3 is AggregatorV3Interface {
+contract AggregatorV3 is AggregatorV3Interface, SimpleWriteAccessController {
     uint8 private _decimals;
     string private _description;
     uint256 private _version;
@@ -43,7 +44,7 @@ contract AggregatorV3 is AggregatorV3Interface {
      * @param description_ Description of the price feed
      * @param version_ Version of the aggregator
      */
-    constructor(uint8 decimals_, string memory description_, uint256 version_) {
+    constructor(uint8 decimals_, string memory description_, uint256 version_) SimpleWriteAccessController() {
         _decimals = decimals_;
         _description = description_;
         _version = version_;
@@ -93,6 +94,7 @@ contract AggregatorV3 is AggregatorV3Interface {
         external
         view
         override
+        checkAccess()
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         require(_roundData[_roundId].roundId != 0, "Round not found");
@@ -113,6 +115,7 @@ contract AggregatorV3 is AggregatorV3Interface {
         external
         view
         override
+        checkAccess()
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         RoundData memory data = _roundData[_latestRoundId];
