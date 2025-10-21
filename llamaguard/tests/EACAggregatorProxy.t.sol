@@ -2,9 +2,8 @@
 pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
-import { EACAggregatorProxy } from "../src/EACAggregatorProxy.sol";
+import { EACAggregatorProxy } from "../src/sepolia/EACAggregatorProxy.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
 
 contract EACAggregatorProxyTest is Test {
     EACAggregatorProxy internal proxy;
@@ -14,9 +13,9 @@ contract EACAggregatorProxyTest is Test {
     address internal dataProxy = address(0x1234);
 
     function setUp() public {
-        // Deploy oracle
+        // Deploy oracle and grant write role to dataProxy
         oracle = new LlamaGuardOracle(8, "Test Oracle", 1);
-        oracle.setProxyAddress(dataProxy);
+        oracle.grantRole(oracle.WRITER_ROLE(), dataProxy);
 
         // Deploy EAC proxy pointing to oracle
         proxy = new EACAggregatorProxy(address(oracle));
@@ -50,7 +49,7 @@ contract EACAggregatorProxyTest is Test {
     function testLatestRoundDataPassthrough() public {
         // Update oracle data
         vm.prank(dataProxy);
-        oracle.updateData(ILlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 }));
+        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
 
         // Read through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -66,7 +65,7 @@ contract EACAggregatorProxyTest is Test {
     function testGetRoundDataPassthrough() public {
         // Update oracle data
         vm.prank(dataProxy);
-        oracle.updateData(ILlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 }));
+        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
 
         // Read specific round through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -121,7 +120,7 @@ contract EACAggregatorProxyTest is Test {
 
         // Update oracle data through old oracle
         vm.prank(dataProxy);
-        oracle.updateData(ILlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 }));
+        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
 
         // Read through proxy
         (, int256 answer1,,,) = proxy.latestRoundData();
@@ -129,10 +128,10 @@ contract EACAggregatorProxyTest is Test {
 
         // Deploy and switch to new oracle
         LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2);
-        newOracle.setProxyAddress(dataProxy);
+        newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData(ILlamaGuardOracle.UpdateData({ supply: 2000, price: 750, state: 3 }));
+        newOracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 2000, price: 750, state: 3 })));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -148,7 +147,7 @@ contract EACAggregatorProxyTest is Test {
         // Multiple updates should all be readable through proxy
         for (uint256 i = 1; i <= 5; i++) {
             vm.prank(dataProxy);
-            oracle.updateData(ILlamaGuardOracle.UpdateData({ supply: i * 100, price: i * 50, state: i }));
+            oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: i * 100, price: i * 50, state: i })));
         }
 
         // Read latest
