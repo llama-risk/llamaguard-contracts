@@ -20,11 +20,9 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         string memory description,
         uint256 version
     )
+        AbstractReadWriteAccessController(msg.sender)
         AggregatorV3(decimals, description, version)
     { }
-
-    bytes32 private constant WRITER_ROLE = keccak256("WRITER_ROLE");
-    bytes32 private constant READER_ROLE = keccak256("READER_ROLE");
 
     /// @notice Update the data from the oracle
     /// @param data The update data containing supply, price, and state
@@ -43,5 +41,9 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     function getData() public view returns (uint256, uint256, int256, uint256) {
         (, int256 answer, uint256 startedAt,,) = this.latestRoundData();
         return (supply, state, answer, startedAt);
+    }
+
+    function hasWriteAccess(address account) public view returns (bool) {
+        return hasRole(WRITER_ROLE, account);
     }
 }
