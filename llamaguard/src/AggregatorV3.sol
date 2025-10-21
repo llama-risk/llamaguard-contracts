@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import {SimpleWriteAccessController} from "@chainlink/contracts/src/v0.8/shared/access/SimpleWriteAccessController.sol";
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import { SimpleWriteAccessController } from
+    "@chainlink/contracts/src/v0.8/shared/access/SimpleWriteAccessController.sol";
 
 /**
  * @title AggregatorV3
@@ -17,7 +18,7 @@ import {SimpleWriteAccessController} from "@chainlink/contracts/src/v0.8/shared/
  * This contract should be inherited by oracle implementations that control data updates.
  * Do NOT deploy directly - it has no access control on its own.
  */
-contract AggregatorV3 is AggregatorV3Interface, SimpleWriteAccessController {
+contract AggregatorV3 is AggregatorV3Interface {
     uint8 private _decimals;
     string private _description;
     uint256 private _version;
@@ -44,7 +45,7 @@ contract AggregatorV3 is AggregatorV3Interface, SimpleWriteAccessController {
      * @param description_ Description of the price feed
      * @param version_ Version of the aggregator
      */
-    constructor(uint8 decimals_, string memory description_, uint256 version_) SimpleWriteAccessController() {
+    constructor(uint8 decimals_, string memory description_, uint256 version_) {
         _decimals = decimals_;
         _description = description_;
         _version = version_;
@@ -94,7 +95,6 @@ contract AggregatorV3 is AggregatorV3Interface, SimpleWriteAccessController {
         external
         view
         override
-        checkAccess()
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         require(_roundData[_roundId].roundId != 0, "Round not found");
@@ -115,7 +115,6 @@ contract AggregatorV3 is AggregatorV3Interface, SimpleWriteAccessController {
         external
         view
         override
-        checkAccess()
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         RoundData memory data = _roundData[_latestRoundId];

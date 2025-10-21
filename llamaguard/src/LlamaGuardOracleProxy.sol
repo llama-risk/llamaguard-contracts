@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {ILlamaGuardOracle} from "./interfaces/ILlamaGuardOracle.sol";
-import {ICreReceiver} from "./interfaces/ICreReceiver.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
+import { AbstractCreReceiver } from "./abstracts/AbstractCreReceiver.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract LlamaGuardOracleProxy is Ownable, ICreReceiver {
+contract LlamaGuardOracleProxy is Ownable, AbstractCreReceiver {
     ILlamaGuardOracle public llamaguardOracle;
     string public description;
 
@@ -16,21 +16,24 @@ contract LlamaGuardOracleProxy is Ownable, ICreReceiver {
         address expectedAuthor,
         bytes10 expectedWorkflowName,
         string memory _description
-    ) Ownable(msg.sender) ICreReceiver(expectedAuthor, expectedWorkflowName) {
+    )
+        Ownable(msg.sender)
+        AbstractCreReceiver(expectedAuthor, expectedWorkflowName)
+    {
         if (llamaGuardOracleAddress == address(0)) revert InvalidLlamaGuardOracle();
 
         llamaguardOracle = ILlamaGuardOracle(llamaGuardOracleAddress);
         description = _description;
     }
 
-    /// @inheritdoc ICreReceiver
+    /// @inheritdoc AbstractCreReceiver
     function _processReport(bytes calldata report) internal override {
         llamaguardOracle.updateData(report);
     }
 
     function changeLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
         ILlamaGuardOracle newLlamaguardOracle = ILlamaGuardOracle(newLlamaGuardOracle);
-        if (newLlamaguardOracle.proxyAddress() == address(this)) revert InvalidLlamaGuardOracle();
+        if (newLlamaguardOracle.hasWriteAccess(address(this)) == false) revert InvalidLlamaGuardOracle();
         llamaguardOracle = newLlamaguardOracle;
     }
 }

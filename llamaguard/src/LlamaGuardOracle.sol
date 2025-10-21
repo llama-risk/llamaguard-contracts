@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {AggregatorV3} from "./AggregatorV3.sol";
-import {ILlamaGuardOracle} from "./interfaces/ILlamaGuardOracle.sol";
+import { AggregatorV3 } from "./AggregatorV3.sol";
+import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
+import { AbstractReadWriteAccessController } from "./abstracts/AbstractReadWriteAccessController.sol";
 
-contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle {
+contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteAccessController {
     struct UpdateData {
         uint256 supply;
         uint256 price;
@@ -14,13 +15,20 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle {
     uint256 public supply;
     uint256 public state;
 
-    constructor(uint8 decimals, string memory description, uint256 version)
+    constructor(
+        uint8 decimals,
+        string memory description,
+        uint256 version
+    )
         AggregatorV3(decimals, description, version)
-    {}
+    { }
+
+    bytes32 private constant WRITER_ROLE = keccak256("WRITER_ROLE");
+    bytes32 private constant READER_ROLE = keccak256("READER_ROLE");
 
     /// @notice Update the data from the oracle
     /// @param data The update data containing supply, price, and state
-    function updateData(bytes calldata data) external checkAccess() {
+    function updateData(bytes calldata data) external onlyRole(WRITER_ROLE) {
         UpdateData memory decodedData = abi.decode(data, (UpdateData));
         updateLatestRoundData(int256(decodedData.price));
 

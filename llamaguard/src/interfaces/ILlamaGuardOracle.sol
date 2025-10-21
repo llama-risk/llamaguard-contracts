@@ -14,4 +14,8 @@ interface ILlamaGuardOracle {
 
     // Views
     function getData() external view returns (uint256, uint256, int256, uint256);
+
+    function hasWriteAccess(address) external view returns (bool);
+    function hasReadAccess(address) external view returns (bool);
+    function hasAccess(address) external view returns (bool);
 }
