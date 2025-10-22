@@ -8,27 +8,52 @@ import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol
 abstract contract AbstractCreReceiver is IReceiver {
     // Immutable expected values
     address public EXPECTED_AUTHOR;
+    address public EXPECTED_FORWARDER;
     bytes10 public EXPECTED_WORKFLOW_NAME;
+    bytes32 public EXPECTED_WORKFLOW_ID;
+
+    /// @notice When true (default), enforce metadata/forwarder checks before processing.
+    /// When false, skip validations and process the report directly.
+    bool public isReportWriteSecured = true;
 
     // Custom errors
     error InvalidAuthor(address received, address expected);
     error InvalidWorkflowName(bytes10 received, bytes10 expected);
+    error InvalidWorkflowId(bytes32 received, bytes32 expected);
+    error InvalidForwarder(address received, address expected);
 
-    constructor(address expectedAuthor, bytes10 expectedWorkflowName) {
+    constructor(
+        address expectedAuthor,
+        address expectedForwarder,
+        bytes10 expectedWorkflowName,
+        bytes32 expectedWorkflowId
+    ) {
         EXPECTED_AUTHOR = expectedAuthor;
+        EXPECTED_FORWARDER = expectedForwarder;
         EXPECTED_WORKFLOW_NAME = expectedWorkflowName;
+        EXPECTED_WORKFLOW_ID = expectedWorkflowId;
     }
 
     /// @inheritdoc IReceiver
     // solhint-disable-next-line no-unused-vars
     function onReport(bytes calldata metadata, bytes calldata report) external override {
-        (address workflowOwner, bytes10 workflowName) = _decodeMetadata(metadata);
+        if (isReportWriteSecured) {
+            (bytes32 workflowId, address workflowOwner, bytes10 workflowName) = _getWorkflowMetaData(metadata);
 
-        if (workflowOwner != EXPECTED_AUTHOR) {
-            revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
-        }
-        if (workflowName != EXPECTED_WORKFLOW_NAME) {
-            revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
+            if (workflowId != EXPECTED_WORKFLOW_ID) {
+                revert InvalidWorkflowId(workflowId, EXPECTED_WORKFLOW_ID);
+            }
+
+            if (msg.sender != EXPECTED_FORWARDER) {
+                revert InvalidForwarder(msg.sender, EXPECTED_FORWARDER);
+            }
+
+            if (workflowOwner != EXPECTED_AUTHOR) {
+                revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
+            }
+            if (workflowName != EXPECTED_WORKFLOW_NAME) {
+                revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
+            }
         }
 
         _processReport(report);
@@ -36,23 +61,19 @@ abstract contract AbstractCreReceiver is IReceiver {
 
     /// @notice Extracts the workflow name and the workflow owner from the metadata parameter of onReport
     /// @param metadata The metadata in bytes format
+    /// @return workflowId The id of the workflow
     /// @return workflowOwner The owner of the workflow
     /// @return workflowName  The name of the workflow
-    function _decodeMetadata(bytes memory metadata) internal pure returns (address, bytes10) {
-        address workflowOwner;
-        bytes10 workflowName;
-        // (first 32 bytes contain length of the byte array)
-        // workflow_cid             // offset 32, size 32
-        // workflow_name            // offset 64, size 10
-        // workflow_owner           // offset 74, size 20
-        // report_name              // offset 94, size  2
+    function _getWorkflowMetaData(bytes memory metadata)
+        internal
+        pure
+        returns (bytes32 workflowId, address workflowOwner, bytes10 workflowName)
+    {
         assembly {
-            // no shifting needed for bytes10 type
+            workflowId := mload(add(metadata, 32))
             workflowName := mload(add(metadata, 64))
-            // shift right by 12 bytes to get the actual value
-            workflowOwner := shr(mul(12, 8), mload(add(metadata, 74)))
+            workflowOwner := shr(96, mload(add(metadata, 74)))
         }
-        return (workflowOwner, workflowName);
     }
 
     /// @notice Abstract function to process the report

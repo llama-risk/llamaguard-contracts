@@ -14,11 +14,13 @@ contract LlamaGuardOracleProxy is Ownable, AbstractCreReceiver {
     constructor(
         address llamaGuardOracleAddress,
         address expectedAuthor,
+        address expectedForwarder,
         bytes10 expectedWorkflowName,
+        bytes32 expectedWorkflowId,
         string memory _description
     )
         Ownable(msg.sender)
-        AbstractCreReceiver(expectedAuthor, expectedWorkflowName)
+        AbstractCreReceiver(expectedAuthor, expectedForwarder, expectedWorkflowName, expectedWorkflowId)
     {
         if (llamaGuardOracleAddress == address(0)) revert InvalidLlamaGuardOracle();
 
@@ -31,9 +33,13 @@ contract LlamaGuardOracleProxy is Ownable, AbstractCreReceiver {
         llamaguardOracle.updateData(report);
     }
 
-    function changeLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
+    function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
         ILlamaGuardOracle newLlamaguardOracle = ILlamaGuardOracle(newLlamaGuardOracle);
         if (newLlamaguardOracle.hasWriteAccess(address(this)) == false) revert InvalidLlamaGuardOracle();
         llamaguardOracle = newLlamaguardOracle;
+    }
+
+    function setIsReportWriteSecured(bool enabled) external onlyOwner {
+        isReportWriteSecured = enabled;
     }
 }

@@ -8,11 +8,13 @@ contract LlamaGuardDeployConfig {
     /// @notice Deployment configuration structure
     struct Config {
         address expectedAuthor; // CRE workflow author address
+        address expectedForwarder; // CRE forwarder contract expected to call onReport
         bytes10 expectedWorkflowName; // CRE workflow name
+        bytes32 expectedWorkflowId; // CRE workflow id (32 bytes)
         uint8 decimals; // Price feed decimals
         string description; // Oracle description
         uint256 version; // Oracle version
-        address pendingOwner; // For two-step ownership transfer
+        address pendingOwner; // For two-step ownership transfer (unused now)
         string networkName;
     }
 
@@ -25,11 +27,13 @@ contract LlamaGuardDeployConfig {
     function getMainnetConfig() public pure returns (Config memory) {
         return Config({
             expectedAuthor: address(0), // TODO: Set CRE workflow author
+            expectedForwarder: address(0), // TODO: Set expected forwarder
             expectedWorkflowName: bytes10(0), // TODO: Set CRE workflow name
+            expectedWorkflowId: bytes32(0), // TODO: Set CRE workflow id
             decimals: 8,
             description: "LlamaGuard Oracle - Mainnet",
             version: 1,
-            pendingOwner: address(0), // TODO: Set final owner address
+            pendingOwner: address(0), // Optional
             networkName: "mainnet"
         });
     }
@@ -38,12 +42,14 @@ contract LlamaGuardDeployConfig {
     /// @return config The deployment configuration
     function getSepoliaConfig() public pure returns (Config memory) {
         return Config({
-            expectedAuthor: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Dummy value (checks disabled in contract)
-            expectedWorkflowName: bytes10("TEST_FLOW"), // Dummy value (checks disabled in contract)
+            expectedAuthor: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Dummy
+            expectedForwarder: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Dummy
+            expectedWorkflowName: bytes10("TEST_FLOW"), // Dummy
+            expectedWorkflowId: bytes32(uint256(0x544553545f57464c4f575f49445f3031)), // "TEST_WFLOW_ID_01"
             decimals: 8,
             description: "LlamaGuard Oracle - Sepolia",
             version: 1,
-            pendingOwner: address(0), // Set final owner if different from deployer
+            pendingOwner: address(0),
             networkName: "sepolia"
         });
     }
@@ -54,11 +60,13 @@ contract LlamaGuardDeployConfig {
         // Default test addresses for local development
         return Config({
             expectedAuthor: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Anvil account 0
+            expectedForwarder: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Anvil account 0
             expectedWorkflowName: bytes10("TEST_FLOW"),
+            expectedWorkflowId: bytes32(uint256(0x414e56494c5f57464c4f575f49445f3031)), // "ANVIL_WFLOW_ID_01"
             decimals: 8,
             description: "LlamaGuard Oracle - Anvil",
             version: 1,
-            pendingOwner: address(0), // No ownership transfer for local testing
+            pendingOwner: address(0),
             networkName: "anvil"
         });
     }

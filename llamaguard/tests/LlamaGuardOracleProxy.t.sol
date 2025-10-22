@@ -11,12 +11,22 @@ contract LlamaGuardOracleProxyTest is Test {
 
     address internal owner = address(this);
     address internal expectedAuthor = address(0xA11CE);
+    address internal expectedForwarder;
     bytes10 internal expectedWorkflowName = bytes10("WORKFLOW1");
+    bytes32 internal expectedWorkflowId = bytes32("WORKFLOWCID_ABCDEFGHIJKLMNOPQRST");
     string internal proxyDescription = "Proxy: Mock Feed";
 
     function setUp() public {
+        expectedForwarder = address(this); // in tests, we call onReport directly
         oracle = new LlamaGuardOracle(8, "Mock Feed", 1);
-        proxy = new LlamaGuardOracleProxy(address(oracle), expectedAuthor, expectedWorkflowName, proxyDescription);
+        proxy = new LlamaGuardOracleProxy(
+            address(oracle),
+            expectedAuthor,
+            expectedForwarder,
+            expectedWorkflowName,
+            expectedWorkflowId,
+            proxyDescription
+        );
 
         // Grant writer role to proxy so it can forward updates
         oracle.grantRole(oracle.WRITER_ROLE(), address(proxy));
@@ -24,7 +34,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testProxyForwardsUpdates() public {
         // Build metadata matching expected values so onReport passes in base template
-        bytes memory metadata = _buildMetadata(expectedAuthor, expectedWorkflowName);
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
 
         bytes memory report = abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 321, state: 9 }));
 
@@ -37,7 +47,7 @@ contract LlamaGuardOracleProxyTest is Test {
     }
 
     function testOnReportRevertsForWrongAuthor() public {
-        bytes memory metadata = _buildMetadata(address(0xBEEF), expectedWorkflowName);
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, address(0xBEEF), expectedWorkflowName);
         bytes memory report = abi.encode(LlamaGuardOracle.UpdateData({ supply: 100, price: 200, state: 3 }));
 
         vm.expectRevert();
@@ -45,29 +55,37 @@ contract LlamaGuardOracleProxyTest is Test {
     }
 
     function testOnReportRevertsForWrongWorkflow() public {
-        bytes memory metadata = _buildMetadata(expectedAuthor, bytes10("WRONGNAME"));
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, bytes10("WRONGNAME"));
         bytes memory report = abi.encode(LlamaGuardOracle.UpdateData({ supply: 500, price: 600, state: 7 }));
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
     }
 
-    function testChangeLlamaGuardOracleRequiresWriteAccess() public {
+    function testSetLlamaGuardOracleRequiresWriteAccess() public {
         // New oracle without granting role to proxy should revert
         LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1);
 
         vm.expectRevert(LlamaGuardOracleProxy.InvalidLlamaGuardOracle.selector);
-        proxy.changeLlamaGuardOracle(address(newOracle));
+        proxy.setLlamaGuardOracle(address(newOracle));
 
         // Grant write role and try again
         newOracle.grantRole(newOracle.WRITER_ROLE(), address(proxy));
-        proxy.changeLlamaGuardOracle(address(newOracle));
+        proxy.setLlamaGuardOracle(address(newOracle));
 
         assertEq(address(proxy.llamaguardOracle()), address(newOracle));
     }
 
-    function _buildMetadata(address workflowOwner, bytes10 workflowName) internal pure returns (bytes memory) {
-        bytes memory workflowCid = new bytes(32);
+    function _buildMetadata(
+        bytes32 workflowId,
+        address workflowOwner,
+        bytes10 workflowName
+    )
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory workflowCid = abi.encode(workflowId);
         bytes memory reportName = new bytes(2);
         return abi.encodePacked(workflowCid, workflowName, bytes20(workflowOwner), reportName);
     }

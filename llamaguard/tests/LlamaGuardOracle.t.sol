@@ -139,9 +139,15 @@ contract LlamaGuardOracleTest is Test {
         (uint256 s2, uint256 st2, int256 p2,) = oracle.getData();
         vm.prank(address(0xABCD));
         (uint256 s3, uint256 st3, int256 p3,) = oracle.getData();
-        assertEq(s1, 1000); assertEq(s2, 1000); assertEq(s3, 1000);
-        assertEq(st1, 2); assertEq(st2, 2); assertEq(st3, 2);
-        assertEq(p1, 500); assertEq(p2, 500); assertEq(p3, 500);
+        assertEq(s1, 1000);
+        assertEq(s2, 1000);
+        assertEq(s3, 1000);
+        assertEq(st1, 2);
+        assertEq(st2, 2);
+        assertEq(st3, 2);
+        assertEq(p1, 500);
+        assertEq(p2, 500);
+        assertEq(p3, 500);
     }
 
     // Aggregator integration
@@ -212,4 +218,3 @@ contract LlamaGuardOracleTest is Test {
         assertEq(p, int256(_price));
     }
 }
-

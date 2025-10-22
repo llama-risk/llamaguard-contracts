@@ -61,7 +61,9 @@ contract DeployLlamaGuardOracle is BaseScript {
         proxy = new LlamaGuardOracleProxy(
             address(oracle),
             config.expectedAuthor,
+            config.expectedForwarder,
             config.expectedWorkflowName,
+            config.expectedWorkflowId,
             config.description
         );
 
@@ -93,13 +95,18 @@ contract DeployLlamaGuardOracle is BaseScript {
             console2.log("Using environment variable configuration");
 
             address expectedAuthor = vm.envOr({ name: "EXPECTED_AUTHOR", defaultValue: address(0) });
+            address expectedForwarder = vm.envOr({ name: "EXPECTED_FORWARDER", defaultValue: address(0) });
             bytes32 workflowNameBytes = vm.envOr({ name: "EXPECTED_WORKFLOW_NAME", defaultValue: bytes32(0) });
             bytes10 expectedWorkflowName = bytes10(workflowNameBytes);
+            bytes32 expectedWorkflowId = vm.envOr({ name: "EXPECTED_WORKFLOW_ID", defaultValue: bytes32(0) });
             uint8 decimals = uint8(vm.envOr({ name: "DECIMALS", defaultValue: uint256(8) }));
             string memory description = vm.envOr({ name: "DESCRIPTION", defaultValue: string("LlamaGuard Oracle") });
             uint256 version = vm.envOr({ name: "VERSION", defaultValue: uint256(1) });
 
-            if (expectedAuthor != address(0) && expectedWorkflowName != bytes10(0)) {
+            if (
+                expectedAuthor != address(0) && expectedForwarder != address(0) && expectedWorkflowName != bytes10(0)
+                    && expectedWorkflowId != bytes32(0)
+            ) {
                 string memory networkName;
                 try vm.envString("NETWORK_NAME") returns (string memory name) {
                     networkName = name;
@@ -109,7 +116,9 @@ contract DeployLlamaGuardOracle is BaseScript {
 
                 config = LlamaGuardDeployConfig.Config({
                     expectedAuthor: expectedAuthor,
+                    expectedForwarder: expectedForwarder,
                     expectedWorkflowName: expectedWorkflowName,
+                    expectedWorkflowId: expectedWorkflowId,
                     decimals: decimals,
                     description: description,
                     version: version,
@@ -141,4 +150,3 @@ contract DeployLlamaGuardOracle is BaseScript {
         configureOracle(oracle, proxyAddress);
     }
 }
-
