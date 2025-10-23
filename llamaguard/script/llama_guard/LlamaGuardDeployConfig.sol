@@ -14,7 +14,12 @@ contract LlamaGuardDeployConfig {
         uint8 decimals; // Price feed decimals
         string description; // Oracle description
         uint256 version; // Oracle version
-        address pendingOwner; // For two-step ownership transfer (unused now)
+        address oracleAdmin; // Final DEFAULT_ADMIN_ROLE holder for oracle (optional)
+        address proxyOwner; // Final owner for oracle proxy (optional)
+        address aggregatorOwner; // Optional owner for Chainlink-style aggregator proxy
+        bool revokeBroadcasterAdmin; // Whether broadcaster should renounce DEFAULT_ADMIN_ROLE after hand-off
+        bool deployEacAggregator; // Whether to deploy EACAggregatorProxy wrapper alongside oracle
+        bool deactivateSecurity; // Disable proxy security checks post-deploy
         string networkName;
     }
 
@@ -33,7 +38,12 @@ contract LlamaGuardDeployConfig {
             decimals: 8,
             description: "LlamaGuard Oracle - Mainnet",
             version: 1,
-            pendingOwner: address(0), // Optional
+            oracleAdmin: address(0),
+            proxyOwner: address(0),
+            aggregatorOwner: address(0),
+            revokeBroadcasterAdmin: false,
+            deployEacAggregator: false,
+            deactivateSecurity: true,
             networkName: "mainnet"
         });
     }
@@ -49,7 +59,12 @@ contract LlamaGuardDeployConfig {
             decimals: 8,
             description: "LlamaGuard Oracle - Sepolia",
             version: 1,
-            pendingOwner: address(0),
+            oracleAdmin: address(0),
+            proxyOwner: address(0),
+            aggregatorOwner: address(0),
+            revokeBroadcasterAdmin: false,
+            deployEacAggregator: false,
+            deactivateSecurity: true,
             networkName: "sepolia"
         });
     }
@@ -66,7 +81,12 @@ contract LlamaGuardDeployConfig {
             decimals: 8,
             description: "LlamaGuard Oracle - Anvil",
             version: 1,
-            pendingOwner: address(0),
+            oracleAdmin: address(0),
+            proxyOwner: address(0),
+            aggregatorOwner: address(0),
+            revokeBroadcasterAdmin: false,
+            deployEacAggregator: false,
+            deactivateSecurity: false,
             networkName: "anvil"
         });
     }
@@ -85,7 +105,7 @@ contract LlamaGuardDeployConfig {
             // Anvil local network
             return getAnvilConfig();
         } else {
-            revert("DeployConfig: Unsupported chain ID");
+            revert("LlamaGuardDeployConfig: Unsupported chain ID");
         }
     }
 }

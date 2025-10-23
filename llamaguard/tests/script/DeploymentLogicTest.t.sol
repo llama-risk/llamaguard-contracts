@@ -3,8 +3,8 @@ pragma solidity >=0.8.26 <0.9.0;
 
 import { DeploymentTestBase } from "./DeploymentTestBase.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
-import { AssetConfigs } from "../../script/AssetConfigs.sol";
-import { DeployConfig } from "../../script/DeployConfig.sol";
+import { AssetConfigs } from "../../script/parameter_registry/AssetConfigs.sol";
+import { DeployConfig } from "../../script/parameter_registry/DeployConfig.sol";
 
 /// @title DeploymentLogicTest
 /// @notice Tests the deployment logic without broadcast functionality

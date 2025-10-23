@@ -2,9 +2,9 @@
 pragma solidity >=0.8.26 <0.9.0;
 
 import { Test } from "forge-std/Test.sol";
-import { DeployMainnet } from "../../script/DeployMainnet.s.sol";
-import { DeployConfig } from "../../script/DeployConfig.sol";
-import { AssetConfigs } from "../../script/AssetConfigs.sol";
+import { DeployMainnet } from "../../script/parameter_registry/DeployMainnet.s.sol";
+import { DeployConfig } from "../../script/parameter_registry/DeployConfig.sol";
+import { AssetConfigs } from "../../script/parameter_registry/AssetConfigs.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
