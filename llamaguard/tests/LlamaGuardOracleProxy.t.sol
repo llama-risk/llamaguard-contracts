@@ -76,6 +76,67 @@ contract LlamaGuardOracleProxyTest is Test {
         assertEq(address(proxy.llamaguardOracle()), address(newOracle));
     }
 
+    function test_RevertWhen_ConstructorCalledWithZeroAddress() public {
+        vm.expectRevert(LlamaGuardOracleProxy.InvalidLlamaGuardOracle.selector);
+        new LlamaGuardOracleProxy(
+            address(0),
+            expectedAuthor,
+            expectedForwarder,
+            expectedWorkflowName,
+            expectedWorkflowId,
+            proxyDescription
+        );
+    }
+
+    function test_SetIsReportWriteSecured_EnablesWriteSecurity() public {
+        // Disable security first
+        proxy.setIsReportWriteSecured(false);
+        assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
+
+        // Re-enable security
+        proxy.setIsReportWriteSecured(true);
+        assertTrue(proxy.isReportWriteSecured(), "Security should be enabled");
+    }
+
+    function test_SetIsReportWriteSecured_DisablesWriteSecurity() public {
+        // Security is enabled by default
+        assertTrue(proxy.isReportWriteSecured(), "Security should be enabled by default");
+
+        // Disable security
+        proxy.setIsReportWriteSecured(false);
+        assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
+    }
+
+    function test_RevertWhen_SetIsReportWriteSecuredCalledByNonOwner() public {
+        address nonOwner = address(0xBEEF);
+
+        vm.prank(nonOwner);
+        vm.expectRevert();
+        proxy.setIsReportWriteSecured(false);
+    }
+
+    function test_OnReport_BypassesValidationWhenSecurityDisabled() public {
+        // Disable security
+        proxy.setIsReportWriteSecured(false);
+
+        // Build metadata with wrong values - should not revert
+        bytes memory wrongMetadata = _buildMetadata(bytes32("WRONG_ID"), address(0xDEAD), bytes10("WRONG"));
+        bytes memory report = abi.encode(LlamaGuardOracle.UpdateData({ supply: 5000, price: 999, state: 7 }));
+
+        // Should succeed even with wrong metadata
+        proxy.onReport(wrongMetadata, report);
+
+        // Verify the update was processed
+        (uint256 supply, uint256 state, int256 price,) = oracle.getData();
+        assertEq(supply, 5000, "Supply should be updated");
+        assertEq(state, 7, "State should be updated");
+        assertEq(price, 999, "Price should be updated");
+    }
+
+    function test_Description_IsSetCorrectly() public view {
+        assertEq(proxy.description(), proxyDescription, "Description should match constructor parameter");
+    }
+
     function _buildMetadata(
         bytes32 workflowId,
         address workflowOwner,
