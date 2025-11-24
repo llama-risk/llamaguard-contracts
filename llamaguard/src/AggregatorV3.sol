@@ -2,8 +2,9 @@
 pragma solidity ^0.8.26;
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import { SimpleWriteAccessController } from
-    "@chainlink/contracts/src/v0.8/shared/access/SimpleWriteAccessController.sol";
+import {
+    SimpleWriteAccessController
+} from "@chainlink/contracts/src/v0.8/shared/access/SimpleWriteAccessController.sol";
 
 /**
  * @title AggregatorV3
@@ -53,11 +54,7 @@ contract AggregatorV3 is AggregatorV3Interface {
 
         // Initialize with a default round
         _roundData[1] = RoundData({
-            roundId: 1,
-            answer: 0,
-            startedAt: block.timestamp,
-            updatedAt: block.timestamp,
-            answeredInRound: 1
+            roundId: 1, answer: 0, startedAt: block.timestamp, updatedAt: block.timestamp, answeredInRound: 1
         });
     }
 

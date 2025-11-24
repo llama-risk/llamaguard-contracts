@@ -141,7 +141,9 @@ contract ParameterRegistryTest is Test {
     function test_RevertWhen_SetParametersForAssetCalledWithZeroLookbackWindow() public {
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
-        registry.setParametersForAsset(asset1, "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 0, true, true, true);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 0, true, true, true
+        );
     }
 
     function test_SetIndividualParameters() public {
