@@ -52,7 +52,11 @@ contract DeployLlamaGuardOracle is BaseScript {
         console2.log("Expected Author:", config.expectedAuthor);
         console2.log("Expected Workflow:", vm.toString(abi.encodePacked(config.expectedWorkflowName)));
 
-        oracle = new LlamaGuardOracle(config.decimals, config.description, config.version, config.initialUpdateTypes);
+        // No initial authorized markets - will be added via addAuthorizedMarket() after deployment
+        address[] memory initialAuthorizedMarkets = new address[](0);
+        oracle = new LlamaGuardOracle(
+            config.decimals, config.description, config.version, config.initialUpdateTypes, initialAuthorizedMarkets
+        );
         console2.log("LlamaGuardOracle deployed at:", address(oracle));
 
         // Ensure broadcaster holds admin role on oracle

@@ -23,6 +23,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @dev Enables O(1) lookups via getLatestUpdateByParameterAndMarket()
     mapping(string => mapping(address => uint256)) private latestUpdateIdByTypeAndMarket;
 
+    /// @notice Mapping of authorized market addresses
+    /// @dev O(1) lookup for market authorization checks
+    mapping(address => bool) private authorizedMarkets;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════════════
@@ -32,15 +36,18 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @param description Human-readable description of the oracle feed
     /// @param version Version number of the oracle
     /// @param initialUpdateTypes Array of initial valid update type strings
+    /// @param initialAuthorizedMarkets Array of initially authorized market addresses
     constructor(
         uint8 decimals,
         string memory description,
         uint256 version,
-        string[] memory initialUpdateTypes
+        string[] memory initialUpdateTypes,
+        address[] memory initialAuthorizedMarkets
     )
         AbstractReadWriteAccessController(msg.sender)
         AggregatorV3(decimals, description, version)
     {
+        // Initialize update types
         for (uint256 i = 0; i < initialUpdateTypes.length; i++) {
             string memory updateType = initialUpdateTypes[i];
             if (bytes(updateType).length == 0 || bytes(updateType).length > 64) {
@@ -49,6 +56,18 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
             if (!validUpdateTypes[updateType]) {
                 validUpdateTypes[updateType] = true;
                 updateTypes.push(updateType);
+            }
+        }
+
+        // Initialize authorized markets
+        for (uint256 i = 0; i < initialAuthorizedMarkets.length; i++) {
+            address market = initialAuthorizedMarkets[i];
+            if (market == address(0)) {
+                revert InvalidMarketAddress(market);
+            }
+            if (!authorizedMarkets[market]) {
+                authorizedMarkets[market] = true;
+                emit AuthorizedMarketAdded(market);
             }
         }
     }
@@ -71,6 +90,16 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Validate update type
         if (!validUpdateTypes[updateType]) {
             revert UnauthorizedUpdateType(updateType);
+        }
+
+        // Validate market address is not address(0)
+        if (market == address(0)) {
+            revert InvalidMarketAddress(market);
+        }
+
+        // Validate market authorization
+        if (!authorizedMarkets[market]) {
+            revert UnauthorizedMarket(market);
         }
 
         // Get previous value from history (empty for first update)
@@ -212,5 +241,40 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         }
 
         return updateHistory[updateId];
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MARKET AUTHORIZATION FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @inheritdoc ILlamaGuardOracle
+    function addAuthorizedMarket(address market) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (market == address(0)) {
+            revert InvalidMarketAddress(market);
+        }
+        if (authorizedMarkets[market]) {
+            revert MarketAlreadyAuthorized(market);
+        }
+
+        authorizedMarkets[market] = true;
+        emit AuthorizedMarketAdded(market);
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function removeAuthorizedMarket(address market) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (market == address(0)) {
+            revert InvalidMarketAddress(market);
+        }
+        if (!authorizedMarkets[market]) {
+            revert MarketNotFound(market);
+        }
+
+        authorizedMarkets[market] = false;
+        emit AuthorizedMarketRemoved(market);
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function isAuthorizedMarket(address market) public view returns (bool) {
+        return authorizedMarkets[market];
     }
 }

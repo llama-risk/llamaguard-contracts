@@ -65,6 +65,34 @@ interface ILlamaGuardOracle {
     /// @notice Thrown when querying an invalid update ID
     error InvalidUpdateId(uint256 updateId);
 
+    /// @notice Thrown when attempting to update/query an unauthorized market
+    error UnauthorizedMarket(address market);
+
+    /// @notice Thrown when market address is address(0)
+    error InvalidMarketAddress(address market);
+
+    /// @notice Thrown when attempting to add a market that is already authorized
+    error MarketAlreadyAuthorized(address market);
+
+    /// @notice Thrown when attempting to remove a market that is not authorized
+    error MarketNotFound(address market);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EVENTS - Market Authorization
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Emitted when a market is added to the authorized list
+     * @param market Address of the newly authorized market
+     */
+    event AuthorizedMarketAdded(address indexed market);
+
+    /**
+     * @notice Emitted when a market is removed from the authorized list
+     * @param market Address of the deauthorized market
+     */
+    event AuthorizedMarketRemoved(address indexed market);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // MUTATORS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -150,4 +178,29 @@ interface ILlamaGuardOracle {
         external
         view
         returns (RiskParameterUpdate memory);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MARKET AUTHORIZATION FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Add a market address to the authorized list
+     * @dev Restricted to DEFAULT_ADMIN_ROLE
+     * @param market Address of the market to authorize (must be non-zero)
+     */
+    function addAuthorizedMarket(address market) external;
+
+    /**
+     * @notice Remove a market address from the authorized list
+     * @dev Restricted to DEFAULT_ADMIN_ROLE
+     * @param market Address of the market to deauthorize
+     */
+    function removeAuthorizedMarket(address market) external;
+
+    /**
+     * @notice Check if a market address is authorized
+     * @param market Address to check
+     * @return bool True if market is authorized, false otherwise
+     */
+    function isAuthorizedMarket(address market) external view returns (bool);
 }

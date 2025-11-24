@@ -16,6 +16,9 @@ contract LlamaGuardOracleProxyTest is Test {
     bytes32 internal expectedWorkflowId = bytes32("WORKFLOWCID_ABCDEFGHIJKLMNOPQRST");
     string internal proxyDescription = "Proxy: Mock Feed";
 
+    // Default test market for legacy tests
+    address internal defaultMarket = address(0xDEFA);
+
     string[] internal defaultUpdateTypes;
 
     function setUp() public {
@@ -27,7 +30,9 @@ contract LlamaGuardOracleProxyTest is Test {
         defaultUpdateTypes[1] = "supply";
         defaultUpdateTypes[2] = "risk_state";
 
-        oracle = new LlamaGuardOracle(8, "Mock Feed", 1, defaultUpdateTypes);
+        address[] memory initialMarkets = new address[](1);
+        initialMarkets[0] = defaultMarket;
+        oracle = new LlamaGuardOracle(8, "Mock Feed", 1, defaultUpdateTypes, initialMarkets);
         proxy = new LlamaGuardOracleProxy(
             address(oracle),
             expectedAuthor,
@@ -62,7 +67,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Build metadata matching expected values so onReport passes in base template
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
 
-        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, "price", address(0), "");
+        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, "price", defaultMarket, "");
 
         proxy.onReport(metadata, report);
 
@@ -74,7 +79,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongAuthor() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, address(0xBEEF), expectedWorkflowName);
-        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, "price", address(0), "");
+        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, "price", defaultMarket, "");
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -82,7 +87,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongWorkflow() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, bytes10("WRONGNAME"));
-        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price", address(0), "");
+        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price", defaultMarket, "");
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -90,7 +95,8 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testSetLlamaGuardOracleRequiresWriteAccess() public {
         // New oracle without granting role to proxy should revert
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1, defaultUpdateTypes);
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1, defaultUpdateTypes, noMarkets);
 
         vm.expectRevert(LlamaGuardOracleProxy.InvalidLlamaGuardOracle.selector);
         proxy.setLlamaGuardOracle(address(newOracle));
@@ -142,7 +148,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Build metadata with wrong values - should not revert
         bytes memory wrongMetadata = _buildMetadata(bytes32("WRONG_ID"), address(0xDEAD), bytes10("WRONG"));
-        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, "price", address(0), "");
+        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, "price", defaultMarket, "");
 
         // Should succeed even with wrong metadata
         proxy.onReport(wrongMetadata, report);

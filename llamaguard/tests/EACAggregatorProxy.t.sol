@@ -12,6 +12,9 @@ contract EACAggregatorProxyTest is Test {
     address internal owner = address(this);
     address internal dataProxy = address(0x1234);
 
+    // Default test market for legacy tests
+    address internal defaultMarket = address(0xDEFA);
+
     string[] internal defaultUpdateTypes;
 
     function setUp() public {
@@ -21,8 +24,10 @@ contract EACAggregatorProxyTest is Test {
         defaultUpdateTypes[1] = "supply";
         defaultUpdateTypes[2] = "risk_state";
 
-        // Deploy oracle and grant write role to dataProxy
-        oracle = new LlamaGuardOracle(8, "Test Oracle", 1, defaultUpdateTypes);
+        // Deploy oracle with initial authorized market and grant write role to dataProxy
+        address[] memory initialMarkets = new address[](1);
+        initialMarkets[0] = defaultMarket;
+        oracle = new LlamaGuardOracle(8, "Test Oracle", 1, defaultUpdateTypes, initialMarkets);
         oracle.grantRole(oracle.WRITER_ROLE(), dataProxy);
 
         // Deploy EAC proxy pointing to oracle
@@ -34,7 +39,7 @@ contract EACAggregatorProxyTest is Test {
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", address(0), "");
+        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", defaultMarket, "");
     }
 
     function testConstructor() public view {
@@ -96,7 +101,8 @@ contract EACAggregatorProxyTest is Test {
 
     function testProposeAggregator() public {
         // Deploy new oracle
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes);
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes, noMarkets);
 
         // Update proxy to point to new oracle
         vm.expectEmit(true, true, false, true);
@@ -112,7 +118,8 @@ contract EACAggregatorProxyTest is Test {
 
     function testProposeAggregatorRevertsForNonOwner() public {
         address nonOwner = address(0x9999);
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes);
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes, noMarkets);
 
         vm.prank(nonOwner);
         vm.expectRevert();
@@ -143,11 +150,13 @@ contract EACAggregatorProxyTest is Test {
         assertEq(answer1, 500);
 
         // Deploy and switch to new oracle
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2, defaultUpdateTypes);
+        address[] memory initialMarketsNew = new address[](1);
+        initialMarketsNew[0] = defaultMarket;
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2, defaultUpdateTypes, initialMarketsNew);
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", address(0), "");
+        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", defaultMarket, "");
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -167,7 +176,7 @@ contract EACAggregatorProxyTest is Test {
                 string(abi.encodePacked("ref-", vm.toString(i))),
                 _encodeUpdateValue(i * 100, int256(i * 50), i),
                 "price",
-                address(0),
+                defaultMarket,
                 ""
             );
         }
