@@ -133,4 +133,21 @@ interface ILlamaGuardOracle {
      * @return True if the update type is authorized
      */
     function isValidUpdateType(string calldata updateType) external view returns (bool);
+
+    /**
+     * @notice Fetches the most recent update for a specific parameter type and market
+     * @dev Returns empty struct (timestamp=0) if no update exists for the combination.
+     *      Does NOT revert for non-existent combinations - callers should check timestamp.
+     * @param updateType The parameter type identifier (e.g., "price", "supply", "risk_state")
+     * @param market The market address (use address(0) for global/non-market-specific updates)
+     * @return The most recent RiskParameterUpdate for the specified (updateType, market) pair,
+     *         or an empty struct if no matching update exists
+     */
+    function getLatestUpdateByParameterAndMarket(
+        string calldata updateType,
+        address market
+    )
+        external
+        view
+        returns (RiskParameterUpdate memory);
 }

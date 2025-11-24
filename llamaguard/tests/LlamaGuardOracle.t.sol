@@ -462,6 +462,239 @@ contract LlamaGuardOracleTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // USER STORY 5: QUERY LATEST UPDATE BY PARAMETER AND MARKET (002 FEATURE)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ----- US2: Index Tracking Tests (T005-T007) -----
+
+    function test_UpdateData_UpdatesLatestIndex() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market = address(0x1111);
+
+        vm.prank(writer);
+        oracle.updateData("ref-1", _encodeUpdateValue(1000, 500, 2), "price", market, "");
+
+        // The index should now point to updateId 2 (first update after roundId 1)
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", market);
+
+        assertEq(update.updateId, 2);
+        assertEq(update.market, market);
+        assertEq(update.updateType, "price");
+    }
+
+    function test_UpdateData_OverwritesPreviousIndex() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market = address(0x2222);
+
+        vm.startPrank(writer);
+        // First update
+        oracle.updateData("ref-1", _encodeUpdateValue(100, 50, 1), "price", market, "");
+        uint256 firstUpdateId = oracle.getLatestRoundId();
+
+        // Second update for same (type, market) pair
+        oracle.updateData("ref-2", _encodeUpdateValue(200, 75, 2), "price", market, "");
+        uint256 secondUpdateId = oracle.getLatestRoundId();
+        vm.stopPrank();
+
+        // Index should point to the latest update
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", market);
+
+        assertEq(update.updateId, secondUpdateId);
+        assertGt(update.updateId, firstUpdateId);
+        assertEq(update.referenceId, "ref-2");
+    }
+
+    function test_UpdateData_IndependentIndexPerPair() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market1 = address(0x3333);
+        address market2 = address(0x4444);
+
+        vm.startPrank(writer);
+        // Update for (price, market1)
+        oracle.updateData("ref-1", _encodeUpdateValue(100, 50, 1), "price", market1, "");
+        uint256 priceMarket1Id = oracle.getLatestRoundId();
+
+        // Update for (price, market2)
+        oracle.updateData("ref-2", _encodeUpdateValue(200, 75, 2), "price", market2, "");
+        uint256 priceMarket2Id = oracle.getLatestRoundId();
+
+        // Update for (supply, market1)
+        oracle.updateData("ref-3", _encodeUpdateValue(300, 100, 3), "supply", market1, "");
+        uint256 supplyMarket1Id = oracle.getLatestRoundId();
+        vm.stopPrank();
+
+        // Each (type, market) pair should have independent tracking
+        ILlamaGuardOracle.RiskParameterUpdate memory update1 =
+            oracle.getLatestUpdateByParameterAndMarket("price", market1);
+        ILlamaGuardOracle.RiskParameterUpdate memory update2 =
+            oracle.getLatestUpdateByParameterAndMarket("price", market2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update3 =
+            oracle.getLatestUpdateByParameterAndMarket("supply", market1);
+
+        assertEq(update1.updateId, priceMarket1Id);
+        assertEq(update2.updateId, priceMarket2Id);
+        assertEq(update3.updateId, supplyMarket1Id);
+
+        // Verify each points to correct reference
+        assertEq(update1.referenceId, "ref-1");
+        assertEq(update2.referenceId, "ref-2");
+        assertEq(update3.referenceId, "ref-3");
+    }
+
+    // ----- US1: Query Function Tests (T011-T015) -----
+
+    function test_GetLatestUpdateByParameterAndMarket_ReturnsCorrectUpdate() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market = address(0x5555);
+        bytes memory newValue = _encodeUpdateValue(1000, 500, 2);
+        bytes memory additionalData = "test data";
+
+        vm.prank(writer);
+        oracle.updateData("reference-123", newValue, "price", market, additionalData);
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", market);
+
+        assertEq(update.timestamp, block.timestamp);
+        assertEq(update.newValue, newValue);
+        assertEq(update.referenceId, "reference-123");
+        assertEq(update.updateType, "price");
+        assertEq(update.market, market);
+        assertEq(update.additionalData, additionalData);
+    }
+
+    function test_GetLatestUpdateByParameterAndMarket_ReturnsLatestAfterMultipleUpdates() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market = address(0x6666);
+
+        vm.startPrank(writer);
+        oracle.updateData("ref-1", _encodeUpdateValue(100, 50, 1), "price", market, "");
+        oracle.updateData("ref-2", _encodeUpdateValue(200, 75, 2), "price", market, "");
+        oracle.updateData("ref-3", _encodeUpdateValue(300, 100, 3), "price", market, "");
+        vm.stopPrank();
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", market);
+
+        // Should return the latest (third) update
+        assertEq(update.referenceId, "ref-3");
+        (uint256 supply,,) = abi.decode(update.newValue, (uint256, int256, uint256));
+        assertEq(supply, 300);
+    }
+
+    function test_GetLatestUpdateByParameterAndMarket_ReturnsEmptyForNonExistent() public view {
+        // Query for a (type, market) pair that has no updates
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", address(0x9999));
+
+        // Should return empty struct with timestamp = 0
+        assertEq(update.timestamp, 0);
+        assertEq(update.updateId, 0);
+        assertEq(update.market, address(0));
+        assertEq(bytes(update.updateType).length, 0);
+        assertEq(bytes(update.referenceId).length, 0);
+        assertEq(update.newValue.length, 0);
+    }
+
+    function test_GetLatestUpdateByParameterAndMarket_DoesNotRevert() public view {
+        // Per FR-005: System MUST NOT revert when querying for non-existent combinations
+        // This test verifies no revert occurs for various non-existent queries
+        oracle.getLatestUpdateByParameterAndMarket("price", address(0x1));
+        oracle.getLatestUpdateByParameterAndMarket("nonexistent_type", address(0x2));
+        oracle.getLatestUpdateByParameterAndMarket("", address(0x3));
+        oracle.getLatestUpdateByParameterAndMarket("supply", address(0));
+
+        // If we reach here, no reverts occurred
+        assertTrue(true);
+    }
+
+    function test_GetLatestUpdateByParameterAndMarket_WorksWithAddressZero() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // address(0) is valid for global/non-market-specific updates per FR-006
+        vm.prank(writer);
+        oracle.updateData("global-ref", _encodeUpdateValue(1000, 500, 2), "price", address(0), "");
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket("price", address(0));
+
+        assertEq(update.market, address(0));
+        assertEq(update.referenceId, "global-ref");
+        assertGt(update.timestamp, 0);
+    }
+
+    // ----- Fuzz Test (T021) -----
+
+    function testFuzz_GetLatestUpdateByParameterAndMarket(
+        uint8 updateTypeIndex,
+        address market,
+        uint256 supply,
+        int256 price,
+        uint256 state
+    )
+        public
+    {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // Bound updateTypeIndex to valid range (0-2 for our 3 default types)
+        updateTypeIndex = uint8(bound(updateTypeIndex, 0, 2));
+
+        string memory updateType;
+        if (updateTypeIndex == 0) {
+            updateType = "price";
+        } else if (updateTypeIndex == 1) {
+            updateType = "supply";
+        } else {
+            updateType = "risk_state";
+        }
+
+        vm.prank(writer);
+        oracle.updateData("fuzz-ref", abi.encode(supply, price, state), updateType, market, "");
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            oracle.getLatestUpdateByParameterAndMarket(updateType, market);
+
+        // Verify correct update is returned
+        assertEq(update.market, market);
+        assertEq(update.updateType, updateType);
+        assertEq(update.referenceId, "fuzz-ref");
+        assertGt(update.timestamp, 0);
+
+        // Decode and verify values
+        (uint256 returnedSupply, int256 returnedPrice, uint256 returnedState) =
+            abi.decode(update.newValue, (uint256, int256, uint256));
+        assertEq(returnedSupply, supply);
+        assertEq(returnedPrice, price);
+        assertEq(returnedState, state);
+    }
+
+    // ----- US3: Interface Consistency Tests (T018) -----
+
+    function test_InterfaceConsistency_GetLatestUpdateByParameterAndMarket() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address market = address(0x7777);
+
+        vm.prank(writer);
+        oracle.updateData("ref-interface", _encodeUpdateValue(1000, 500, 2), "price", market, "");
+
+        // Call via interface to verify signature compatibility
+        ILlamaGuardOracle iOracle = ILlamaGuardOracle(address(oracle));
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            iOracle.getLatestUpdateByParameterAndMarket("price", market);
+
+        assertEq(update.referenceId, "ref-interface");
+        assertEq(update.market, market);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // ACCESS CONTROL TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 

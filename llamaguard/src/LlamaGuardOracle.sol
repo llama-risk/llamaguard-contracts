@@ -19,6 +19,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @notice Mapping from updateId (roundId) to RiskParameterUpdate struct
     mapping(uint256 => RiskParameterUpdate) public updateHistory;
 
+    /// @notice Mapping to track latest updateId for each (updateType, market) combination
+    /// @dev Enables O(1) lookups via getLatestUpdateByParameterAndMarket()
+    mapping(string => mapping(address => uint256)) private latestUpdateIdByTypeAndMarket;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════════════
@@ -92,6 +96,9 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
             market: market,
             additionalData: additionalData
         });
+
+        // Update the latest update index for this (updateType, market) combination
+        latestUpdateIdByTypeAndMarket[updateType][market] = updateId;
 
         emit ParameterUpdated(
             referenceId, newValue, previousValue, block.timestamp, updateType, updateId, market, additionalData
@@ -176,5 +183,34 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @inheritdoc ILlamaGuardOracle
     function hasWriteAccess(address account) public view returns (bool) {
         return hasRole(WRITER_ROLE, account);
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function getLatestUpdateByParameterAndMarket(
+        string calldata updateType,
+        address market
+    )
+        external
+        view
+        returns (RiskParameterUpdate memory)
+    {
+        uint256 updateId = latestUpdateIdByTypeAndMarket[updateType][market];
+
+        // Return empty struct if no update exists (updateId == 0)
+        // This is intentional - we do NOT revert per spec FR-004 and FR-005
+        if (updateId == 0) {
+            return RiskParameterUpdate({
+                timestamp: 0,
+                newValue: "",
+                referenceId: "",
+                previousValue: "",
+                updateType: "",
+                updateId: 0,
+                market: address(0),
+                additionalData: ""
+            });
+        }
+
+        return updateHistory[updateId];
     }
 }
