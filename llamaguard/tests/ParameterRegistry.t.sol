@@ -79,6 +79,12 @@ contract ParameterRegistryTest is Test {
         registry.setUpdater(makeAddr("anotherUpdater"));
     }
 
+    function test_RevertWhen_SetUpdaterCalledWithZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
+        registry.setUpdater(address(0));
+    }
+
     function test_SetParametersForAsset_OnlyUpdater() public {
         vm.prank(updater);
         registry.setParametersForAsset(
@@ -122,6 +128,22 @@ contract ParameterRegistryTest is Test {
         vm.prank(updater);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
         registry.setParametersForAsset(asset1, "Asset One", address(0), 1000, 250, 200, 200, 10, true, true, true);
+    }
+
+    function test_RevertWhen_SetParametersForAssetCalledWithZeroAssetAddress() public {
+        vm.prank(updater);
+        vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
+        registry.setParametersForAsset(
+            address(0), "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 10, true, true, true
+        );
+    }
+
+    function test_RevertWhen_SetParametersForAssetCalledWithZeroLookbackWindow() public {
+        vm.prank(updater);
+        vm.expectRevert(ParameterRegistry.InvalidLookbackWindow.selector);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleProxy), 1000, 250, 200, 200, 0, true, true, true
+        );
     }
 
     function test_SetIndividualParameters() public {
@@ -313,7 +335,7 @@ contract ParameterRegistryTest is Test {
         // Test that all parameters can be set to their maximum allowed values
         vm.prank(updater);
         registry.setParametersForAsset(
-            asset1, "Asset One", address(mockOracleProxy), 19_999, 250, 250, 250, 10, true, true, true
+            asset1, "Asset One", address(mockOracleProxy), 20_000, 250, 250, 250, 10, true, true, true
         );
 
         (
@@ -327,14 +349,54 @@ contract ParameterRegistryTest is Test {
             bool actionEnabled
         ) = registry.getParametersForAsset(asset1);
 
-        assertEq(maxApy, 19_999);
-        assertEq(upperTol, 250);
-        assertEq(lowerTol, 250);
-        assertEq(maxDiscount, 250);
+        assertEq(maxApy, 20_000, "Max APY should be at maximum limit");
+        assertEq(upperTol, 250, "Upper tolerance should be at maximum");
+        assertEq(lowerTol, 250, "Lower tolerance should be at maximum");
+        assertEq(maxDiscount, 250, "Max discount should be at maximum");
         assertEq(lookbackWindow, 10);
         assertTrue(upperEnabled);
         assertTrue(lowerEnabled);
         assertTrue(actionEnabled);
+    }
+
+    function test_RevertWhen_SetParametersForAssetCalledWithMaxExpectedApyAboveLimit() public {
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxExpectedApyTooHigh.selector, 20_001));
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleProxy), 20_001, 250, 200, 200, 10, true, true, true
+        );
+    }
+
+    function test_SetMaxExpectedApy_AtMaximumLimit() public {
+        // First create an asset
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleProxy), 1000, 100, 100, 100, 10, true, true, true
+        );
+
+        // Test that exactly 20,000 BPS (200%) is accepted
+        vm.prank(updater);
+        registry.setMaxExpectedApy(asset1, 20_000);
+        (uint256 maxApy,,,,,,,) = registry.getParametersForAsset(asset1);
+        assertEq(maxApy, 20_000, "Max APY should be set to maximum limit");
+    }
+
+    function test_RevertWhen_SetMaxExpectedApyAboveLimit() public {
+        // First create an asset
+        vm.prank(updater);
+        registry.setParametersForAsset(
+            asset1, "Asset One", address(mockOracleProxy), 1000, 100, 100, 100, 10, true, true, true
+        );
+
+        // Test that 20,001 BPS is rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxExpectedApyTooHigh.selector, 20_001));
+        registry.setMaxExpectedApy(asset1, 20_001);
+
+        // Test that much higher values are rejected
+        vm.prank(updater);
+        vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxExpectedApyTooHigh.selector, 50_000));
+        registry.setMaxExpectedApy(asset1, 50_000);
     }
 
     function test_DeleteAsset() public {

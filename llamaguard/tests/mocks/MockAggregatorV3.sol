@@ -22,10 +22,7 @@ contract MockAggregatorV3 {
         external
     {
         rounds[_roundId] = RoundData({
-            answer: _answer,
-            startedAt: _startedAt,
-            updatedAt: _updatedAt,
-            answeredInRound: _answeredInRound
+            answer: _answer, startedAt: _startedAt, updatedAt: _updatedAt, answeredInRound: _answeredInRound
         });
 
         if (_roundId > latestRound) {

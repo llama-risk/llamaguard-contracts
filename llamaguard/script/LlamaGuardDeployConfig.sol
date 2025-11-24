@@ -16,6 +16,16 @@ contract LlamaGuardDeployConfig {
         uint256 version; // Oracle version
         address pendingOwner; // For two-step ownership transfer (unused now)
         string networkName;
+        string[] initialUpdateTypes; // Initial valid update types
+    }
+
+    /// @notice Default initial update types
+    function getDefaultUpdateTypes() public pure returns (string[] memory) {
+        string[] memory types = new string[](3);
+        types[0] = "price";
+        types[1] = "supply";
+        types[2] = "risk_state";
+        return types;
     }
 
     // ============================================
@@ -25,6 +35,11 @@ contract LlamaGuardDeployConfig {
     /// @notice Returns configuration for Ethereum mainnet
     /// @return config The deployment configuration
     function getMainnetConfig() public pure returns (Config memory) {
+        string[] memory updateTypes = new string[](3);
+        updateTypes[0] = "price";
+        updateTypes[1] = "supply";
+        updateTypes[2] = "risk_state";
+
         return Config({
             expectedAuthor: address(0), // TODO: Set CRE workflow author
             expectedForwarder: address(0), // TODO: Set expected forwarder
@@ -34,13 +49,19 @@ contract LlamaGuardDeployConfig {
             description: "LlamaGuard Oracle - Mainnet",
             version: 1,
             pendingOwner: address(0), // Optional
-            networkName: "mainnet"
+            networkName: "mainnet",
+            initialUpdateTypes: updateTypes
         });
     }
 
     /// @notice Returns configuration for Sepolia testnet
     /// @return config The deployment configuration
     function getSepoliaConfig() public pure returns (Config memory) {
+        string[] memory updateTypes = new string[](3);
+        updateTypes[0] = "price";
+        updateTypes[1] = "supply";
+        updateTypes[2] = "risk_state";
+
         return Config({
             expectedAuthor: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Dummy
             expectedForwarder: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Dummy
@@ -50,13 +71,19 @@ contract LlamaGuardDeployConfig {
             description: "LlamaGuard Oracle - Sepolia",
             version: 1,
             pendingOwner: address(0),
-            networkName: "sepolia"
+            networkName: "sepolia",
+            initialUpdateTypes: updateTypes
         });
     }
 
     /// @notice Returns configuration for local Anvil network
     /// @return config The deployment configuration
     function getAnvilConfig() public pure returns (Config memory) {
+        string[] memory updateTypes = new string[](3);
+        updateTypes[0] = "price";
+        updateTypes[1] = "supply";
+        updateTypes[2] = "risk_state";
+
         // Default test addresses for local development
         return Config({
             expectedAuthor: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, // Anvil account 0
@@ -67,7 +94,8 @@ contract LlamaGuardDeployConfig {
             description: "LlamaGuard Oracle - Anvil",
             version: 1,
             pendingOwner: address(0),
-            networkName: "anvil"
+            networkName: "anvil",
+            initialUpdateTypes: updateTypes
         });
     }
 

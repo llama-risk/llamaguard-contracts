@@ -12,13 +12,34 @@ contract EACAggregatorProxyTest is Test {
     address internal owner = address(this);
     address internal dataProxy = address(0x1234);
 
+    // Default test market for legacy tests
+    address internal defaultMarket = address(0xDEFA);
+
+    string[] internal defaultUpdateTypes;
+
     function setUp() public {
-        // Deploy oracle and grant write role to dataProxy
-        oracle = new LlamaGuardOracle(8, "Test Oracle", 1);
+        // Setup default update types
+        defaultUpdateTypes = new string[](3);
+        defaultUpdateTypes[0] = "price";
+        defaultUpdateTypes[1] = "supply";
+        defaultUpdateTypes[2] = "risk_state";
+
+        // Deploy oracle with initial authorized market and grant write role to dataProxy
+        address[] memory initialMarkets = new address[](1);
+        initialMarkets[0] = defaultMarket;
+        oracle = new LlamaGuardOracle(8, "Test Oracle", 1, defaultUpdateTypes, initialMarkets);
         oracle.grantRole(oracle.WRITER_ROLE(), dataProxy);
 
         // Deploy EAC proxy pointing to oracle
         proxy = new EACAggregatorProxy(address(oracle));
+    }
+
+    function _encodeUpdateValue(uint256 supply_, int256 price_, uint256 state_) internal pure returns (bytes memory) {
+        return abi.encode(supply_, price_, state_);
+    }
+
+    function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
+        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", defaultMarket, "");
     }
 
     function testConstructor() public view {
@@ -49,7 +70,7 @@ contract EACAggregatorProxyTest is Test {
     function testLatestRoundDataPassthrough() public {
         // Update oracle data
         vm.prank(dataProxy);
-        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
+        _callUpdateData(1000, 500, 2);
 
         // Read through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -65,7 +86,7 @@ contract EACAggregatorProxyTest is Test {
     function testGetRoundDataPassthrough() public {
         // Update oracle data
         vm.prank(dataProxy);
-        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
+        _callUpdateData(1000, 500, 2);
 
         // Read specific round through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
@@ -80,7 +101,8 @@ contract EACAggregatorProxyTest is Test {
 
     function testProposeAggregator() public {
         // Deploy new oracle
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2);
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes, noMarkets);
 
         // Update proxy to point to new oracle
         vm.expectEmit(true, true, false, true);
@@ -96,7 +118,8 @@ contract EACAggregatorProxyTest is Test {
 
     function testProposeAggregatorRevertsForNonOwner() public {
         address nonOwner = address(0x9999);
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2);
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(18, "New Oracle", 2, defaultUpdateTypes, noMarkets);
 
         vm.prank(nonOwner);
         vm.expectRevert();
@@ -120,18 +143,20 @@ contract EACAggregatorProxyTest is Test {
 
         // Update oracle data through old oracle
         vm.prank(dataProxy);
-        oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 1000, price: 500, state: 2 })));
+        _callUpdateData(1000, 500, 2);
 
         // Read through proxy
         (, int256 answer1,,,) = proxy.latestRoundData();
         assertEq(answer1, 500);
 
         // Deploy and switch to new oracle
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2);
+        address[] memory initialMarketsNew = new address[](1);
+        initialMarketsNew[0] = defaultMarket;
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2, defaultUpdateTypes, initialMarketsNew);
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: 2000, price: 750, state: 3 })));
+        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", defaultMarket, "");
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -147,7 +172,13 @@ contract EACAggregatorProxyTest is Test {
         // Multiple updates should all be readable through proxy
         for (uint256 i = 1; i <= 5; i++) {
             vm.prank(dataProxy);
-            oracle.updateData(abi.encode(LlamaGuardOracle.UpdateData({ supply: i * 100, price: i * 50, state: i })));
+            oracle.updateData(
+                string(abi.encodePacked("ref-", vm.toString(i))),
+                _encodeUpdateValue(i * 100, int256(i * 50), i),
+                "price",
+                defaultMarket,
+                ""
+            );
         }
 
         // Read latest

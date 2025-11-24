@@ -52,7 +52,11 @@ contract DeployLlamaGuardOracle is BaseScript {
         console2.log("Expected Author:", config.expectedAuthor);
         console2.log("Expected Workflow:", vm.toString(abi.encodePacked(config.expectedWorkflowName)));
 
-        oracle = new LlamaGuardOracle(config.decimals, config.description, config.version);
+        // No initial authorized markets - will be added via addAuthorizedMarket() after deployment
+        address[] memory initialAuthorizedMarkets = new address[](0);
+        oracle = new LlamaGuardOracle(
+            config.decimals, config.description, config.version, config.initialUpdateTypes, initialAuthorizedMarkets
+        );
         console2.log("LlamaGuardOracle deployed at:", address(oracle));
 
         // Ensure broadcaster holds admin role on oracle
@@ -114,6 +118,12 @@ contract DeployLlamaGuardOracle is BaseScript {
                     networkName = string(abi.encodePacked("chain-", vm.toString(chainId)));
                 }
 
+                // Default update types
+                string[] memory updateTypes = new string[](3);
+                updateTypes[0] = "price";
+                updateTypes[1] = "supply";
+                updateTypes[2] = "risk_state";
+
                 config = LlamaGuardDeployConfig.Config({
                     expectedAuthor: expectedAuthor,
                     expectedForwarder: expectedForwarder,
@@ -123,7 +133,8 @@ contract DeployLlamaGuardOracle is BaseScript {
                     description: description,
                     version: version,
                     pendingOwner: address(0),
-                    networkName: networkName
+                    networkName: networkName,
+                    initialUpdateTypes: updateTypes
                 });
                 return config;
             }
