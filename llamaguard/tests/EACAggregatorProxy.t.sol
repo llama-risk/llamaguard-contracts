@@ -39,7 +39,7 @@ contract EACAggregatorProxyTest is Test {
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", defaultMarket, "");
+        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", "");
     }
 
     function testConstructor() public view {
@@ -156,7 +156,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", defaultMarket, "");
+        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", "");
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -176,7 +176,6 @@ contract EACAggregatorProxyTest is Test {
                 string(abi.encodePacked("ref-", vm.toString(i))),
                 _encodeUpdateValue(i * 100, int256(i * 50), i),
                 "price",
-                defaultMarket,
                 ""
             );
         }

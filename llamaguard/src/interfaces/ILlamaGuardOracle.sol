@@ -39,7 +39,6 @@ interface ILlamaGuardOracle {
         uint256 timestamp,
         string indexed updateType,
         uint256 indexed updateId,
-        address indexed market,
         bytes additionalData
     );
 
@@ -102,14 +101,12 @@ interface ILlamaGuardOracle {
      * @param referenceId External reference ID for the update
      * @param newValue ABI-encoded new parameter values
      * @param updateType Classification of the update (must be authorized)
-     * @param market Market address (use address(0) for global updates)
      * @param additionalData Optional additional data for the update
      */
     function updateData(
         string calldata referenceId,
         bytes calldata newValue,
         string calldata updateType,
-        address market,
         bytes calldata additionalData
     )
         external;
@@ -124,15 +121,6 @@ interface ILlamaGuardOracle {
     // ═══════════════════════════════════════════════════════════════════════════
     // VIEWS
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * @notice Get combined data from the oracle (backward compatible)
-     * @return supply The supply value from the latest update
-     * @return state The state value from the latest update
-     * @return price The price value from the latest update
-     * @return startedAt The timestamp of the latest update
-     */
-    function getData() external view returns (uint256 supply, uint256 state, int256 price, uint256 startedAt);
 
     /**
      * @notice Fetch an update record by its ID
@@ -162,12 +150,14 @@ interface ILlamaGuardOracle {
     function isValidUpdateType(string calldata updateType) external view returns (bool);
 
     /**
-     * @notice Fetches the most recent update for a specific parameter type and market
-     * @dev Returns empty struct (timestamp=0) if no update exists for the combination.
-     *      Does NOT revert for non-existent combinations - callers should check timestamp.
+     * @notice Fetches the most recent update for a specific parameter type
+     * @dev Returns empty struct (timestamp=0) if no update exists for the updateType.
+     *      Does NOT revert for non-existent update types - callers should check timestamp.
+     *      The input market address will be rewritten to the returned RiskParameterUpdate.market field.
      * @param updateType The parameter type identifier (e.g., "price", "supply", "risk_state")
-     * @param market The market address (use address(0) for global/non-market-specific updates)
-     * @return The most recent RiskParameterUpdate for the specified (updateType, market) pair,
+     * @param market The market address to be written to the returned RiskParameterUpdate.market field
+     * @return The most recent RiskParameterUpdate for the specified updateType,
+     *         with the market field set to the input market address,
      *         or an empty struct if no matching update exists
      */
     function getLatestUpdateByParameterAndMarket(

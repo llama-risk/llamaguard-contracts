@@ -19,9 +19,9 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @notice Mapping from updateId (roundId) to RiskParameterUpdate struct
     mapping(uint256 => RiskParameterUpdate) public updateHistory;
 
-    /// @notice Mapping to track latest updateId for each (updateType, market) combination
+    /// @notice Mapping to track latest updateId for each updateType
     /// @dev Enables O(1) lookups via getLatestUpdateByParameterAndMarket()
-    mapping(string => mapping(address => uint256)) private latestUpdateIdByTypeAndMarket;
+    mapping(string => uint256) private latestUpdateIdByType;
 
     /// @notice Mapping of authorized market addresses
     /// @dev O(1) lookup for market authorization checks
@@ -81,7 +81,6 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         string calldata referenceId,
         bytes calldata newValue,
         string calldata updateType,
-        address market,
         bytes calldata additionalData
     )
         external
@@ -90,16 +89,6 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Validate update type
         if (!validUpdateTypes[updateType]) {
             revert UnauthorizedUpdateType(updateType);
-        }
-
-        // Validate market address is not address(0)
-        if (market == address(0)) {
-            revert InvalidMarketAddress(market);
-        }
-
-        // Validate market authorization
-        if (!authorizedMarkets[market]) {
-            revert UnauthorizedMarket(market);
         }
 
         // Get previous value from history (empty for first update)
@@ -114,7 +103,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Get new roundId as updateId and store in history
         uint256 updateId = this.getLatestRoundId();
 
-        // Store in history
+        // Store in history (market is set to address(0) as per requirements)
         updateHistory[updateId] = RiskParameterUpdate({
             timestamp: block.timestamp,
             newValue: newValue,
@@ -122,15 +111,15 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
             previousValue: previousValue,
             updateType: updateType,
             updateId: updateId,
-            market: market,
+            market: address(0),
             additionalData: additionalData
         });
 
-        // Update the latest update index for this (updateType, market) combination
-        latestUpdateIdByTypeAndMarket[updateType][market] = updateId;
+        // Update the latest update index for this updateType
+        latestUpdateIdByType[updateType] = updateId;
 
         emit ParameterUpdated(
-            referenceId, newValue, previousValue, block.timestamp, updateType, updateId, market, additionalData
+            referenceId, newValue, previousValue, block.timestamp, updateType, updateId, additionalData
         );
     }
 
@@ -156,33 +145,6 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     // ═══════════════════════════════════════════════════════════════════════════
     // VIEWS
     // ═══════════════════════════════════════════════════════════════════════════
-
-    /// @inheritdoc ILlamaGuardOracle
-    function getData() public view returns (uint256 supply, uint256 state, int256 price, uint256 startedAt) {
-        uint80 latestRound = this.getLatestRoundId();
-
-        // Check if there's any data
-        if (latestRound == 0) {
-            // No updates yet, return zeros with initial timestamp
-            (, int256 answer, uint256 started,,) = this.latestRoundData();
-            return (0, 0, answer, started);
-        }
-
-        RiskParameterUpdate memory update = updateHistory[latestRound];
-
-        // Handle case where updateHistory hasn't been populated yet
-        if (update.timestamp == 0) {
-            (, int256 answer, uint256 started,,) = this.latestRoundData();
-            return (0, 0, answer, started);
-        }
-
-        (uint256 decodedSupply, int256 decodedPrice, uint256 decodedState) =
-            abi.decode(update.newValue, (uint256, int256, uint256));
-        supply = decodedSupply;
-        state = decodedState;
-        price = decodedPrice;
-        startedAt = update.timestamp;
-    }
 
     /// @inheritdoc ILlamaGuardOracle
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory) {
@@ -223,7 +185,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         view
         returns (RiskParameterUpdate memory)
     {
-        uint256 updateId = latestUpdateIdByTypeAndMarket[updateType][market];
+        uint256 updateId = latestUpdateIdByType[updateType];
 
         // Return empty struct if no update exists (updateId == 0)
         // This is intentional - we do NOT revert per spec FR-004 and FR-005
@@ -240,7 +202,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
             });
         }
 
-        return updateHistory[updateId];
+        RiskParameterUpdate memory update = updateHistory[updateId];
+        // Rewrite the input market to the returned RiskParameterUpdate
+        update.market = market;
+        return update;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
