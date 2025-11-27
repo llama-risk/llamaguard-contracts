@@ -48,19 +48,20 @@ contract LlamaGuardOracleProxyTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), address(proxy));
     }
 
+    /// @dev Encode report for proxy - newValue is just price, additionalData is full bundle
     function _encodeProxyReport(
         string memory referenceId,
         uint256 supply_,
         int256 price_,
         uint256 state_,
-        string memory updateType,
-        bytes memory additionalData
+        string memory updateType
     )
         internal
         pure
         returns (bytes memory)
     {
-        bytes memory newValue = abi.encode(supply_, price_, state_);
+        bytes memory newValue = abi.encode(price_);
+        bytes memory additionalData = abi.encode(supply_, price_, state_);
         return abi.encode(referenceId, newValue, updateType, additionalData);
     }
 
@@ -68,7 +69,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Build metadata matching expected values so onReport passes in base template
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
 
-        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, "price", "");
+        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, "price");
 
         proxy.onReport(metadata, report);
 
@@ -76,9 +77,9 @@ contract LlamaGuardOracleProxyTest is Test {
         (, int256 answer,,,) = oracle.latestRoundData();
         assertEq(answer, 321);
 
-        // Verify full data via getUpdateById
+        // Verify full data via getUpdateById - decode from additionalData for full bundle
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
-        (uint256 supply, int256 price, uint256 state) = abi.decode(update.newValue, (uint256, int256, uint256));
+        (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 1000);
         assertEq(state, 9);
         assertEq(price, 321);
@@ -86,7 +87,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongAuthor() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, address(0xBEEF), expectedWorkflowName);
-        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, "price", "");
+        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, "price");
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -94,7 +95,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongWorkflow() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, bytes10("WRONGNAME"));
-        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price", "");
+        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price");
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -155,7 +156,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Build metadata with wrong values - should not revert
         bytes memory wrongMetadata = _buildMetadata(bytes32("WRONG_ID"), address(0xDEAD), bytes10("WRONG"));
-        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, "price", "");
+        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, "price");
 
         // Should succeed even with wrong metadata
         proxy.onReport(wrongMetadata, report);
@@ -164,9 +165,9 @@ contract LlamaGuardOracleProxyTest is Test {
         (, int256 answer,,,) = oracle.latestRoundData();
         assertEq(answer, 999, "Price should be updated");
 
-        // Verify full data via getUpdateById
+        // Verify full data via getUpdateById - decode from additionalData for full bundle
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
-        (uint256 supply, int256 price, uint256 state) = abi.decode(update.newValue, (uint256, int256, uint256));
+        (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 5000, "Supply should be updated");
         assertEq(state, 7, "State should be updated");
         assertEq(price, 999, "Price should be updated");
@@ -264,7 +265,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Build metadata with new expected values
         bytes memory metadata = _buildMetadata(newId, newAuthor, newName);
-        bytes memory report = _encodeProxyReport("ref-new", 3000, 400, 5, "price", "");
+        bytes memory report = _encodeProxyReport("ref-new", 3000, 400, 5, "price");
 
         // Should succeed with new expected values
         proxy.onReport(metadata, report);

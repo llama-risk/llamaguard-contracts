@@ -34,12 +34,22 @@ contract EACAggregatorProxyTest is Test {
         proxy = new EACAggregatorProxy(address(oracle));
     }
 
-    function _encodeUpdateValue(uint256 supply_, int256 price_, uint256 state_) internal pure returns (bytes memory) {
+    /// @dev Encode price for newValue parameter (just price for Chainlink compatibility)
+    function _encodePrice(int256 price_) internal pure returns (bytes memory) {
+        return abi.encode(price_);
+    }
+
+    /// @dev Encode full bundle for additionalData parameter (supply, price, state)
+    function _encodeAdditionalData(uint256 supply_, int256 price_, uint256 state_)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return abi.encode(supply_, price_, state_);
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateData("ref-1", _encodeUpdateValue(supply_, price_, state_), "price", "");
+        oracle.updateData("ref-1", _encodePrice(price_), "price", _encodeAdditionalData(supply_, price_, state_));
     }
 
     function testConstructor() public view {
@@ -156,7 +166,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData("ref-2", _encodeUpdateValue(2000, 750, 3), "price", "");
+        newOracle.updateData("ref-2", _encodePrice(750), "price", _encodeAdditionalData(2000, 750, 3));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -174,9 +184,9 @@ contract EACAggregatorProxyTest is Test {
             vm.prank(dataProxy);
             oracle.updateData(
                 string(abi.encodePacked("ref-", vm.toString(i))),
-                _encodeUpdateValue(i * 100, int256(i * 50), i),
+                _encodePrice(int256(i * 50)),
                 "price",
-                ""
+                _encodeAdditionalData(i * 100, int256(i * 50), i)
             );
         }
 

@@ -16,13 +16,13 @@ interface ILlamaGuardOracle {
      */
     struct RiskParameterUpdate {
         uint256 timestamp; // Timestamp of the update
-        bytes newValue; // Encoded parameters, flexible for various data types
+        bytes newValue; // ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility
         string referenceId; // External reference, potentially linking to off-chain data
-        bytes previousValue; // Previous value for historical comparison
+        bytes previousValue; // Previous newValue (price) for historical comparison
         string updateType; // Classification of the update for validation purposes
         uint256 updateId; // Unique identifier (equals roundId)
         address market; // Address for market of the parameter update
-        bytes additionalData; // Additional data for the update
+        bytes additionalData; // ABI-encoded tuple: (uint256 supply, int256 price, uint256 state)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -97,11 +97,13 @@ interface ILlamaGuardOracle {
 
     /**
      * @notice Update the oracle with new parameter data
-     * @dev Only callable by addresses with WRITER_ROLE
+     * @dev Only callable by addresses with WRITER_ROLE.
+     *      newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
+     *      additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
      * @param referenceId External reference ID for the update
-     * @param newValue ABI-encoded new parameter values
+     * @param newValue ABI-encoded price (int256) - used as the Chainlink round answer
      * @param updateType Classification of the update (must be authorized)
-     * @param additionalData Optional additional data for the update
+     * @param additionalData ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
      */
     function updateData(
         string calldata referenceId,

@@ -94,9 +94,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Get previous value from history (empty for first update)
         bytes memory previousValue = updateHistory[this.getLatestRoundId()].newValue;
 
-        // Decode new value to extract price for AggregatorV3 and update round data
+        // Decode price from newValue and update round data for AggregatorV3 compatibility
+        // newValue contains only the price (int256), while additionalData contains the full bundle
         {
-            (, int256 price,) = abi.decode(newValue, (uint256, int256, uint256));
+            int256 price = abi.decode(newValue, (int256));
             updateLatestRoundData(price);
         }
 
