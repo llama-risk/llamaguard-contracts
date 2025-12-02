@@ -1,6 +1,6 @@
 {
-  "name": "@llamarisk/parameter-registry",
-  "description": "Parameter registry for SmartNav",
+  "name": "@llamarisk/llamaguard-contracts",
+  "description": "LlamaGuard oracle contracts for on-chain risk parameter delivery",
   "version": "1.0.0",
   "author": {
     "name": "zekiblue",
