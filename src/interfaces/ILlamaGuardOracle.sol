@@ -19,21 +19,10 @@ interface ILlamaGuardOracle {
         bytes newValue; // ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility
         string referenceId; // External reference, potentially linking to off-chain data
         bytes previousValue; // Previous newValue (price) for historical comparison
-        bytes32 updateTypeHash; // keccak256 hash of update type string for validation
+        string updateType; // Classification of the update for validation purposes
         uint256 updateId; // Unique identifier (equals roundId)
         address market; // Address for market of the parameter update
         bytes additionalData; // ABI-encoded tuple: (uint256 supply, int256 price, uint256 state)
-    }
-
-    /**
-     * @notice Structure for update input data
-     * @dev Used as input parameter for updateLatestRiskRoundData function to enable single-struct external calls
-     */
-    struct UpdateInput {
-        string referenceId; // External reference ID for the update
-        bytes newValue; // ABI-encoded price (int256) - used as the Chainlink round answer
-        bytes32 updateTypeHash; // keccak256 hash of update type string (must be authorized)
-        bytes additionalData; // ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -48,7 +37,7 @@ interface ILlamaGuardOracle {
         bytes newValue,
         bytes previousValue,
         uint256 timestamp,
-        bytes32 indexed updateTypeHash,
+        string indexed updateType,
         uint256 indexed updateId,
         bytes additionalData
     );
@@ -62,8 +51,8 @@ interface ILlamaGuardOracle {
     // ERRORS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Thrown when an unauthorized update type hash is used
-    error UnauthorizedUpdateType(bytes32 updateTypeHash);
+    /// @notice Thrown when an unauthorized update type is used
+    error UnauthorizedUpdateType(string updateType);
 
     /// @notice Thrown when update type string is invalid (empty or too long)
     error InvalidUpdateTypeString(string updateType);
@@ -107,13 +96,22 @@ interface ILlamaGuardOracle {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Update the oracle with new risk round data
+     * @notice Update the oracle with new parameter data
      * @dev Only callable by addresses with WRITER_ROLE.
-     *      input.newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
-     *      input.additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
-     * @param input UpdateInput struct containing referenceId, newValue, updateType, and additionalData
+     *      newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
+     *      additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
+     * @param referenceId External reference ID for the update
+     * @param newValue ABI-encoded price (int256) - used as the Chainlink round answer
+     * @param updateType Classification of the update (must be authorized)
+     * @param additionalData ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
      */
-    function updateLatestRiskRoundData(UpdateInput calldata input) external;
+    function updateData(
+        string calldata referenceId,
+        bytes calldata newValue,
+        string calldata updateType,
+        bytes calldata additionalData
+    )
+        external;
 
     /**
      * @notice Add a new authorized update type
@@ -134,6 +132,12 @@ interface ILlamaGuardOracle {
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory);
 
     /**
+     * @notice Get all authorized update types
+     * @return Array of authorized update type strings
+     */
+    function getAllUpdateTypes() external view returns (string[] memory);
+
+    /**
      * @notice Check if an address has write access
      * @param account The address to check
      * @return True if the address has WRITER_ROLE
@@ -149,32 +153,17 @@ interface ILlamaGuardOracle {
 
     /**
      * @notice Fetches the most recent update for a specific parameter type
-     * @dev Reverts with InvalidUpdateId(0) if no update exists for the updateType.
+     * @dev Returns empty struct (timestamp=0) if no update exists for the updateType.
+     *      Does NOT revert for non-existent update types - callers should check timestamp.
      *      The input market address will be rewritten to the returned RiskParameterUpdate.market field.
      * @param updateType The parameter type identifier (e.g., "price", "supply", "risk_state")
      * @param market The market address to be written to the returned RiskParameterUpdate.market field
      * @return The most recent RiskParameterUpdate for the specified updateType,
-     *         with the market field set to the input market address
+     *         with the market field set to the input market address,
+     *         or an empty struct if no matching update exists
      */
     function getLatestUpdateByParameterAndMarket(
         string calldata updateType,
-        address market
-    )
-        external
-        view
-        returns (RiskParameterUpdate memory);
-
-    /**
-     * @notice Fetches the most recent update for a specific parameter type by hash
-     * @dev Reverts with InvalidUpdateId(0) if no update exists for the updateTypeHash.
-     *      The input market address will be rewritten to the returned RiskParameterUpdate.market field.
-     * @param updateTypeHash The keccak256 hash of the parameter type identifier
-     * @param market The market address to be written to the returned RiskParameterUpdate.market field
-     * @return The most recent RiskParameterUpdate for the specified updateTypeHash,
-     *         with the market field set to the input market address
-     */
-    function getLatestUpdateByParameterAndMarket(
-        bytes32 updateTypeHash,
         address market
     )
         external

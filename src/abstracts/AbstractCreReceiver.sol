@@ -1,22 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.26;
 
 import { IReceiver } from "@chainlink/contracts/src/v0.8/keystone/interfaces/IReceiver.sol";
 import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-/// @title AbstractCreReceiver - Abstract receiver with workflow validation and metadata decoding
-/// @notice Supports multiple workflows via a mapping from workflow ID to configuration
+/// @title IReceiverTemplate - Abstract receiver with workflow validation and metadata decoding
 abstract contract AbstractCreReceiver is IReceiver {
-    /// @notice Configuration for a workflow
-    struct WorkflowConfig {
-        address expectedForwarder;
-        address expectedAuthor;
-        bytes10 expectedWorkflowName;
-        bool isActive;
-    }
-
-    /// @notice Mapping from workflow ID to its configuration
-    mapping(bytes32 workflowId => WorkflowConfig) public workflowConfigs;
+    // Immutable expected values
+    address public EXPECTED_AUTHOR;
+    address public EXPECTED_FORWARDER;
+    bytes10 public EXPECTED_WORKFLOW_NAME;
+    bytes32 public EXPECTED_WORKFLOW_ID;
 
     /// @notice When true (default), enforce metadata/forwarder checks before processing.
     /// When false, skip validations and process the report directly.
@@ -25,52 +19,40 @@ abstract contract AbstractCreReceiver is IReceiver {
     // Custom errors
     error InvalidAuthor(address received, address expected);
     error InvalidWorkflowName(bytes10 received, bytes10 expected);
-    error InvalidWorkflowId(bytes32 workflowId);
+    error InvalidWorkflowId(bytes32 received, bytes32 expected);
     error InvalidForwarder(address received, address expected);
-    error WorkflowNotActive(bytes32 workflowId);
 
-    // Events
-    event WorkflowConfigUpdated(
-        bytes32 indexed workflowId,
-        address expectedForwarder,
+    constructor(
         address expectedAuthor,
+        address expectedForwarder,
         bytes10 expectedWorkflowName,
-        bool isActive
-    );
-
-    constructor(bytes32 workflowId, address expectedForwarder, address expectedAuthor, bytes10 expectedWorkflowName) {
-        workflowConfigs[workflowId] = WorkflowConfig({
-            expectedForwarder: expectedForwarder,
-            expectedAuthor: expectedAuthor,
-            expectedWorkflowName: expectedWorkflowName,
-            isActive: true
-        });
-
-        emit WorkflowConfigUpdated(workflowId, expectedForwarder, expectedAuthor, expectedWorkflowName, true);
+        bytes32 expectedWorkflowId
+    ) {
+        EXPECTED_AUTHOR = expectedAuthor;
+        EXPECTED_FORWARDER = expectedForwarder;
+        EXPECTED_WORKFLOW_NAME = expectedWorkflowName;
+        EXPECTED_WORKFLOW_ID = expectedWorkflowId;
     }
 
     /// @inheritdoc IReceiver
+    // solhint-disable-next-line no-unused-vars
     function onReport(bytes calldata metadata, bytes calldata report) external override {
         if (isReportWriteSecured) {
             (bytes32 workflowId, address workflowOwner, bytes10 workflowName) = _getWorkflowMetaData(metadata);
 
-            WorkflowConfig storage config = workflowConfigs[workflowId];
-
-            // Check if workflow exists and is active
-            if (!config.isActive) {
-                revert WorkflowNotActive(workflowId);
+            if (workflowId != EXPECTED_WORKFLOW_ID) {
+                revert InvalidWorkflowId(workflowId, EXPECTED_WORKFLOW_ID);
             }
 
-            if (msg.sender != config.expectedForwarder) {
-                revert InvalidForwarder(msg.sender, config.expectedForwarder);
+            if (msg.sender != EXPECTED_FORWARDER) {
+                revert InvalidForwarder(msg.sender, EXPECTED_FORWARDER);
             }
 
-            if (workflowOwner != config.expectedAuthor) {
-                revert InvalidAuthor(workflowOwner, config.expectedAuthor);
+            if (workflowOwner != EXPECTED_AUTHOR) {
+                revert InvalidAuthor(workflowOwner, EXPECTED_AUTHOR);
             }
-
-            if (workflowName != config.expectedWorkflowName) {
-                revert InvalidWorkflowName(workflowName, config.expectedWorkflowName);
+            if (workflowName != EXPECTED_WORKFLOW_NAME) {
+                revert InvalidWorkflowName(workflowName, EXPECTED_WORKFLOW_NAME);
             }
         }
 
@@ -92,20 +74,6 @@ abstract contract AbstractCreReceiver is IReceiver {
             workflowName := mload(add(metadata, 64))
             workflowOwner := shr(96, mload(add(metadata, 74)))
         }
-    }
-
-    /// @notice Get workflow configuration by ID
-    /// @param workflowId The workflow ID to query
-    /// @return config The workflow configuration
-    function getWorkflowConfig(bytes32 workflowId) external view returns (WorkflowConfig memory) {
-        return workflowConfigs[workflowId];
-    }
-
-    /// @notice Check if a workflow is active
-    /// @param workflowId The workflow ID to check
-    /// @return True if the workflow is active
-    function isWorkflowActive(bytes32 workflowId) external view returns (bool) {
-        return workflowConfigs[workflowId].isActive;
     }
 
     /// @notice Abstract function to process the report

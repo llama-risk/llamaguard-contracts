@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.26;
 
 import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
 import { AbstractCreReceiver } from "./abstracts/AbstractCreReceiver.sol";
@@ -13,14 +13,14 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
 
     constructor(
         address llamaGuardOracleAddress,
-        bytes32 workflowId,
-        address expectedForwarder,
         address expectedAuthor,
+        address expectedForwarder,
         bytes10 expectedWorkflowName,
+        bytes32 expectedWorkflowId,
         string memory _description
     )
         Ownable(msg.sender)
-        AbstractCreReceiver(workflowId, expectedForwarder, expectedAuthor, expectedWorkflowName)
+        AbstractCreReceiver(expectedAuthor, expectedForwarder, expectedWorkflowName, expectedWorkflowId)
     {
         if (llamaGuardOracleAddress == address(0)) revert InvalidLlamaGuardOracle();
 
@@ -30,10 +30,11 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
 
     /// @inheritdoc AbstractCreReceiver
     function _processReport(bytes calldata report) internal override {
-        // Decode the report directly into UpdateInput struct
-        ILlamaGuardOracle.UpdateInput memory input = abi.decode(report, (ILlamaGuardOracle.UpdateInput));
+        // Decode the report to extract all parameters for the new updateData signature
+        (string memory referenceId, bytes memory newValue, string memory updateType, bytes memory additionalData) =
+            abi.decode(report, (string, bytes, string, bytes));
 
-        llamaguardOracle.updateLatestRiskRoundData(input);
+        llamaguardOracle.updateData(referenceId, newValue, updateType, additionalData);
     }
 
     function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
@@ -46,41 +47,39 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
         isReportWriteSecured = enabled;
     }
 
-    /// @notice Set or update workflow configuration
-    /// @param workflowId The workflow ID to configure
-    /// @param expectedForwarder The expected forwarder address
-    /// @param expectedAuthor The expected author address
-    /// @param expectedWorkflowName The expected workflow name
-    /// @param isActive Whether the workflow is active
-    function setWorkflowConfig(
-        bytes32 workflowId,
-        address expectedForwarder,
-        address expectedAuthor,
-        bytes10 expectedWorkflowName,
-        bool isActive
+    /// @notice Set the expected author
+    function setExpectedAuthor(address newExpectedAuthor) external onlyOwner {
+        EXPECTED_AUTHOR = newExpectedAuthor;
+    }
+
+    /// @notice Set the expected forwarder
+    function setExpectedForwarder(address newExpectedForwarder) external onlyOwner {
+        EXPECTED_FORWARDER = newExpectedForwarder;
+    }
+
+    /// @notice Set the expected workflow name
+    function setExpectedWorkflowName(bytes10 newExpectedWorkflowName) external onlyOwner {
+        EXPECTED_WORKFLOW_NAME = newExpectedWorkflowName;
+    }
+
+    /// @notice Set the expected workflow ID
+    function setExpectedWorkflowId(bytes32 newExpectedWorkflowId) external onlyOwner {
+        EXPECTED_WORKFLOW_ID = newExpectedWorkflowId;
+    }
+
+    /// @notice Set all expected values at once
+    function setExpectedValues(
+        address newExpectedAuthor,
+        address newExpectedForwarder,
+        bytes10 newExpectedWorkflowName,
+        bytes32 newExpectedWorkflowId
     )
         external
         onlyOwner
     {
-        workflowConfigs[workflowId] = WorkflowConfig({
-            expectedForwarder: expectedForwarder,
-            expectedAuthor: expectedAuthor,
-            expectedWorkflowName: expectedWorkflowName,
-            isActive: isActive
-        });
-
-        emit WorkflowConfigUpdated(workflowId, expectedForwarder, expectedAuthor, expectedWorkflowName, isActive);
-    }
-
-    /// @notice Activate or deactivate a workflow
-    /// @param workflowId The workflow ID to update
-    /// @param isActive Whether the workflow should be active
-    function setWorkflowActive(bytes32 workflowId, bool isActive) external onlyOwner {
-        WorkflowConfig storage config = workflowConfigs[workflowId];
-        config.isActive = isActive;
-
-        emit WorkflowConfigUpdated(
-            workflowId, config.expectedForwarder, config.expectedAuthor, config.expectedWorkflowName, isActive
-        );
+        EXPECTED_AUTHOR = newExpectedAuthor;
+        EXPECTED_FORWARDER = newExpectedForwarder;
+        EXPECTED_WORKFLOW_NAME = newExpectedWorkflowName;
+        EXPECTED_WORKFLOW_ID = newExpectedWorkflowId;
     }
 }

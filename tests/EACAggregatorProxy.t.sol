@@ -4,7 +4,6 @@ pragma solidity ^0.8.26;
 import { Test } from "forge-std/Test.sol";
 import { EACAggregatorProxy } from "../src/sepolia/EACAggregatorProxy.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
 
 contract EACAggregatorProxyTest is Test {
     EACAggregatorProxy internal proxy;
@@ -17,9 +16,6 @@ contract EACAggregatorProxyTest is Test {
     address internal defaultMarket = address(0xDEFA);
 
     string[] internal defaultUpdateTypes;
-
-    // Pre-computed hash for price update type
-    bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
 
     function setUp() public {
         // Setup default update types
@@ -38,28 +34,22 @@ contract EACAggregatorProxyTest is Test {
         proxy = new EACAggregatorProxy(address(oracle));
     }
 
-    /// @dev Create UpdateInput struct for updateLatestRiskRoundData calls
-    function _createUpdateInput(
-        string memory referenceId,
-        int256 price_,
-        bytes32 updateTypeHash,
-        uint256 supply_,
-        uint256 state_
-    )
+    /// @dev Encode price for newValue parameter (just price for Chainlink compatibility)
+    function _encodePrice(int256 price_) internal pure returns (bytes memory) {
+        return abi.encode(price_);
+    }
+
+    /// @dev Encode full bundle for additionalData parameter (supply, price, state)
+    function _encodeAdditionalData(uint256 supply_, int256 price_, uint256 state_)
         internal
         pure
-        returns (ILlamaGuardOracle.UpdateInput memory)
+        returns (bytes memory)
     {
-        return ILlamaGuardOracle.UpdateInput({
-            referenceId: referenceId,
-            newValue: abi.encode(price_),
-            updateTypeHash: updateTypeHash,
-            additionalData: abi.encode(supply_, price_, state_)
-        });
+        return abi.encode(supply_, price_, state_);
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_HASH, supply_, state_));
+        oracle.updateData("ref-1", _encodePrice(price_), "price", _encodeAdditionalData(supply_, price_, state_));
     }
 
     function testConstructor() public view {
@@ -96,11 +86,11 @@ contract EACAggregatorProxyTest is Test {
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             proxy.latestRoundData();
 
-        assertEq(roundId, 1);
+        assertEq(roundId, 2);
         assertEq(answer, 500);
         assertGt(startedAt, 0);
         assertGt(updatedAt, 0);
-        assertEq(answeredInRound, 1);
+        assertEq(answeredInRound, 2);
     }
 
     function testGetRoundDataPassthrough() public {
@@ -110,13 +100,13 @@ contract EACAggregatorProxyTest is Test {
 
         // Read specific round through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
-            proxy.getRoundData(1);
+            proxy.getRoundData(2);
 
-        assertEq(roundId, 1);
+        assertEq(roundId, 2);
         assertEq(answer, 500);
         assertGt(startedAt, 0);
         assertGt(updatedAt, 0);
-        assertEq(answeredInRound, 1);
+        assertEq(answeredInRound, 2);
     }
 
     function testProposeAggregator() public {
@@ -176,7 +166,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 750, PRICE_HASH, 2000, 3));
+        newOracle.updateData("ref-2", _encodePrice(750), "price", _encodeAdditionalData(2000, 750, 3));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -192,16 +182,17 @@ contract EACAggregatorProxyTest is Test {
         // Multiple updates should all be readable through proxy
         for (uint256 i = 1; i <= 5; i++) {
             vm.prank(dataProxy);
-            oracle.updateLatestRiskRoundData(
-                _createUpdateInput(
-                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), PRICE_HASH, i * 100, i
-                )
+            oracle.updateData(
+                string(abi.encodePacked("ref-", vm.toString(i))),
+                _encodePrice(int256(i * 50)),
+                "price",
+                _encodeAdditionalData(i * 100, int256(i * 50), i)
             );
         }
 
         // Read latest
         (uint80 roundId, int256 answer,,,) = proxy.latestRoundData();
-        assertEq(roundId, 5); // 5 updates, starting at roundId 1
+        assertEq(roundId, 6); // Initial round + 5 updates
         assertEq(answer, 250); // 5 * 50
     }
 }
