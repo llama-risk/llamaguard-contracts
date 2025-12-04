@@ -3,8 +3,8 @@ pragma solidity >=0.8.26 <0.9.0;
 
 import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
-import { DeployConfig } from "../../script/DeployConfig.sol";
-import { AssetConfigs } from "../../script/AssetConfigs.sol";
+import { DeployConfig } from "../../script/parameter-registry/DeployConfig.sol";
+import { AssetConfigs } from "../../script/parameter-registry/AssetConfigs.sol";
 
 /// @title DeploymentTestBase
 /// @notice Base contract for testing deployment scripts
