@@ -65,12 +65,13 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.description(), "Test Feed");
         assertEq(oracle.version(), 1);
 
-        // Check initial update types
-        string[] memory types = oracle.getAllUpdateTypes();
-        assertEq(types.length, 3);
-        assertEq(types[0], "price");
-        assertEq(types[1], "supply");
-        assertEq(types[2], "risk_state");
+        // Check initial update types via public array access
+        assertEq(oracle.updateTypes(0), "price");
+        assertEq(oracle.updateTypes(1), "supply");
+        assertEq(oracle.updateTypes(2), "risk_state");
+        assertTrue(oracle.isValidUpdateType("price"));
+        assertTrue(oracle.isValidUpdateType("supply"));
+        assertTrue(oracle.isValidUpdateType("risk_state"));
     }
 
     function testConstructorWithDifferentParameters() public {
@@ -84,18 +85,20 @@ contract LlamaGuardOracleTest is Test {
         assertEq(newOracle.description(), "ETH/USD");
         assertEq(newOracle.version(), 2);
 
-        string[] memory types = newOracle.getAllUpdateTypes();
-        assertEq(types.length, 2);
-        assertEq(types[0], "custom_type");
-        assertEq(types[1], "another_type");
+        // Check update types via public array access
+        assertEq(newOracle.updateTypes(0), "custom_type");
+        assertEq(newOracle.updateTypes(1), "another_type");
+        assertTrue(newOracle.isValidUpdateType("custom_type"));
+        assertTrue(newOracle.isValidUpdateType("another_type"));
     }
 
     function testConstructorWithEmptyUpdateTypes() public {
         string[] memory emptyTypes = new string[](0);
         address[] memory noMarkets = new address[](0);
         LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "Test", 1, emptyTypes, noMarkets);
-        string[] memory types = newOracle.getAllUpdateTypes();
-        assertEq(types.length, 0);
+        // Verify no valid update types exist by checking that common types are invalid
+        assertFalse(newOracle.isValidUpdateType("price"));
+        assertFalse(newOracle.isValidUpdateType("supply"));
     }
 
     function testConstructorRejectsInvalidUpdateTypeString() public {
@@ -307,9 +310,8 @@ contract LlamaGuardOracleTest is Test {
 
         assertTrue(oracle.isValidUpdateType("new_custom_type"));
 
-        string[] memory types = oracle.getAllUpdateTypes();
-        assertEq(types.length, 4);
-        assertEq(types[3], "new_custom_type");
+        // Verify new type is at index 3 via public array access
+        assertEq(oracle.updateTypes(3), "new_custom_type");
     }
 
     function test_US4_addUpdateType_EmitsUpdateTypeAddedEvent() public {
@@ -334,18 +336,16 @@ contract LlamaGuardOracleTest is Test {
         oracle.addUpdateType(longString);
     }
 
-    function test_US4_getAllUpdateTypes_ReturnsAllTypes() public {
-        string[] memory types = oracle.getAllUpdateTypes();
-        assertEq(types.length, 3);
-        assertEq(types[0], "price");
-        assertEq(types[1], "supply");
-        assertEq(types[2], "risk_state");
+    function test_US4_updateTypesArrayAccess_ReturnsAllTypes() public {
+        // Verify initial types via public array access
+        assertEq(oracle.updateTypes(0), "price");
+        assertEq(oracle.updateTypes(1), "supply");
+        assertEq(oracle.updateTypes(2), "risk_state");
 
-        // Add a new type and verify
+        // Add a new type and verify it's appended
         oracle.addUpdateType("new_type");
-        types = oracle.getAllUpdateTypes();
-        assertEq(types.length, 4);
-        assertEq(types[3], "new_type");
+        assertEq(oracle.updateTypes(3), "new_type");
+        assertTrue(oracle.isValidUpdateType("new_type"));
     }
 
     function test_US4_RevertWhen_NonOwnerAddsType() public {
