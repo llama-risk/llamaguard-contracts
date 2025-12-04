@@ -166,8 +166,8 @@ contract LlamaGuardOracleConfig {
         // Config 0: Test Oracle 1
         // ─────────────────────────────────────────────────────────────────────
         string[] memory updateTypes0 = new string[](2);
-        updateTypes0[0] = "bounded";
-        updateTypes0[1] = "AV";
+        updateTypes0[0] = "boundedNAV";
+        updateTypes0[1] = "boundedNAV";
 
         address[] memory markets0 = new address[](0);
 
@@ -195,8 +195,8 @@ contract LlamaGuardOracleConfig {
         // Config 1: Test Oracle 2
         // ─────────────────────────────────────────────────────────────────────
         string[] memory updateTypes1 = new string[](2);
-        updateTypes1[0] = "bounded";
-        updateTypes1[1] = "AV";
+        updateTypes1[0] = "boundedNAV";
+        updateTypes1[1] = "boundedNAV";
 
         address[] memory markets1 = new address[](0);
 
