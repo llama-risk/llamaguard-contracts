@@ -11,6 +11,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Array of all valid update type strings
+    /// @dev This public array provides transparency for integrators and off-chain systems
+    ///      to discover which update types are supported by this oracle. Individual elements
+    ///      can be accessed via updateTypes(index), and the length via updateTypes.length.
+    ///      Use isValidUpdateType() for O(1) validation of specific update types.
     string[] public updateTypes;
 
     /// @notice Mapping for O(1) validation of update types
@@ -160,11 +164,6 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         }
 
         return update;
-    }
-
-    /// @inheritdoc ILlamaGuardOracle
-    function getAllUpdateTypes() external view returns (string[] memory) {
-        return updateTypes;
     }
 
     /// @inheritdoc ILlamaGuardOracle

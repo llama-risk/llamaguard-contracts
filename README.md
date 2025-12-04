@@ -38,7 +38,7 @@ Multi-asset parameter registry for offchain oracle network consumption.
 ## Installation
 
 ```sh
-forge install
+bun install
 ```
 
 ## Build

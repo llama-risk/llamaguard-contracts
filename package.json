@@ -13,7 +13,8 @@
   "devDependencies": {
     "forge-std": "github:foundry-rs/forge-std#v1.9.7",
     "prettier": "^3.5",
-    "solhint": "^5.1"
+    "solhint": "^5.1",
+    "prettier-plugin-solidity": "^2.2.0"
   },
   "keywords": [
     "blockchain",

@@ -132,12 +132,6 @@ interface ILlamaGuardOracle {
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory);
 
     /**
-     * @notice Get all authorized update types
-     * @return Array of authorized update type strings
-     */
-    function getAllUpdateTypes() external view returns (string[] memory);
-
-    /**
      * @notice Check if an address has write access
      * @param account The address to check
      * @return True if the address has WRITER_ROLE
