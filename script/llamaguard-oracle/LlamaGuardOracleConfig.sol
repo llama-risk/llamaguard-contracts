@@ -54,8 +54,9 @@ contract LlamaGuardOracleConfig {
         // Config 0: Primary Oracle
         // TODO: Fill in Chainlink CRE parameters before mainnet deployment
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes0 = new string[](1);
+        string[] memory updateTypes0 = new string[](2);
         updateTypes0[0] = "boundedNAV"; // TODO: Confirm update types
+        updateTypes0[1] = "boundedNAV"; // TODO: Confirm update types
 
         address[] memory markets0 = new address[](0); // TODO: Add authorized markets
 
@@ -117,62 +118,34 @@ contract LlamaGuardOracleConfig {
     /// @notice Returns oracle/proxy configurations for Sepolia testnet
     /// @return configs Array of deployment configurations
     function getSepoliaConfigs() public pure returns (DeploymentConfig[] memory) {
-        DeploymentConfig[] memory configs = new DeploymentConfig[](2);
+        DeploymentConfig[] memory configs = new DeploymentConfig[](1);
 
         // ─────────────────────────────────────────────────────────────────────
-        // Config 0: USCC Oracle
+        // Config 0: Test Oracle
         // TODO: Set Chainlink CRE parameters for Sepolia testing
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes0 = new string[](1);
+        string[] memory updateTypes0 = new string[](2);
         updateTypes0[0] = "boundedNAV"; // TODO: Finalize the update types
+        updateTypes0[1] = "boundedNAV"; // TODO: Finalize the update types
 
         address[] memory markets0 = new address[](0);
 
         configs[0] = DeploymentConfig({
             oracle: OracleConfig({
-                name: "USCC",
+                name: "TEST",
                 decimals: 8,
-                description: "LlamaGuard USCC Risk Oracle (Sepolia)",
+                description: "LlamaGuard Risk Oracle (Sepolia)",
                 version: 1,
                 updateTypes: updateTypes0,
                 authorizedMarkets: markets0
             }),
             proxy: ProxyConfig({
-                name: "USCC",
+                name: "TEST",
                 workflowId: bytes32(0), // TODO: Set for Sepolia
                 expectedForwarder: address(0), // TODO: Set for Sepolia
                 expectedAuthor: address(0), // TODO: Set for Sepolia
                 expectedWorkflowName: bytes10(0), // TODO: Set for Sepolia
-                description: "LlamaGuard USCC Oracle Proxy (Sepolia)"
-            }),
-            pendingOwner: address(0)
-        });
-
-        // ─────────────────────────────────────────────────────────────────────
-        // Config 1: USDB Oracle
-        // TODO: Set Chainlink CRE parameters for Sepolia testing
-        // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes1 = new string[](1);
-        updateTypes1[0] = "boundedNAV"; // TODO: Finalize the update types
-
-        address[] memory markets1 = new address[](0);
-
-        configs[1] = DeploymentConfig({
-            oracle: OracleConfig({
-                name: "USTB",
-                decimals: 8,
-                description: "LlamaGuard USTB Risk Oracle (Sepolia)",
-                version: 1,
-                updateTypes: updateTypes1,
-                authorizedMarkets: markets1
-            }),
-            proxy: ProxyConfig({
-                name: "USTB",
-                workflowId: bytes32(0), // TODO: Set for Sepolia
-                expectedForwarder: address(0), // TODO: Set for Sepolia
-                expectedAuthor: address(0), // TODO: Set for Sepolia
-                expectedWorkflowName: bytes10(0), // TODO: Set for Sepolia
-                description: "LlamaGuard USTB Oracle Proxy (Sepolia)"
+                description: "LlamaGuard Oracle Proxy (Sepolia)"
             }),
             pendingOwner: address(0)
         });
@@ -192,8 +165,9 @@ contract LlamaGuardOracleConfig {
         // ─────────────────────────────────────────────────────────────────────
         // Config 0: Test Oracle 1
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes0 = new string[](1);
-        updateTypes0[0] = "boundedNAV";
+        string[] memory updateTypes0 = new string[](2);
+        updateTypes0[0] = "bounded";
+        updateTypes0[1] = "AV";
 
         address[] memory markets0 = new address[](0);
 
@@ -220,8 +194,9 @@ contract LlamaGuardOracleConfig {
         // ─────────────────────────────────────────────────────────────────────
         // Config 1: Test Oracle 2
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes1 = new string[](1);
-        updateTypes1[0] = "boundedNAV";
+        string[] memory updateTypes1 = new string[](2);
+        updateTypes1[0] = "bounded";
+        updateTypes1[1] = "AV";
 
         address[] memory markets1 = new address[](0);
 

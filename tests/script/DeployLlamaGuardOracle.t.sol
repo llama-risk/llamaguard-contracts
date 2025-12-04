@@ -84,7 +84,7 @@ contract DeployLlamaGuardOracleTest is Test {
 
     function test_Config_GetConfigCount() public view {
         assertEq(config.getConfigCount(1), 1, "Mainnet should have 1 config");
-        assertEq(config.getConfigCount(11_155_111), 2, "Sepolia should have 2 configs");
+        assertEq(config.getConfigCount(11_155_111), 1, "Sepolia should have 1 config");
         assertEq(config.getConfigCount(31_337), 2, "Anvil should have 2 configs");
     }
 
@@ -122,8 +122,9 @@ contract DeployLlamaGuardOracleTest is Test {
         assertEq(cfg.oracle.name, "TEST1");
         assertEq(cfg.oracle.decimals, 8);
         assertEq(cfg.oracle.version, 1);
-        assertEq(cfg.oracle.updateTypes.length, 1);
-        assertEq(cfg.oracle.updateTypes[0], "boundedNAV");
+        assertEq(cfg.oracle.updateTypes.length, 2);
+        assertEq(cfg.oracle.updateTypes[0], "bounded");
+        assertEq(cfg.oracle.updateTypes[1], "AV");
 
         // Proxy config
         assertEq(cfg.proxy.name, "TEST1");
@@ -544,7 +545,8 @@ contract DeployLlamaGuardOracleTest is Test {
         LlamaGuardOracle oracle = LlamaGuardOracle(deployed[0].oracle);
 
         // Verify configured update types
-        assertTrue(oracle.isValidUpdateType("boundedNAV"), "boundedNAV should be valid");
+        assertTrue(oracle.isValidUpdateType("bounded"), "bounded should be valid");
+        assertTrue(oracle.isValidUpdateType("AV"), "AV should be valid");
         assertFalse(oracle.isValidUpdateType("invalid"), "invalid should not be valid");
     }
 
@@ -555,10 +557,11 @@ contract DeployLlamaGuardOracleTest is Test {
         LlamaGuardOracle oracle = LlamaGuardOracle(deployed[0].oracle);
 
         // Access public updateTypes array
-        // Note: Duplicate update types are deduplicated by LlamaGuardOracle constructor
         string memory type0 = oracle.updateTypes(0);
+        string memory type1 = oracle.updateTypes(1);
 
-        assertEq(type0, "boundedNAV", "First update type should be boundedNAV");
+        assertEq(type0, "bounded", "First update type should be bounded");
+        assertEq(type1, "AV", "Second update type should be AV");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -570,21 +573,14 @@ contract DeployLlamaGuardOracleTest is Test {
 
         DeployLlamaGuardOracle.DeployedContracts[] memory deployed = deployScript.runAnyNetwork();
 
-        assertEq(deployed.length, 2, "Should deploy 2 oracle+proxy pairs on Sepolia");
-        assertEq(deployed[0].name, "USCC", "First Sepolia config should be USCC");
-        assertEq(deployed[1].name, "USTB", "Second Sepolia config should be USTB");
+        assertEq(deployed.length, 1, "Should deploy 1 oracle+proxy pair on Sepolia");
+        assertEq(deployed[0].name, "TEST", "Sepolia config should be TEST");
 
-        LlamaGuardOracle oracle0 = LlamaGuardOracle(deployed[0].oracle);
-        assertEq(oracle0.description(), "LlamaGuard USCC Risk Oracle (Sepolia)");
+        LlamaGuardOracle oracle = LlamaGuardOracle(deployed[0].oracle);
+        assertEq(oracle.description(), "LlamaGuard Risk Oracle (Sepolia)");
 
-        LlamaGuardOracleProxy proxy0 = LlamaGuardOracleProxy(deployed[0].proxy);
-        assertEq(proxy0.description(), "LlamaGuard USCC Oracle Proxy (Sepolia)");
-
-        LlamaGuardOracle oracle1 = LlamaGuardOracle(deployed[1].oracle);
-        assertEq(oracle1.description(), "LlamaGuard USTB Risk Oracle (Sepolia)");
-
-        LlamaGuardOracleProxy proxy1 = LlamaGuardOracleProxy(deployed[1].proxy);
-        assertEq(proxy1.description(), "LlamaGuard USTB Oracle Proxy (Sepolia)");
+        LlamaGuardOracleProxy proxy = LlamaGuardOracleProxy(deployed[0].proxy);
+        assertEq(proxy.description(), "LlamaGuard Oracle Proxy (Sepolia)");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
