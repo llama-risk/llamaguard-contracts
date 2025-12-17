@@ -56,6 +56,26 @@ contract LlamaGuardOracleTest is Test {
         return abi.encode(supply_, price_, state_);
     }
 
+    /// @dev Create UpdateInput struct for updateData calls
+    function _createUpdateInput(
+        string memory referenceId,
+        int256 price_,
+        string memory updateType,
+        uint256 supply_,
+        uint256 state_
+    )
+        internal
+        pure
+        returns (ILlamaGuardOracle.UpdateInput memory)
+    {
+        return ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_)
+        });
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR TESTS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -128,7 +148,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             oracle.latestRoundData();
@@ -144,8 +164,8 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.startPrank(writer);
-        oracle.updateData("ref-1", _encodePrice(50), "price", _encodeAdditionalData(100, 50, 1));
-        oracle.updateData("ref-2", _encodePrice(75), "price", _encodeAdditionalData(200, 75, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
         vm.stopPrank();
 
         // Check historical round
@@ -162,9 +182,9 @@ contract LlamaGuardOracleTest is Test {
 
         // Even with different updateTypes, price data should always be accessible
         vm.startPrank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 1));
-        oracle.updateData("ref-2", _encodePrice(600), "supply", _encodeAdditionalData(2000, 600, 2));
-        oracle.updateData("ref-3", _encodePrice(700), "risk_state", _encodeAdditionalData(3000, 700, 3));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 1));
+        oracle.updateData(_createUpdateInput("ref-2", 600, "supply", 2000, 2));
+        oracle.updateData(_createUpdateInput("ref-3", 700, "risk_state", 3000, 3));
         vm.stopPrank();
 
         // latestRoundData should return the latest price
@@ -176,7 +196,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("ref-1", abi.encode(price_), "price", abi.encode(supply_, price_, state_));
+        oracle.updateData(_createUpdateInput("ref-1", price_, "price", supply_, state_));
 
         (, int256 answer,,,) = oracle.latestRoundData();
         assertEq(answer, price_);
@@ -193,7 +213,7 @@ contract LlamaGuardOracleTest is Test {
         bytes memory additionalData = _encodeAdditionalData(1000, 500, 2);
 
         vm.prank(writer);
-        oracle.updateData("reference-123", newValue, "price", additionalData);
+        oracle.updateData(_createUpdateInput("reference-123", 500, "price", 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
 
@@ -211,11 +231,10 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         bytes memory firstPrice = _encodePrice(50);
-        bytes memory secondPrice = _encodePrice(75);
 
         vm.startPrank(writer);
-        oracle.updateData("ref-1", firstPrice, "price", _encodeAdditionalData(100, 50, 1));
-        oracle.updateData("ref-2", secondPrice, "price", _encodeAdditionalData(200, 75, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
         vm.stopPrank();
 
         // First update should have empty previousValue
@@ -231,7 +250,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("my-unique-reference-id", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("my-unique-reference-id", 500, "price", 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
         assertEq(update.referenceId, "my-unique-reference-id");
@@ -241,7 +260,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
         // ID 0 should revert
         vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.InvalidUpdateId.selector, 0));
@@ -260,7 +279,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
         // Verify data was stored via latestRoundData
         (, int256 answer,,,) = oracle.latestRoundData();
@@ -279,7 +298,7 @@ contract LlamaGuardOracleTest is Test {
 
         vm.prank(writer);
         vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.UnauthorizedUpdateType.selector, "invalid_type"));
-        oracle.updateData("ref-1", _encodePrice(500), "invalid_type", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "invalid_type", 1000, 2));
     }
 
     function test_US3_updateData_EmitsParameterUpdatedEvent() public {
@@ -292,13 +311,13 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(writer);
         vm.expectEmit(true, true, true, true);
         emit ParameterUpdated("ref-1", newValue, emptyPrevValue, block.timestamp, "price", 2, additionalData);
-        oracle.updateData("ref-1", newValue, "price", additionalData);
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
     }
 
     function test_US3_RevertWhen_UnauthorizedCaller() public {
         vm.prank(nonWriter);
         vm.expectRevert();
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -375,7 +394,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         uint256 beforeTs = block.timestamp;
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(2500), "price", _encodeAdditionalData(5000, 2500, 7));
+        oracle.updateData(_createUpdateInput("ref-1", 2500, "price", 5000, 7));
         (, int256 answer, uint256 startedAt,,) = oracle.latestRoundData();
         assertEq(answer, 2500);
         assertGe(startedAt, beforeTs);
@@ -384,7 +403,7 @@ contract LlamaGuardOracleTest is Test {
     function testLatestRoundDataCallableByAnyone() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
         vm.prank(nonWriter);
         (, int256 p1,,,) = oracle.latestRoundData();
@@ -406,7 +425,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         uint80 initialId = oracle.getLatestRoundId();
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
         uint80 newId = oracle.getLatestRoundId();
         assertEq(newId, initialId + 1);
     }
@@ -414,9 +433,9 @@ contract LlamaGuardOracleTest is Test {
     function testAggregatorStoresMultipleRounds() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.startPrank(writer);
-        oracle.updateData("ref-1", _encodePrice(50), "price", _encodeAdditionalData(100, 50, 1));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
         uint80 r1 = oracle.getLatestRoundId();
-        oracle.updateData("ref-2", _encodePrice(75), "price", _encodeAdditionalData(200, 75, 2));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
         uint80 r2 = oracle.getLatestRoundId();
         vm.stopPrank();
 
@@ -429,7 +448,7 @@ contract LlamaGuardOracleTest is Test {
     function testOracleIsChainlinkAggregator() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             oracle.latestRoundData();
         assertEq(answer, 500);
@@ -444,10 +463,9 @@ contract LlamaGuardOracleTest is Test {
         vm.startPrank(writer);
         for (uint256 i = 1; i <= 10; i++) {
             oracle.updateData(
-                string(abi.encodePacked("ref-", vm.toString(i))),
-                _encodePrice(int256(i * 50)),
-                "price",
-                _encodeAdditionalData(i * 100, int256(i * 50), i)
+                _createUpdateInput(
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), "price", i * 100, i
+                )
             );
         }
         vm.stopPrank();
@@ -472,7 +490,7 @@ contract LlamaGuardOracleTest is Test {
     function testFuzzUpdateData(uint256 _supply, int256 _price, uint256 _state) public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData("ref-1", abi.encode(_price), "price", abi.encode(_supply, _price, _state));
+        oracle.updateData(_createUpdateInput("ref-1", _price, "price", _supply, _state));
 
         // Verify price via latestRoundData
         (, int256 answer,,,) = oracle.latestRoundData();
@@ -500,7 +518,7 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x1111);
 
         vm.prank(writer);
-        oracle.updateData("ref-1", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
         // The index should now point to updateId 2 (first update after roundId 1)
         // Query with any market - the market will be rewritten to the input value
@@ -520,11 +538,11 @@ contract LlamaGuardOracleTest is Test {
 
         vm.startPrank(writer);
         // First update
-        oracle.updateData("ref-1", _encodePrice(50), "price", _encodeAdditionalData(100, 50, 1));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
         uint256 firstUpdateId = oracle.getLatestRoundId();
 
         // Second update for same type
-        oracle.updateData("ref-2", _encodePrice(75), "price", _encodeAdditionalData(200, 75, 2));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
         uint256 secondUpdateId = oracle.getLatestRoundId();
         vm.stopPrank();
 
@@ -544,15 +562,15 @@ contract LlamaGuardOracleTest is Test {
 
         vm.startPrank(writer);
         // Update for price type
-        oracle.updateData("ref-1", _encodePrice(50), "price", _encodeAdditionalData(100, 50, 1));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
         uint256 priceUpdateId = oracle.getLatestRoundId();
 
         // Update for supply type
-        oracle.updateData("ref-2", _encodePrice(75), "supply", _encodeAdditionalData(200, 75, 2));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "supply", 200, 2));
         uint256 supplyUpdateId = oracle.getLatestRoundId();
 
         // Update for risk_state type
-        oracle.updateData("ref-3", _encodePrice(100), "risk_state", _encodeAdditionalData(300, 100, 3));
+        oracle.updateData(_createUpdateInput("ref-3", 100, "risk_state", 300, 3));
         uint256 riskStateUpdateId = oracle.getLatestRoundId();
         vm.stopPrank();
 
@@ -589,7 +607,7 @@ contract LlamaGuardOracleTest is Test {
         bytes memory additionalData = _encodeAdditionalData(1000, 500, 2);
 
         vm.prank(writer);
-        oracle.updateData("reference-123", newValue, "price", additionalData);
+        oracle.updateData(_createUpdateInput("reference-123", 500, "price", 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update =
             oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
@@ -609,9 +627,9 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x6666);
 
         vm.startPrank(writer);
-        oracle.updateData("ref-1", _encodePrice(50), "price", _encodeAdditionalData(100, 50, 1));
-        oracle.updateData("ref-2", _encodePrice(75), "price", _encodeAdditionalData(200, 75, 2));
-        oracle.updateData("ref-3", _encodePrice(100), "price", _encodeAdditionalData(300, 100, 3));
+        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
+        oracle.updateData(_createUpdateInput("ref-3", 100, "price", 300, 3));
         vm.stopPrank();
 
         ILlamaGuardOracle.RiskParameterUpdate memory update =
@@ -654,7 +672,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData("market-ref", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("market-ref", 500, "price", 1000, 2));
 
         // Query with different market addresses - market should be rewritten to query param
         address queryMarket1 = address(0x1111);
@@ -700,7 +718,7 @@ contract LlamaGuardOracleTest is Test {
         }
 
         vm.prank(writer);
-        oracle.updateData("fuzz-ref", abi.encode(price), updateType, abi.encode(supply, price, state));
+        oracle.updateData(_createUpdateInput("fuzz-ref", price, updateType, supply, state));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update =
             oracle.getLatestUpdateByParameterAndMarket(updateType, queryMarket);
@@ -727,7 +745,7 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x7777);
 
         vm.prank(writer);
-        oracle.updateData("ref-interface", _encodePrice(500), "price", _encodeAdditionalData(1000, 500, 2));
+        oracle.updateData(_createUpdateInput("ref-interface", 500, "price", 1000, 2));
 
         // Call via interface to verify signature compatibility
         ILlamaGuardOracle iOracle = ILlamaGuardOracle(address(oracle));

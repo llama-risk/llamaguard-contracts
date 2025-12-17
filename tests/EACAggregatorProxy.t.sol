@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import { Test } from "forge-std/Test.sol";
 import { EACAggregatorProxy } from "../src/sepolia/EACAggregatorProxy.sol";
 import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
+import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
 
 contract EACAggregatorProxyTest is Test {
     EACAggregatorProxy internal proxy;
@@ -34,22 +35,28 @@ contract EACAggregatorProxyTest is Test {
         proxy = new EACAggregatorProxy(address(oracle));
     }
 
-    /// @dev Encode price for newValue parameter (just price for Chainlink compatibility)
-    function _encodePrice(int256 price_) internal pure returns (bytes memory) {
-        return abi.encode(price_);
-    }
-
-    /// @dev Encode full bundle for additionalData parameter (supply, price, state)
-    function _encodeAdditionalData(uint256 supply_, int256 price_, uint256 state_)
+    /// @dev Create UpdateInput struct for updateData calls
+    function _createUpdateInput(
+        string memory referenceId,
+        int256 price_,
+        string memory updateType,
+        uint256 supply_,
+        uint256 state_
+    )
         internal
         pure
-        returns (bytes memory)
+        returns (ILlamaGuardOracle.UpdateInput memory)
     {
-        return abi.encode(supply_, price_, state_);
+        return ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_)
+        });
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateData("ref-1", _encodePrice(price_), "price", _encodeAdditionalData(supply_, price_, state_));
+        oracle.updateData(_createUpdateInput("ref-1", price_, "price", supply_, state_));
     }
 
     function testConstructor() public view {
@@ -166,7 +173,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData("ref-2", _encodePrice(750), "price", _encodeAdditionalData(2000, 750, 3));
+        newOracle.updateData(_createUpdateInput("ref-2", 750, "price", 2000, 3));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -183,10 +190,9 @@ contract EACAggregatorProxyTest is Test {
         for (uint256 i = 1; i <= 5; i++) {
             vm.prank(dataProxy);
             oracle.updateData(
-                string(abi.encodePacked("ref-", vm.toString(i))),
-                _encodePrice(int256(i * 50)),
-                "price",
-                _encodeAdditionalData(i * 100, int256(i * 50), i)
+                _createUpdateInput(
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), "price", i * 100, i
+                )
             );
         }
 

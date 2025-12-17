@@ -30,11 +30,10 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
 
     /// @inheritdoc AbstractCreReceiver
     function _processReport(bytes calldata report) internal override {
-        // Decode the report to extract all parameters for the new updateData signature
-        (string memory referenceId, bytes memory newValue, string memory updateType, bytes memory additionalData) =
-            abi.decode(report, (string, bytes, string, bytes));
+        // Decode the report directly into UpdateInput struct
+        ILlamaGuardOracle.UpdateInput memory input = abi.decode(report, (ILlamaGuardOracle.UpdateInput));
 
-        llamaguardOracle.updateData(referenceId, newValue, updateType, additionalData);
+        llamaguardOracle.updateData(input);
     }
 
     function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {

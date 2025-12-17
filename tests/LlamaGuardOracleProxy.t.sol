@@ -49,7 +49,7 @@ contract LlamaGuardOracleProxyTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), address(proxy));
     }
 
-    /// @dev Encode report for proxy - newValue is just price, additionalData is full bundle
+    /// @dev Encode report for proxy - now uses UpdateInput struct encoding
     function _encodeProxyReport(
         string memory referenceId,
         uint256 supply_,
@@ -61,9 +61,13 @@ contract LlamaGuardOracleProxyTest is Test {
         pure
         returns (bytes memory)
     {
-        bytes memory newValue = abi.encode(price_);
-        bytes memory additionalData = abi.encode(supply_, price_, state_);
-        return abi.encode(referenceId, newValue, updateType, additionalData);
+        ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_)
+        });
+        return abi.encode(input);
     }
 
     function testProxyForwardsUpdates() public {

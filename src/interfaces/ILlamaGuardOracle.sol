@@ -25,6 +25,17 @@ interface ILlamaGuardOracle {
         bytes additionalData; // ABI-encoded tuple: (uint256 supply, int256 price, uint256 state)
     }
 
+    /**
+     * @notice Structure for update input data
+     * @dev Used as input parameter for updateData function to enable single-struct external calls
+     */
+    struct UpdateInput {
+        string referenceId; // External reference ID for the update
+        bytes newValue; // ABI-encoded price (int256) - used as the Chainlink round answer
+        string updateType; // Classification of the update (must be authorized)
+        bytes additionalData; // ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // EVENTS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -98,20 +109,11 @@ interface ILlamaGuardOracle {
     /**
      * @notice Update the oracle with new parameter data
      * @dev Only callable by addresses with WRITER_ROLE.
-     *      newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
-     *      additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
-     * @param referenceId External reference ID for the update
-     * @param newValue ABI-encoded price (int256) - used as the Chainlink round answer
-     * @param updateType Classification of the update (must be authorized)
-     * @param additionalData ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
+     *      input.newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
+     *      input.additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
+     * @param input UpdateInput struct containing referenceId, newValue, updateType, and additionalData
      */
-    function updateData(
-        string calldata referenceId,
-        bytes calldata newValue,
-        string calldata updateType,
-        bytes calldata additionalData
-    )
-        external;
+    function updateData(UpdateInput calldata input) external;
 
     /**
      * @notice Add a new authorized update type
