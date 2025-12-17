@@ -153,11 +153,11 @@ contract LlamaGuardOracleTest is Test {
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             oracle.latestRoundData();
 
-        assertEq(roundId, 2);
+        assertEq(roundId, 1);
         assertEq(answer, 500);
         assertGt(startedAt, 0);
         assertGt(updatedAt, 0);
-        assertEq(answeredInRound, 2);
+        assertEq(answeredInRound, 1);
     }
 
     function test_US1_getRoundData_ReturnsHistoricalPrice() public {
@@ -169,11 +169,11 @@ contract LlamaGuardOracleTest is Test {
         vm.stopPrank();
 
         // Check historical round
-        (, int256 answer1,,,) = oracle.getRoundData(2);
+        (, int256 answer1,,,) = oracle.getRoundData(1);
         assertEq(answer1, 50);
 
         // Check latest round
-        (, int256 answer2,,,) = oracle.getRoundData(3);
+        (, int256 answer2,,,) = oracle.getRoundData(2);
         assertEq(answer2, 75);
     }
 
@@ -215,13 +215,13 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(writer);
         oracle.updateData(_createUpdateInput("reference-123", 500, "price", 1000, 2));
 
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
 
         assertEq(update.timestamp, block.timestamp);
         assertEq(update.newValue, newValue);
         assertEq(update.referenceId, "reference-123");
         assertEq(update.updateType, "price");
-        assertEq(update.updateId, 2);
+        assertEq(update.updateId, 1);
         // Market is now always address(0) in stored updates
         assertEq(update.market, address(0));
         assertEq(update.additionalData, additionalData);
@@ -238,11 +238,11 @@ contract LlamaGuardOracleTest is Test {
         vm.stopPrank();
 
         // First update should have empty previousValue
-        ILlamaGuardOracle.RiskParameterUpdate memory update1 = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update1 = oracle.getUpdateById(1);
         assertEq(update1.previousValue.length, 0);
 
         // Second update should have first price as previousValue
-        ILlamaGuardOracle.RiskParameterUpdate memory update2 = oracle.getUpdateById(3);
+        ILlamaGuardOracle.RiskParameterUpdate memory update2 = oracle.getUpdateById(2);
         assertEq(update2.previousValue, firstPrice);
     }
 
@@ -252,7 +252,7 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(writer);
         oracle.updateData(_createUpdateInput("my-unique-reference-id", 500, "price", 1000, 2));
 
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         assertEq(update.referenceId, "my-unique-reference-id");
     }
 
@@ -286,7 +286,7 @@ contract LlamaGuardOracleTest is Test {
         assertEq(answer, 500);
 
         // Also verify via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 1000);
         assertEq(state, 2);
@@ -310,7 +310,7 @@ contract LlamaGuardOracleTest is Test {
 
         vm.prank(writer);
         vm.expectEmit(true, true, true, true);
-        emit ParameterUpdated("ref-1", newValue, emptyPrevValue, block.timestamp, "price", 2, additionalData);
+        emit ParameterUpdated("ref-1", newValue, emptyPrevValue, block.timestamp, "price", 1, additionalData);
         oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
     }
 
@@ -387,7 +387,8 @@ contract LlamaGuardOracleTest is Test {
     function testLatestRoundDataInitialState() public view {
         (, int256 answer, uint256 startedAt,,) = oracle.latestRoundData();
         assertEq(answer, 0);
-        assertGt(startedAt, 0);
+        // Initial round (0) has startedAt = 0, which is the expected initial state
+        assertEq(startedAt, 0);
     }
 
     function testLatestRoundDataAfterUpdate() public {
@@ -475,7 +476,7 @@ contract LlamaGuardOracleTest is Test {
         assertEq(answer, 500);
 
         // Verify full data via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(11); // 10th update, roundId starts
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(10); // 10th update, roundId starts
         // at 1
         (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 1000);
@@ -497,7 +498,7 @@ contract LlamaGuardOracleTest is Test {
         assertEq(answer, _price);
 
         // Verify full data via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, _supply);
         assertEq(state, _state);
@@ -520,12 +521,12 @@ contract LlamaGuardOracleTest is Test {
         vm.prank(writer);
         oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
 
-        // The index should now point to updateId 2 (first update after roundId 1)
+        // The index should now point to updateId 1 (first update)
         // Query with any market - the market will be rewritten to the input value
         ILlamaGuardOracle.RiskParameterUpdate memory update =
             oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
 
-        assertEq(update.updateId, 2);
+        assertEq(update.updateId, 1);
         // Market is rewritten to the query parameter
         assertEq(update.market, queryMarket);
         assertEq(update.updateType, "price");

@@ -83,7 +83,7 @@ contract LlamaGuardOracleProxyTest is Test {
         assertEq(answer, 321);
 
         // Verify full data via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 1000);
         assertEq(state, 9);
@@ -191,7 +191,7 @@ contract LlamaGuardOracleProxyTest is Test {
         assertEq(answer, 999, "Price should be updated");
 
         // Verify full data via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(2);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
         assertEq(supply, 5000, "Supply should be updated");
         assertEq(state, 7, "State should be updated");
