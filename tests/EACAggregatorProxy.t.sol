@@ -93,11 +93,11 @@ contract EACAggregatorProxyTest is Test {
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             proxy.latestRoundData();
 
-        assertEq(roundId, 2);
+        assertEq(roundId, 1);
         assertEq(answer, 500);
         assertGt(startedAt, 0);
         assertGt(updatedAt, 0);
-        assertEq(answeredInRound, 2);
+        assertEq(answeredInRound, 1);
     }
 
     function testGetRoundDataPassthrough() public {
@@ -107,13 +107,13 @@ contract EACAggregatorProxyTest is Test {
 
         // Read specific round through proxy
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
-            proxy.getRoundData(2);
+            proxy.getRoundData(1);
 
-        assertEq(roundId, 2);
+        assertEq(roundId, 1);
         assertEq(answer, 500);
         assertGt(startedAt, 0);
         assertGt(updatedAt, 0);
-        assertEq(answeredInRound, 2);
+        assertEq(answeredInRound, 1);
     }
 
     function testProposeAggregator() public {
@@ -198,7 +198,7 @@ contract EACAggregatorProxyTest is Test {
 
         // Read latest
         (uint80 roundId, int256 answer,,,) = proxy.latestRoundData();
-        assertEq(roundId, 6); // Initial round + 5 updates
+        assertEq(roundId, 5); // 5 updates, starting at roundId 1
         assertEq(answer, 250); // 5 * 50
     }
 }

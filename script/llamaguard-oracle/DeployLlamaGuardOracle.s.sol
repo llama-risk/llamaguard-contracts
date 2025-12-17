@@ -61,6 +61,8 @@ contract DeployLlamaGuardOracle is BaseScript {
 
         console2.log("===========================================");
         console2.log("Deploying Single Oracle+Proxy Pair");
+        console2.log("Chain ID:", block.chainid);
+        console2.log("Broadcaster:", broadcaster);
         console2.log("Config Index:", index);
         console2.log("Config Name:", deployConfig.oracle.name);
         console2.log("===========================================");
@@ -81,6 +83,7 @@ contract DeployLlamaGuardOracle is BaseScript {
         console2.log("===========================================");
         console2.log("LlamaGuard Oracle Deployment");
         console2.log("Chain ID:", block.chainid);
+        console2.log("Broadcaster:", broadcaster);
         console2.log("Number of deployments:", configs.length);
         console2.log("===========================================");
 
