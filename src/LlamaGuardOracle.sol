@@ -81,18 +81,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @inheritdoc ILlamaGuardOracle
-    function updateData(
-        string calldata referenceId,
-        bytes calldata newValue,
-        string calldata updateType,
-        bytes calldata additionalData
-    )
-        external
-        onlyRole(WRITER_ROLE)
-    {
+    function updateData(UpdateInput calldata input) external onlyRole(WRITER_ROLE) {
         // Validate update type
-        if (!validUpdateTypes[updateType]) {
-            revert UnauthorizedUpdateType(updateType);
+        if (!validUpdateTypes[input.updateType]) {
+            revert UnauthorizedUpdateType(input.updateType);
         }
 
         // Get previous value from history (empty for first update)
@@ -101,7 +93,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Decode price from newValue and update round data for AggregatorV3 compatibility
         // newValue contains only the price (int256), while additionalData contains the full bundle
         {
-            int256 price = abi.decode(newValue, (int256));
+            int256 price = abi.decode(input.newValue, (int256));
             updateLatestRoundData(price);
         }
 
@@ -111,20 +103,26 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Store in history (market is set to address(0) as per requirements)
         updateHistory[updateId] = RiskParameterUpdate({
             timestamp: block.timestamp,
-            newValue: newValue,
-            referenceId: referenceId,
+            newValue: input.newValue,
+            referenceId: input.referenceId,
             previousValue: previousValue,
-            updateType: updateType,
+            updateType: input.updateType,
             updateId: updateId,
             market: address(0),
-            additionalData: additionalData
+            additionalData: input.additionalData
         });
 
         // Update the latest update index for this updateType
-        latestUpdateIdByType[updateType] = updateId;
+        latestUpdateIdByType[input.updateType] = updateId;
 
         emit ParameterUpdated(
-            referenceId, newValue, previousValue, block.timestamp, updateType, updateId, additionalData
+            input.referenceId,
+            input.newValue,
+            previousValue,
+            block.timestamp,
+            input.updateType,
+            updateId,
+            input.additionalData
         );
     }
 
