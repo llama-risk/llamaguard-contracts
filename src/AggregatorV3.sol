@@ -50,12 +50,10 @@ contract AggregatorV3 is AggregatorV3Interface {
         _decimals = decimals_;
         _description = description_;
         _version = version_;
-        _latestRoundId = 1;
+        _latestRoundId = 0;
 
         // Initialize with a default round
-        _roundData[1] = RoundData({
-            roundId: 1, answer: 0, startedAt: block.timestamp, updatedAt: block.timestamp, answeredInRound: 1
-        });
+        _roundData[0] = RoundData({ roundId: 0, answer: 0, startedAt: 0, updatedAt: 0, answeredInRound: 0 });
     }
 
     /**
