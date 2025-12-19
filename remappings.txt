@@ -1,3 +1,6 @@
 @openzeppelin/contracts/=node_modules/@openzeppelin/contracts/
 forge-std/=node_modules/forge-std/src/
 @chainlink/contracts/=node_modules/@chainlink/contracts/
+chaos-agents/=node_modules/chaos-agents/src/
+openzeppelin-contracts/contracts/=node_modules/@openzeppelin/contracts-v5/
+openzeppelin-contracts-upgradeable/contracts/=node_modules/@openzeppelin/contracts-upgradeable-v5/
