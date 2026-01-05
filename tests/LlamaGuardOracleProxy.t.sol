@@ -24,6 +24,9 @@ contract LlamaGuardOracleProxyTest is Test {
 
     string[] internal defaultUpdateTypes;
 
+    // Pre-computed hash for price update type
+    bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
+
     function setUp() public {
         expectedForwarder = address(this); // in tests, we call onReport directly
 
@@ -55,7 +58,7 @@ contract LlamaGuardOracleProxyTest is Test {
         uint256 supply_,
         int256 price_,
         uint256 state_,
-        string memory updateType
+        bytes32 updateTypeHash
     )
         internal
         pure
@@ -64,7 +67,7 @@ contract LlamaGuardOracleProxyTest is Test {
         ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
             referenceId: referenceId,
             newValue: abi.encode(price_),
-            updateType: updateType,
+            updateTypeHash: updateTypeHash,
             additionalData: abi.encode(supply_, price_, state_)
         });
         return abi.encode(input);
@@ -74,7 +77,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Build metadata matching expected values so onReport passes in base template
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
 
-        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 1000, 321, 9, PRICE_HASH);
 
         proxy.onReport(metadata, report);
 
@@ -92,7 +95,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongAuthor() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, address(0xBEEF), expectedWorkflowName);
-        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 100, 200, 3, PRICE_HASH);
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -100,7 +103,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForWrongWorkflow() public {
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, bytes10("WRONGNAME"));
-        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, PRICE_HASH);
 
         vm.expectRevert();
         proxy.onReport(metadata, report);
@@ -111,7 +114,7 @@ contract LlamaGuardOracleProxyTest is Test {
         proxy.setWorkflowActive(expectedWorkflowId, false);
 
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
-        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, PRICE_HASH);
 
         vm.expectRevert(abi.encodeWithSelector(AbstractCreReceiver.WorkflowNotActive.selector, expectedWorkflowId));
         proxy.onReport(metadata, report);
@@ -120,7 +123,7 @@ contract LlamaGuardOracleProxyTest is Test {
     function testOnReportRevertsForUnknownWorkflow() public {
         bytes32 unknownWorkflowId = bytes32("UNKNOWN_WORKFLOW_ID____________");
         bytes memory metadata = _buildMetadata(unknownWorkflowId, expectedAuthor, expectedWorkflowName);
-        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 500, 600, 7, PRICE_HASH);
 
         vm.expectRevert(abi.encodeWithSelector(AbstractCreReceiver.WorkflowNotActive.selector, unknownWorkflowId));
         proxy.onReport(metadata, report);
@@ -181,7 +184,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Build metadata with wrong values - should not revert
         bytes memory wrongMetadata = _buildMetadata(bytes32("WRONG_ID"), address(0xDEAD), bytes10("WRONG"));
-        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, "price");
+        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, PRICE_HASH);
 
         // Should succeed even with wrong metadata
         proxy.onReport(wrongMetadata, report);
@@ -301,7 +304,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Build metadata with new expected values
         bytes memory metadata = _buildMetadata(newWorkflowId, newAuthor, newName);
-        bytes memory report = _encodeProxyReport("ref-new", 3000, 400, 5, "price");
+        bytes memory report = _encodeProxyReport("ref-new", 3000, 400, 5, PRICE_HASH);
 
         // Should succeed with new workflow config
         proxy.onReport(metadata, report);
@@ -321,7 +324,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // First workflow should still work
         bytes memory metadata1 = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
-        bytes memory report1 = _encodeProxyReport("ref-1", 1000, 100, 1, "price");
+        bytes memory report1 = _encodeProxyReport("ref-1", 1000, 100, 1, PRICE_HASH);
         proxy.onReport(metadata1, report1);
 
         (, int256 answer1,,,) = oracle.latestRoundData();
@@ -329,7 +332,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
         // Second workflow should also work
         bytes memory metadata2 = _buildMetadata(secondWorkflowId, secondAuthor, secondName);
-        bytes memory report2 = _encodeProxyReport("ref-2", 2000, 200, 2, "price");
+        bytes memory report2 = _encodeProxyReport("ref-2", 2000, 200, 2, PRICE_HASH);
         proxy.onReport(metadata2, report2);
 
         (, int256 answer2,,,) = oracle.latestRoundData();
