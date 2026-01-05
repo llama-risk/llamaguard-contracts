@@ -54,9 +54,8 @@ contract LlamaGuardOracleConfig {
         // Config 0: Primary Oracle
         // TODO: Fill in Chainlink CRE parameters before mainnet deployment
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes0 = new string[](2);
+        string[] memory updateTypes0 = new string[](1);
         updateTypes0[0] = "boundedNAV"; // TODO: Confirm update types
-        updateTypes0[1] = "boundedNAV"; // TODO: Confirm update types
 
         address[] memory markets0 = new address[](0); // TODO: Add authorized markets
 
@@ -193,9 +192,8 @@ contract LlamaGuardOracleConfig {
         // ─────────────────────────────────────────────────────────────────────
         // Config 0: Test Oracle 1
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes0 = new string[](2);
+        string[] memory updateTypes0 = new string[](1);
         updateTypes0[0] = "boundedNAV";
-        updateTypes0[1] = "boundedNAV";
 
         address[] memory markets0 = new address[](0);
 
@@ -222,9 +220,8 @@ contract LlamaGuardOracleConfig {
         // ─────────────────────────────────────────────────────────────────────
         // Config 1: Test Oracle 2
         // ─────────────────────────────────────────────────────────────────────
-        string[] memory updateTypes1 = new string[](2);
+        string[] memory updateTypes1 = new string[](1);
         updateTypes1[0] = "boundedNAV";
-        updateTypes1[1] = "boundedNAV";
 
         address[] memory markets1 = new address[](0);
 

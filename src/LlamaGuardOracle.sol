@@ -18,18 +18,18 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     string[] public updateTypes;
 
     /// @notice Mapping for O(1) validation of update types
-    mapping(string => bool) private validUpdateTypes;
+    mapping(bytes32 updateTypeHash => bool isValid) private _validUpdateTypes;
 
     /// @notice Mapping from updateId (roundId) to RiskParameterUpdate struct
     mapping(uint256 => RiskParameterUpdate) public updateHistory;
 
     /// @notice Mapping to track latest updateId for each updateType
     /// @dev Enables O(1) lookups via getLatestUpdateByParameterAndMarket()
-    mapping(string => uint256) private latestUpdateIdByType;
+    mapping(bytes32 updateTypeHash => uint256 updateId) private _latestUpdateIdByType;
 
     /// @notice Mapping of authorized market addresses
     /// @dev O(1) lookup for market authorization checks
-    mapping(address => bool) private authorizedMarkets;
+    mapping(address market => bool isAuthorized) private _authorizedMarkets;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
@@ -53,27 +53,52 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     {
         // Initialize update types
         for (uint256 i = 0; i < initialUpdateTypes.length; i++) {
-            string memory updateType = initialUpdateTypes[i];
-            if (bytes(updateType).length == 0 || bytes(updateType).length > 64) {
-                revert InvalidUpdateTypeString(updateType);
-            }
-            if (!validUpdateTypes[updateType]) {
-                validUpdateTypes[updateType] = true;
-                updateTypes.push(updateType);
-            }
+            _addUpdateType(initialUpdateTypes[i]);
         }
 
         // Initialize authorized markets
         for (uint256 i = 0; i < initialAuthorizedMarkets.length; i++) {
-            address market = initialAuthorizedMarkets[i];
-            if (market == address(0)) {
-                revert InvalidMarketAddress(market);
-            }
-            if (!authorizedMarkets[market]) {
-                authorizedMarkets[market] = true;
-                emit AuthorizedMarketAdded(market);
-            }
+            _addAuthorizedMarket(initialAuthorizedMarkets[i]);
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INTERNAL HELPERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Internal helper to add a new update type
+    /// @param updateType The update type string to add
+    function _addUpdateType(string memory updateType) internal {
+        // Validate string length
+        if (bytes(updateType).length == 0 || bytes(updateType).length > 64) {
+            revert InvalidUpdateTypeString(updateType);
+        }
+
+        // Check for duplicates
+        bytes32 typeHash = keccak256(bytes(updateType));
+        if (_validUpdateTypes[typeHash]) {
+            revert UpdateTypeAlreadyExists(updateType);
+        }
+
+        // Add the new type
+        _validUpdateTypes[typeHash] = true;
+        updateTypes.push(updateType);
+
+        emit UpdateTypeAdded(updateType);
+    }
+
+    /// @notice Internal helper to add an authorized market
+    /// @param market The market address to authorize
+    function _addAuthorizedMarket(address market) internal {
+        if (market == address(0)) {
+            revert InvalidMarketAddress(market);
+        }
+        if (_authorizedMarkets[market]) {
+            revert MarketAlreadyAuthorized(market);
+        }
+
+        _authorizedMarkets[market] = true;
+        emit AuthorizedMarketAdded(market);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -81,10 +106,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @inheritdoc ILlamaGuardOracle
-    function updateData(UpdateInput calldata input) external onlyRole(WRITER_ROLE) {
-        // Validate update type
-        if (!validUpdateTypes[input.updateType]) {
-            revert UnauthorizedUpdateType(input.updateType);
+    function updateLatestRiskRoundData(UpdateInput calldata input) external onlyRole(WRITER_ROLE) {
+        // Validate update type hash
+        if (!_validUpdateTypes[input.updateTypeHash]) {
+            revert UnauthorizedUpdateType(input.updateTypeHash);
         }
 
         // Get previous value from history (empty for first update)
@@ -100,27 +125,27 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // Get new roundId as updateId and store in history
         uint256 updateId = this.getLatestRoundId();
 
-        // Store in history (market is set to address(0) as per requirements)
+        // Store in history (market is set to address(0) for global updates)
         updateHistory[updateId] = RiskParameterUpdate({
             timestamp: block.timestamp,
             newValue: input.newValue,
             referenceId: input.referenceId,
             previousValue: previousValue,
-            updateType: input.updateType,
+            updateTypeHash: input.updateTypeHash,
             updateId: updateId,
             market: address(0),
             additionalData: input.additionalData
         });
 
         // Update the latest update index for this updateType
-        latestUpdateIdByType[input.updateType] = updateId;
+        _latestUpdateIdByType[input.updateTypeHash] = updateId;
 
         emit ParameterUpdated(
             input.referenceId,
             input.newValue,
             previousValue,
             block.timestamp,
-            input.updateType,
+            input.updateTypeHash,
             updateId,
             input.additionalData
         );
@@ -128,21 +153,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
 
     /// @inheritdoc ILlamaGuardOracle
     function addUpdateType(string calldata newUpdateType) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // Validate string length
-        if (bytes(newUpdateType).length == 0 || bytes(newUpdateType).length > 64) {
-            revert InvalidUpdateTypeString(newUpdateType);
-        }
-
-        // Check for duplicates
-        if (validUpdateTypes[newUpdateType]) {
-            revert UpdateTypeAlreadyExists(newUpdateType);
-        }
-
-        // Add the new type
-        validUpdateTypes[newUpdateType] = true;
-        updateTypes.push(newUpdateType);
-
-        emit UpdateTypeAdded(newUpdateType);
+        _addUpdateType(newUpdateType);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -166,7 +177,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
 
     /// @inheritdoc ILlamaGuardOracle
     function isValidUpdateType(string calldata updateType) external view returns (bool) {
-        return validUpdateTypes[updateType];
+        return _validUpdateTypes[keccak256(bytes(updateType))];
     }
 
     /// @inheritdoc ILlamaGuardOracle
@@ -183,21 +194,38 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         view
         returns (RiskParameterUpdate memory)
     {
-        uint256 updateId = latestUpdateIdByType[updateType];
+        return _getLatestUpdateByParameterAndMarket(keccak256(bytes(updateType)), market);
+    }
 
-        // Return empty struct if no update exists (updateId == 0)
-        // This is intentional - we do NOT revert per spec FR-004 and FR-005
+    /// @inheritdoc ILlamaGuardOracle
+    function getLatestUpdateByParameterAndMarket(
+        bytes32 updateTypeHash,
+        address market
+    )
+        external
+        view
+        returns (RiskParameterUpdate memory)
+    {
+        return _getLatestUpdateByParameterAndMarket(updateTypeHash, market);
+    }
+
+    /// @notice Internal implementation for getLatestUpdateByParameterAndMarket
+    /// @param updateTypeHash The keccak256 hash of the parameter type identifier
+    /// @param market The market address to be written to the returned RiskParameterUpdate.market field
+    /// @return The most recent RiskParameterUpdate for the specified updateTypeHash
+    function _getLatestUpdateByParameterAndMarket(
+        bytes32 updateTypeHash,
+        address market
+    )
+        internal
+        view
+        returns (RiskParameterUpdate memory)
+    {
+        uint256 updateId = _latestUpdateIdByType[updateTypeHash];
+
+        // Strict validation: revert if no update exists
         if (updateId == 0) {
-            return RiskParameterUpdate({
-                timestamp: 0,
-                newValue: "",
-                referenceId: "",
-                previousValue: "",
-                updateType: "",
-                updateId: 0,
-                market: address(0),
-                additionalData: ""
-            });
+            revert InvalidUpdateId(updateId);
         }
 
         RiskParameterUpdate memory update = updateHistory[updateId];
@@ -206,21 +234,18 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         return update;
     }
 
+    /// @inheritdoc ILlamaGuardOracle
+    function isAuthorizedMarket(address market) public view returns (bool) {
+        return _authorizedMarkets[market];
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // MARKET AUTHORIZATION FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @inheritdoc ILlamaGuardOracle
     function addAuthorizedMarket(address market) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (market == address(0)) {
-            revert InvalidMarketAddress(market);
-        }
-        if (authorizedMarkets[market]) {
-            revert MarketAlreadyAuthorized(market);
-        }
-
-        authorizedMarkets[market] = true;
-        emit AuthorizedMarketAdded(market);
+        _addAuthorizedMarket(market);
     }
 
     /// @inheritdoc ILlamaGuardOracle
@@ -228,16 +253,11 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         if (market == address(0)) {
             revert InvalidMarketAddress(market);
         }
-        if (!authorizedMarkets[market]) {
+        if (!_authorizedMarkets[market]) {
             revert MarketNotFound(market);
         }
 
-        authorizedMarkets[market] = false;
+        _authorizedMarkets[market] = false;
         emit AuthorizedMarketRemoved(market);
-    }
-
-    /// @inheritdoc ILlamaGuardOracle
-    function isAuthorizedMarket(address market) public view returns (bool) {
-        return authorizedMarkets[market];
     }
 }

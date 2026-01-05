@@ -18,6 +18,9 @@ contract EACAggregatorProxyTest is Test {
 
     string[] internal defaultUpdateTypes;
 
+    // Pre-computed hash for price update type
+    bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
+
     function setUp() public {
         // Setup default update types
         defaultUpdateTypes = new string[](3);
@@ -35,11 +38,11 @@ contract EACAggregatorProxyTest is Test {
         proxy = new EACAggregatorProxy(address(oracle));
     }
 
-    /// @dev Create UpdateInput struct for updateData calls
+    /// @dev Create UpdateInput struct for updateLatestRiskRoundData calls
     function _createUpdateInput(
         string memory referenceId,
         int256 price_,
-        string memory updateType,
+        bytes32 updateTypeHash,
         uint256 supply_,
         uint256 state_
     )
@@ -50,13 +53,13 @@ contract EACAggregatorProxyTest is Test {
         return ILlamaGuardOracle.UpdateInput({
             referenceId: referenceId,
             newValue: abi.encode(price_),
-            updateType: updateType,
+            updateTypeHash: updateTypeHash,
             additionalData: abi.encode(supply_, price_, state_)
         });
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateData(_createUpdateInput("ref-1", price_, "price", supply_, state_));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_HASH, supply_, state_));
     }
 
     function testConstructor() public view {
@@ -173,7 +176,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateData(_createUpdateInput("ref-2", 750, "price", 2000, 3));
+        newOracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 750, PRICE_HASH, 2000, 3));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -189,9 +192,9 @@ contract EACAggregatorProxyTest is Test {
         // Multiple updates should all be readable through proxy
         for (uint256 i = 1; i <= 5; i++) {
             vm.prank(dataProxy);
-            oracle.updateData(
+            oracle.updateLatestRiskRoundData(
                 _createUpdateInput(
-                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), "price", i * 100, i
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), PRICE_HASH, i * 100, i
                 )
             );
         }

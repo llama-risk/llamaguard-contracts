@@ -17,12 +17,17 @@ contract LlamaGuardOracleTest is Test {
 
     string[] internal defaultUpdateTypes;
 
+    // Pre-computed hashes for commonly used update types
+    bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
+    bytes32 internal constant SUPPLY_HASH = keccak256(bytes("supply"));
+    bytes32 internal constant RISK_STATE_HASH = keccak256(bytes("risk_state"));
+
     event ParameterUpdated(
         string referenceId,
         bytes newValue,
         bytes previousValue,
         uint256 timestamp,
-        string indexed updateType,
+        bytes32 indexed updateTypeHash,
         uint256 indexed updateId,
         bytes additionalData
     );
@@ -56,11 +61,11 @@ contract LlamaGuardOracleTest is Test {
         return abi.encode(supply_, price_, state_);
     }
 
-    /// @dev Create UpdateInput struct for updateData calls
+    /// @dev Create UpdateInput struct for updateLatestRiskRoundData calls
     function _createUpdateInput(
         string memory referenceId,
         int256 price_,
-        string memory updateType,
+        bytes32 updateTypeHash,
         uint256 supply_,
         uint256 state_
     )
@@ -71,7 +76,7 @@ contract LlamaGuardOracleTest is Test {
         return ILlamaGuardOracle.UpdateInput({
             referenceId: referenceId,
             newValue: abi.encode(price_),
-            updateType: updateType,
+            updateTypeHash: updateTypeHash,
             additionalData: abi.encode(supply_, price_, state_)
         });
     }
@@ -148,7 +153,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
 
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             oracle.latestRoundData();
@@ -164,8 +169,8 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.startPrank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
-        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_HASH, 200, 2));
         vm.stopPrank();
 
         // Check historical round
@@ -182,9 +187,9 @@ contract LlamaGuardOracleTest is Test {
 
         // Even with different updateTypes, price data should always be accessible
         vm.startPrank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 1));
-        oracle.updateData(_createUpdateInput("ref-2", 600, "supply", 2000, 2));
-        oracle.updateData(_createUpdateInput("ref-3", 700, "risk_state", 3000, 3));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 600, SUPPLY_HASH, 2000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-3", 700, RISK_STATE_HASH, 3000, 3));
         vm.stopPrank();
 
         // latestRoundData should return the latest price
@@ -196,7 +201,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", price_, "price", supply_, state_));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_HASH, supply_, state_));
 
         (, int256 answer,,,) = oracle.latestRoundData();
         assertEq(answer, price_);
@@ -213,14 +218,14 @@ contract LlamaGuardOracleTest is Test {
         bytes memory additionalData = _encodeAdditionalData(1000, 500, 2);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("reference-123", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("reference-123", 500, PRICE_HASH, 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
 
         assertEq(update.timestamp, block.timestamp);
         assertEq(update.newValue, newValue);
         assertEq(update.referenceId, "reference-123");
-        assertEq(update.updateType, "price");
+        assertEq(update.updateTypeHash, PRICE_HASH);
         assertEq(update.updateId, 1);
         // Market is now always address(0) in stored updates
         assertEq(update.market, address(0));
@@ -233,8 +238,8 @@ contract LlamaGuardOracleTest is Test {
         bytes memory firstPrice = _encodePrice(50);
 
         vm.startPrank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
-        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_HASH, 200, 2));
         vm.stopPrank();
 
         // First update should have empty previousValue
@@ -250,7 +255,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("my-unique-reference-id", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("my-unique-reference-id", 500, PRICE_HASH, 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
         assertEq(update.referenceId, "my-unique-reference-id");
@@ -260,7 +265,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
 
         // ID 0 should revert
         vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.InvalidUpdateId.selector, 0));
@@ -275,11 +280,11 @@ contract LlamaGuardOracleTest is Test {
     // USER STORY 3: AUTHORIZED DATA UPDATES WITH TYPE VALIDATION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function test_US3_updateData_ValidTypeAccepted() public {
+    function test_US3_updateLatestRiskRoundData_ValidTypeAccepted() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
 
         // Verify data was stored via latestRoundData
         (, int256 answer,,,) = oracle.latestRoundData();
@@ -296,12 +301,13 @@ contract LlamaGuardOracleTest is Test {
     function test_US3_RevertWhen_InvalidUpdateType() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
+        bytes32 invalidTypeHash = keccak256(bytes("invalid_type"));
         vm.prank(writer);
-        vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.UnauthorizedUpdateType.selector, "invalid_type"));
-        oracle.updateData(_createUpdateInput("ref-1", 500, "invalid_type", 1000, 2));
+        vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.UnauthorizedUpdateType.selector, invalidTypeHash));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, invalidTypeHash, 1000, 2));
     }
 
-    function test_US3_updateData_EmitsParameterUpdatedEvent() public {
+    function test_US3_updateLatestRiskRoundData_EmitsParameterUpdatedEvent() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         bytes memory newValue = _encodePrice(500);
@@ -310,14 +316,14 @@ contract LlamaGuardOracleTest is Test {
 
         vm.prank(writer);
         vm.expectEmit(true, true, true, true);
-        emit ParameterUpdated("ref-1", newValue, emptyPrevValue, block.timestamp, "price", 1, additionalData);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        emit ParameterUpdated("ref-1", newValue, emptyPrevValue, block.timestamp, PRICE_HASH, 1, additionalData);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
     }
 
     function test_US3_RevertWhen_UnauthorizedCaller() public {
         vm.prank(nonWriter);
         vm.expectRevert();
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -395,7 +401,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         uint256 beforeTs = block.timestamp;
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 2500, "price", 5000, 7));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 2500, PRICE_HASH, 5000, 7));
         (, int256 answer, uint256 startedAt,,) = oracle.latestRoundData();
         assertEq(answer, 2500);
         assertGe(startedAt, beforeTs);
@@ -404,7 +410,7 @@ contract LlamaGuardOracleTest is Test {
     function testLatestRoundDataCallableByAnyone() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
 
         vm.prank(nonWriter);
         (, int256 p1,,,) = oracle.latestRoundData();
@@ -426,7 +432,7 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         uint80 initialId = oracle.getLatestRoundId();
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
         uint80 newId = oracle.getLatestRoundId();
         assertEq(newId, initialId + 1);
     }
@@ -434,9 +440,9 @@ contract LlamaGuardOracleTest is Test {
     function testAggregatorStoresMultipleRounds() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.startPrank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
         uint80 r1 = oracle.getLatestRoundId();
-        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_HASH, 200, 2));
         uint80 r2 = oracle.getLatestRoundId();
         vm.stopPrank();
 
@@ -449,7 +455,7 @@ contract LlamaGuardOracleTest is Test {
     function testOracleIsChainlinkAggregator() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
         (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
             oracle.latestRoundData();
         assertEq(answer, 500);
@@ -463,9 +469,9 @@ contract LlamaGuardOracleTest is Test {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.startPrank(writer);
         for (uint256 i = 1; i <= 10; i++) {
-            oracle.updateData(
+            oracle.updateLatestRiskRoundData(
                 _createUpdateInput(
-                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), "price", i * 100, i
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), PRICE_HASH, i * 100, i
                 )
             );
         }
@@ -491,7 +497,7 @@ contract LlamaGuardOracleTest is Test {
     function testFuzzUpdateData(uint256 _supply, int256 _price, uint256 _state) public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", _price, "price", _supply, _state));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", _price, PRICE_HASH, _supply, _state));
 
         // Verify price via latestRoundData
         (, int256 answer,,,) = oracle.latestRoundData();
@@ -519,17 +525,17 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x1111);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_HASH, 1000, 2));
 
         // The index should now point to updateId 1 (first update)
         // Query with any market - the market will be rewritten to the input value
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
 
         assertEq(update.updateId, 1);
         // Market is rewritten to the query parameter
         assertEq(update.market, queryMarket);
-        assertEq(update.updateType, "price");
+        assertEq(update.updateTypeHash, PRICE_HASH);
     }
 
     function test_UpdateData_OverwritesPreviousIndex() public {
@@ -539,17 +545,17 @@ contract LlamaGuardOracleTest is Test {
 
         vm.startPrank(writer);
         // First update
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
         uint256 firstUpdateId = oracle.getLatestRoundId();
 
         // Second update for same type
-        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_HASH, 200, 2));
         uint256 secondUpdateId = oracle.getLatestRoundId();
         vm.stopPrank();
 
         // Index should point to the latest update
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
 
         assertEq(update.updateId, secondUpdateId);
         assertGt(update.updateId, firstUpdateId);
@@ -563,25 +569,25 @@ contract LlamaGuardOracleTest is Test {
 
         vm.startPrank(writer);
         // Update for price type
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
         uint256 priceUpdateId = oracle.getLatestRoundId();
 
         // Update for supply type
-        oracle.updateData(_createUpdateInput("ref-2", 75, "supply", 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, SUPPLY_HASH, 200, 2));
         uint256 supplyUpdateId = oracle.getLatestRoundId();
 
         // Update for risk_state type
-        oracle.updateData(_createUpdateInput("ref-3", 100, "risk_state", 300, 3));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-3", 100, RISK_STATE_HASH, 300, 3));
         uint256 riskStateUpdateId = oracle.getLatestRoundId();
         vm.stopPrank();
 
-        // Each updateType should have independent tracking
+        // Each updateType should have independent tracking (using bytes32 overload)
         ILlamaGuardOracle.RiskParameterUpdate memory update1 =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
         ILlamaGuardOracle.RiskParameterUpdate memory update2 =
-            oracle.getLatestUpdateByParameterAndMarket("supply", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(SUPPLY_HASH, queryMarket);
         ILlamaGuardOracle.RiskParameterUpdate memory update3 =
-            oracle.getLatestUpdateByParameterAndMarket("risk_state", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(RISK_STATE_HASH, queryMarket);
 
         assertEq(update1.updateId, priceUpdateId);
         assertEq(update2.updateId, supplyUpdateId);
@@ -608,15 +614,15 @@ contract LlamaGuardOracleTest is Test {
         bytes memory additionalData = _encodeAdditionalData(1000, 500, 2);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("reference-123", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("reference-123", 500, PRICE_HASH, 1000, 2));
 
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
 
         assertEq(update.timestamp, block.timestamp);
         assertEq(update.newValue, newValue);
         assertEq(update.referenceId, "reference-123");
-        assertEq(update.updateType, "price");
+        assertEq(update.updateTypeHash, PRICE_HASH);
         // Market is rewritten to query parameter
         assertEq(update.market, queryMarket);
         assertEq(update.additionalData, additionalData);
@@ -628,13 +634,13 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x6666);
 
         vm.startPrank(writer);
-        oracle.updateData(_createUpdateInput("ref-1", 50, "price", 100, 1));
-        oracle.updateData(_createUpdateInput("ref-2", 75, "price", 200, 2));
-        oracle.updateData(_createUpdateInput("ref-3", 100, "price", 300, 3));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_HASH, 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_HASH, 200, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-3", 100, PRICE_HASH, 300, 3));
         vm.stopPrank();
 
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
 
         // Should return the latest (third) update
         assertEq(update.referenceId, "ref-3");
@@ -643,46 +649,34 @@ contract LlamaGuardOracleTest is Test {
         assertEq(supply, 300);
     }
 
-    function test_GetLatestUpdateByParameterAndMarket_ReturnsEmptyForNonExistentType() public view {
-        // Query for an updateType that has no updates
-        ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket("nonexistent_type", address(0x9999));
-
-        // Should return empty struct with timestamp = 0
-        assertEq(update.timestamp, 0);
-        assertEq(update.updateId, 0);
-        assertEq(update.market, address(0));
-        assertEq(bytes(update.updateType).length, 0);
-        assertEq(bytes(update.referenceId).length, 0);
-        assertEq(update.newValue.length, 0);
+    function test_GetLatestUpdateByParameterAndMarket_RevertsForNonExistentType() public {
+        // Query for an updateType that has no updates should revert with InvalidUpdateId(0)
+        bytes32 nonExistentHash = keccak256(bytes("nonexistent_type"));
+        vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.InvalidUpdateId.selector, 0));
+        oracle.getLatestUpdateByParameterAndMarket(nonExistentHash, address(0x9999));
     }
 
-    function test_GetLatestUpdateByParameterAndMarket_DoesNotRevert() public view {
-        // Per FR-005: System MUST NOT revert when querying for non-existent update types
-        // This test verifies no revert occurs for various queries
-        oracle.getLatestUpdateByParameterAndMarket("price", address(0x1));
-        oracle.getLatestUpdateByParameterAndMarket("nonexistent_type", address(0x2));
-        oracle.getLatestUpdateByParameterAndMarket("", address(0x3));
-        oracle.getLatestUpdateByParameterAndMarket("supply", address(0));
-
-        // If we reach here, no reverts occurred
-        assertTrue(true);
+    function test_GetLatestUpdateByParameterAndMarket_RevertsForTypeWithNoUpdates() public {
+        // Even valid update types should revert if they have no updates yet
+        // PRICE_HASH is valid but has no updates
+        vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.InvalidUpdateId.selector, 0));
+        oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, address(0x1));
     }
 
     function test_GetLatestUpdateByParameterAndMarket_MarketIsRewritten() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("market-ref", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("market-ref", 500, PRICE_HASH, 1000, 2));
 
         // Query with different market addresses - market should be rewritten to query param
         address queryMarket1 = address(0x1111);
         address queryMarket2 = address(0x2222);
 
         ILlamaGuardOracle.RiskParameterUpdate memory update1 =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket1);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket1);
         ILlamaGuardOracle.RiskParameterUpdate memory update2 =
-            oracle.getLatestUpdateByParameterAndMarket("price", queryMarket2);
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket2);
 
         // Same update data, different market in response
         assertEq(update1.market, queryMarket1);
@@ -709,24 +703,25 @@ contract LlamaGuardOracleTest is Test {
         // Bound updateTypeIndex to valid range (0-2 for our 3 default types)
         updateTypeIndex = uint8(bound(updateTypeIndex, 0, 2));
 
-        string memory updateType;
+        bytes32 updateTypeHash;
         if (updateTypeIndex == 0) {
-            updateType = "price";
+            updateTypeHash = PRICE_HASH;
         } else if (updateTypeIndex == 1) {
-            updateType = "supply";
+            updateTypeHash = SUPPLY_HASH;
         } else {
-            updateType = "risk_state";
+            updateTypeHash = RISK_STATE_HASH;
         }
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("fuzz-ref", price, updateType, supply, state));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("fuzz-ref", price, updateTypeHash, supply, state));
 
+        // Use bytes32 overload for the query
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            oracle.getLatestUpdateByParameterAndMarket(updateType, queryMarket);
+            oracle.getLatestUpdateByParameterAndMarket(updateTypeHash, queryMarket);
 
         // Verify correct update is returned with market rewritten to query param
         assertEq(update.market, queryMarket);
-        assertEq(update.updateType, updateType);
+        assertEq(update.updateTypeHash, updateTypeHash);
         assertEq(update.referenceId, "fuzz-ref");
         assertGt(update.timestamp, 0);
 
@@ -746,16 +741,57 @@ contract LlamaGuardOracleTest is Test {
         address queryMarket = address(0x7777);
 
         vm.prank(writer);
-        oracle.updateData(_createUpdateInput("ref-interface", 500, "price", 1000, 2));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-interface", 500, PRICE_HASH, 1000, 2));
 
-        // Call via interface to verify signature compatibility
+        // Call via interface to verify signature compatibility (using bytes32 overload)
         ILlamaGuardOracle iOracle = ILlamaGuardOracle(address(oracle));
         ILlamaGuardOracle.RiskParameterUpdate memory update =
-            iOracle.getLatestUpdateByParameterAndMarket("price", queryMarket);
+            iOracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
 
         assertEq(update.referenceId, "ref-interface");
         // Market is rewritten to query param
         assertEq(update.market, queryMarket);
+    }
+
+    function test_InterfaceConsistency_GetLatestUpdateByParameterAndMarket_StringOverload() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address queryMarket = address(0x8888);
+        string memory updateType = "price";
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-string", 600, PRICE_HASH, 2000, 3));
+
+        // Call via interface using string overload with explicit string memory variable
+        ILlamaGuardOracle iOracle = ILlamaGuardOracle(address(oracle));
+        ILlamaGuardOracle.RiskParameterUpdate memory update =
+            iOracle.getLatestUpdateByParameterAndMarket(updateType, queryMarket);
+
+        assertEq(update.referenceId, "ref-string");
+        assertEq(update.market, queryMarket);
+        assertEq(update.updateTypeHash, PRICE_HASH);
+    }
+
+    function test_Bytes32Overload_MatchesStringOverload() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        address queryMarket = address(0x9999);
+        string memory updateType = "price";
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-compare", 700, PRICE_HASH, 3000, 4));
+
+        // Both overloads should return the same data
+        ILlamaGuardOracle.RiskParameterUpdate memory updateFromString =
+            oracle.getLatestUpdateByParameterAndMarket(updateType, queryMarket);
+        ILlamaGuardOracle.RiskParameterUpdate memory updateFromBytes32 =
+            oracle.getLatestUpdateByParameterAndMarket(PRICE_HASH, queryMarket);
+
+        assertEq(updateFromString.updateId, updateFromBytes32.updateId);
+        assertEq(updateFromString.timestamp, updateFromBytes32.timestamp);
+        assertEq(updateFromString.referenceId, updateFromBytes32.referenceId);
+        assertEq(updateFromString.updateTypeHash, updateFromBytes32.updateTypeHash);
+        assertEq(updateFromString.market, updateFromBytes32.market);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -774,7 +810,7 @@ contract LlamaGuardOracleTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
     // MARKET AUTHORIZATION MANAGEMENT TESTS
     // ═══════════════════════════════════════════════════════════════════════════
-    // NOTE: Market authorization is no longer used in updateData, but the management
+    // NOTE: Market authorization is no longer used in updateLatestRiskRoundData, but the management
     // functions (addAuthorizedMarket, removeAuthorizedMarket, isAuthorizedMarket)
     // are still available for external use cases.
 
@@ -826,19 +862,16 @@ contract LlamaGuardOracleTest is Test {
         new LlamaGuardOracle(8, "Test", 1, defaultUpdateTypes, initialMarkets);
     }
 
-    // T017: test_Constructor_HandlesDuplicateMarkets
-    function test_Constructor_HandlesDuplicateMarkets() public {
+    // T017: test_Constructor_RevertsDuplicateMarkets
+    function test_Constructor_RevertsDuplicateMarkets() public {
         // Arrange: Create markets array with duplicates
         address[] memory initialMarkets = new address[](3);
         initialMarkets[0] = market1;
         initialMarkets[1] = market2;
         initialMarkets[2] = market1; // Duplicate
 
-        // Act: Deploy oracle (should not revert)
-        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "Test", 1, defaultUpdateTypes, initialMarkets);
-
-        // Assert: Market1 is authorized (idempotent)
-        assertTrue(newOracle.isAuthorizedMarket(market1));
-        assertTrue(newOracle.isAuthorizedMarket(market2));
+        // Act & Assert: Deploy oracle should revert on duplicate market
+        vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.MarketAlreadyAuthorized.selector, market1));
+        new LlamaGuardOracle(8, "Test", 1, defaultUpdateTypes, initialMarkets);
     }
 }

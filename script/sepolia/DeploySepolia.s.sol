@@ -368,7 +368,7 @@ contract DeploySepolia is BaseScript {
         ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
             referenceId: seedConfig.referenceId,
             newValue: abi.encode(price),
-            updateType: seedConfig.updateType,
+            updateTypeHash: keccak256(bytes(seedConfig.updateType)),
             additionalData: abi.encode(uint256(0), price, uint256(0)) // (supply, price, state) - using 0 for supply and
             // state
         });

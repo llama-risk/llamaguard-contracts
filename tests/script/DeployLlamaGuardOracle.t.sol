@@ -122,9 +122,8 @@ contract DeployLlamaGuardOracleTest is Test {
         assertEq(cfg.oracle.name, "TEST1");
         assertEq(cfg.oracle.decimals, 8);
         assertEq(cfg.oracle.version, 1);
-        assertEq(cfg.oracle.updateTypes.length, 2);
+        assertEq(cfg.oracle.updateTypes.length, 1);
         assertEq(cfg.oracle.updateTypes[0], "boundedNAV");
-        assertEq(cfg.oracle.updateTypes[1], "boundedNAV");
 
         // Proxy config
         assertEq(cfg.proxy.name, "TEST1");
