@@ -18,15 +18,17 @@ contract EACAggregatorProxyTest is Test {
 
     string[] internal defaultUpdateTypes;
 
-    // Pre-computed hash for price update type
+    // Pre-computed hashes for update types
     bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
+    bytes32 internal constant BOUNDED_NAV_HASH = keccak256(bytes("boundedNAV"));
 
     function setUp() public {
         // Setup default update types
-        defaultUpdateTypes = new string[](3);
+        defaultUpdateTypes = new string[](4);
         defaultUpdateTypes[0] = "price";
         defaultUpdateTypes[1] = "supply";
         defaultUpdateTypes[2] = "risk_state";
+        defaultUpdateTypes[3] = "boundedNAV";
 
         // Deploy oracle with initial authorized market and grant write role to dataProxy
         address[] memory initialMarkets = new address[](1);

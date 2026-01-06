@@ -21,6 +21,7 @@ contract LlamaGuardOracleTest is Test {
     bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
     bytes32 internal constant SUPPLY_HASH = keccak256(bytes("supply"));
     bytes32 internal constant RISK_STATE_HASH = keccak256(bytes("risk_state"));
+    bytes32 internal constant BOUNDED_NAV_HASH = keccak256(bytes("boundedNAV"));
 
     event ParameterUpdated(
         string referenceId,
@@ -36,10 +37,11 @@ contract LlamaGuardOracleTest is Test {
 
     function setUp() public {
         // Setup default update types
-        defaultUpdateTypes = new string[](3);
+        defaultUpdateTypes = new string[](4);
         defaultUpdateTypes[0] = "price";
         defaultUpdateTypes[1] = "supply";
         defaultUpdateTypes[2] = "risk_state";
+        defaultUpdateTypes[3] = "boundedNAV";
 
         // Create initial authorized markets array with defaultMarket for legacy tests
         address[] memory initialMarkets = new address[](1);
@@ -94,9 +96,11 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.updateTypes(0), "price");
         assertEq(oracle.updateTypes(1), "supply");
         assertEq(oracle.updateTypes(2), "risk_state");
+        assertEq(oracle.updateTypes(3), "boundedNAV");
         assertTrue(oracle.isValidUpdateType("price"));
         assertTrue(oracle.isValidUpdateType("supply"));
         assertTrue(oracle.isValidUpdateType("risk_state"));
+        assertTrue(oracle.isValidUpdateType("boundedNAV"));
     }
 
     function testConstructorWithDifferentParameters() public {
@@ -335,8 +339,8 @@ contract LlamaGuardOracleTest is Test {
 
         assertTrue(oracle.isValidUpdateType("new_custom_type"));
 
-        // Verify new type is at index 3 via public array access
-        assertEq(oracle.updateTypes(3), "new_custom_type");
+        // Verify new type is at index 4 via public array access (after price, supply, risk_state, boundedNAV)
+        assertEq(oracle.updateTypes(4), "new_custom_type");
     }
 
     function test_US4_addUpdateType_EmitsUpdateTypeAddedEvent() public {
@@ -366,10 +370,11 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.updateTypes(0), "price");
         assertEq(oracle.updateTypes(1), "supply");
         assertEq(oracle.updateTypes(2), "risk_state");
+        assertEq(oracle.updateTypes(3), "boundedNAV");
 
         // Add a new type and verify it's appended
         oracle.addUpdateType("new_type");
-        assertEq(oracle.updateTypes(3), "new_type");
+        assertEq(oracle.updateTypes(4), "new_type");
         assertTrue(oracle.isValidUpdateType("new_type"));
     }
 
@@ -383,6 +388,7 @@ contract LlamaGuardOracleTest is Test {
         assertTrue(oracle.isValidUpdateType("price"));
         assertTrue(oracle.isValidUpdateType("supply"));
         assertTrue(oracle.isValidUpdateType("risk_state"));
+        assertTrue(oracle.isValidUpdateType("boundedNAV"));
         assertFalse(oracle.isValidUpdateType("invalid"));
     }
 

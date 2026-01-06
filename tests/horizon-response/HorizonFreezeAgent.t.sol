@@ -17,6 +17,8 @@ contract HorizonFreezeAgentTest is Test {
 
     event ReserveFreezeUpdated(address indexed market, bool frozen, uint256 state);
 
+    bytes32 internal constant BOUNDED_NAV_HASH = keccak256(bytes("boundedNAV"));
+
     function setUp() public {
         agentHub = makeAddr("agentHub");
         market = makeAddr("market");
@@ -61,7 +63,7 @@ contract HorizonFreezeAgentTest is Test {
             newValue: abi.encode(int256(100)), // price
             referenceId: "test-ref",
             previousValue: "",
-            updateType: "freeze",
+            updateTypeHash: BOUNDED_NAV_HASH,
             updateId: 1,
             market: marketAddr,
             additionalData: _encodeAdditionalData(lowerBound, upperBound, state, supply)
