@@ -8,7 +8,7 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/inte
  * @notice Implementation of Chainlink's AggregatorV3Interface
  *
  * Security Model:
- * - updateLatestRoundData() is internal - only callable by derived contracts
+ * - _updateLatestRoundData() is internal - only callable by derived contracts
  * - Derived contracts MUST implement proper access control (e.g., LlamaGuardOracle.onlyProxy)
  * - Historical round data is immutable once created
  *
@@ -37,6 +37,9 @@ contract AggregatorV3 is AggregatorV3Interface {
     // Events
     event RoundDataUpdated(uint80 indexed roundId, int256 answer, uint256 startedAt, uint256 updatedAt);
 
+    // Errors
+    error RoundNotFound(uint80 roundId);
+
     /**
      * @dev Constructor to initialize the aggregator
      * @param decimals_ Number of decimals for the price feed
@@ -47,7 +50,6 @@ contract AggregatorV3 is AggregatorV3Interface {
         _decimals = decimals_;
         _description = description_;
         _version = version_;
-        _latestRoundId = 0;
 
         // Initialize with a default round
         _roundData[0] = RoundData({ roundId: 0, answer: 0, startedAt: 0, updatedAt: 0, answeredInRound: 0 });
@@ -89,7 +91,7 @@ contract AggregatorV3 is AggregatorV3Interface {
         override
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
-        require(_roundData[_roundId].roundId != 0, "Round not found");
+        if (_roundData[_roundId].roundId == 0) revert RoundNotFound(_roundId);
 
         RoundData memory data = _roundData[_roundId];
         return (data.roundId, data.answer, data.startedAt, data.updatedAt, data.answeredInRound);
@@ -114,11 +116,18 @@ contract AggregatorV3 is AggregatorV3Interface {
     }
 
     /**
+     * @dev Get the latest round ID
+     */
+    function getLatestRoundId() external view returns (uint80) {
+        return _latestRoundId;
+    }
+
+    /**
      * @notice Update the latest round data
      * @dev Internal function - only callable by derived contracts that implement proper access control
      * @param answer The new price answer
      */
-    function updateLatestRoundData(int256 answer) internal {
+    function _updateLatestRoundData(int256 answer) internal {
         _latestRoundId++;
 
         _roundData[_latestRoundId] = RoundData({
@@ -130,12 +139,5 @@ contract AggregatorV3 is AggregatorV3Interface {
         });
 
         emit RoundDataUpdated(_latestRoundId, answer, block.timestamp, block.timestamp);
-    }
-
-    /**
-     * @dev Get the latest round ID
-     */
-    function getLatestRoundId() external view returns (uint80) {
-        return _latestRoundId;
     }
 }
