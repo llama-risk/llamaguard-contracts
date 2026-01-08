@@ -119,7 +119,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         // newValue contains only the price (int256), while additionalData contains the full bundle
         {
             int256 price = abi.decode(input.newValue, (int256));
-            updateLatestRoundData(price);
+            _updateLatestRoundData(price);
         }
 
         // Get new roundId as updateId and store in history
