@@ -12,15 +12,14 @@ contract LlamaGuardOracleProxyTest is Test {
     LlamaGuardOracle internal oracle;
     LlamaGuardOracleProxy internal proxy;
 
-    address internal owner = address(this);
-    address internal expectedAuthor = address(0xA11CE);
+    address internal owner = makeAddr("owner");
+    address internal expectedAuthor = makeAddr("expectedAuthor");
     address internal expectedForwarder;
     bytes10 internal expectedWorkflowName = bytes10("WORKFLOW1");
     bytes32 internal expectedWorkflowId = bytes32("WORKFLOWCID_ABCDEFGHIJKLMNOPQRST");
     string internal proxyDescription = "Proxy: Mock Feed";
 
-    // Default test market for legacy tests
-    address internal defaultMarket = address(0xDEFA);
+    address internal defaultMarket = makeAddr("defaultMarket");
 
     string[] internal defaultUpdateTypes;
 
@@ -39,6 +38,9 @@ contract LlamaGuardOracleProxyTest is Test {
         address[] memory initialMarkets = new address[](1);
         initialMarkets[0] = defaultMarket;
         oracle = new LlamaGuardOracle(8, "Mock Feed", 1, defaultUpdateTypes, initialMarkets);
+
+        // Deploy proxy as owner so that owner variable matches actual ownership
+        vm.prank(owner);
         proxy = new LlamaGuardOracleProxy(
             address(oracle),
             expectedWorkflowId,
@@ -111,6 +113,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function testOnReportRevertsForInactiveWorkflow() public {
         // Deactivate the workflow
+        vm.prank(owner);
         proxy.setWorkflowActive(expectedWorkflowId, false);
 
         bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
@@ -134,11 +137,13 @@ contract LlamaGuardOracleProxyTest is Test {
         address[] memory noMarkets = new address[](0);
         LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1, defaultUpdateTypes, noMarkets);
 
+        vm.prank(owner);
         vm.expectRevert(LlamaGuardOracleProxy.InvalidLlamaGuardOracle.selector);
         proxy.setLlamaGuardOracle(address(newOracle));
 
         // Grant write role and try again
         newOracle.grantRole(newOracle.WRITER_ROLE(), address(proxy));
+        vm.prank(owner);
         proxy.setLlamaGuardOracle(address(newOracle));
 
         assertEq(address(proxy.llamaguardOracle()), address(newOracle));
@@ -152,6 +157,7 @@ contract LlamaGuardOracleProxyTest is Test {
     }
 
     function test_SetIsReportWriteSecured_EnablesWriteSecurity() public {
+        vm.startPrank(owner);
         // Disable security first
         proxy.setIsReportWriteSecured(false);
         assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
@@ -159,6 +165,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Re-enable security
         proxy.setIsReportWriteSecured(true);
         assertTrue(proxy.isReportWriteSecured(), "Security should be enabled");
+        vm.stopPrank();
     }
 
     function test_SetIsReportWriteSecured_DisablesWriteSecurity() public {
@@ -166,6 +173,7 @@ contract LlamaGuardOracleProxyTest is Test {
         assertTrue(proxy.isReportWriteSecured(), "Security should be enabled by default");
 
         // Disable security
+        vm.prank(owner);
         proxy.setIsReportWriteSecured(false);
         assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
     }
@@ -180,6 +188,7 @@ contract LlamaGuardOracleProxyTest is Test {
 
     function test_OnReport_BypassesValidationWhenSecurityDisabled() public {
         // Disable security
+        vm.prank(owner);
         proxy.setIsReportWriteSecured(false);
 
         // Build metadata with wrong values - should not revert
@@ -215,6 +224,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newAuthor = address(0x2222);
         bytes10 newName = bytes10("NEWWORKFLO");
 
+        vm.prank(owner);
         proxy.setWorkflowConfig(newWorkflowId, newForwarder, newAuthor, newName, true);
 
         AbstractCreReceiver.WorkflowConfig memory config = proxy.getWorkflowConfig(newWorkflowId);
@@ -229,6 +239,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newAuthor = address(0x4444);
         bytes10 newName = bytes10("UPDATEDNAM");
 
+        vm.prank(owner);
         proxy.setWorkflowConfig(expectedWorkflowId, newForwarder, newAuthor, newName, true);
 
         AbstractCreReceiver.WorkflowConfig memory config = proxy.getWorkflowConfig(expectedWorkflowId);
@@ -247,6 +258,7 @@ contract LlamaGuardOracleProxyTest is Test {
         vm.expectEmit(true, false, false, true);
         emit AbstractCreReceiver.WorkflowConfigUpdated(newWorkflowId, newForwarder, newAuthor, newName, true);
 
+        vm.prank(owner);
         proxy.setWorkflowConfig(newWorkflowId, newForwarder, newAuthor, newName, true);
     }
 
@@ -259,6 +271,7 @@ contract LlamaGuardOracleProxyTest is Test {
     }
 
     function test_SetWorkflowActive_ActivatesWorkflow() public {
+        vm.startPrank(owner);
         // First deactivate
         proxy.setWorkflowActive(expectedWorkflowId, false);
         assertFalse(proxy.isWorkflowActive(expectedWorkflowId), "Workflow should be inactive");
@@ -266,6 +279,7 @@ contract LlamaGuardOracleProxyTest is Test {
         // Then activate
         proxy.setWorkflowActive(expectedWorkflowId, true);
         assertTrue(proxy.isWorkflowActive(expectedWorkflowId), "Workflow should be active");
+        vm.stopPrank();
     }
 
     function test_SetWorkflowActive_DeactivatesWorkflow() public {
@@ -273,6 +287,7 @@ contract LlamaGuardOracleProxyTest is Test {
         assertTrue(proxy.isWorkflowActive(expectedWorkflowId), "Workflow should be active by default");
 
         // Deactivate
+        vm.prank(owner);
         proxy.setWorkflowActive(expectedWorkflowId, false);
         assertFalse(proxy.isWorkflowActive(expectedWorkflowId), "Workflow should be inactive");
     }
@@ -283,6 +298,7 @@ contract LlamaGuardOracleProxyTest is Test {
             expectedWorkflowId, expectedForwarder, expectedAuthor, expectedWorkflowName, false
         );
 
+        vm.prank(owner);
         proxy.setWorkflowActive(expectedWorkflowId, false);
     }
 
@@ -300,6 +316,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newAuthor = address(0xAA11);
         bytes10 newName = bytes10("NEWNAME");
 
+        vm.prank(owner);
         proxy.setWorkflowConfig(newWorkflowId, address(this), newAuthor, newName, true);
 
         // Build metadata with new expected values
@@ -320,6 +337,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address secondAuthor = address(0xBB22);
         bytes10 secondName = bytes10("SECOND");
 
+        vm.prank(owner);
         proxy.setWorkflowConfig(secondWorkflowId, address(this), secondAuthor, secondName, true);
 
         // First workflow should still work
@@ -362,6 +380,7 @@ contract LlamaGuardOracleProxyTest is Test {
     function test_TransferOwnership_SetsPendingOwner() public {
         address newOwner = address(0xEEFF33);
 
+        vm.prank(owner);
         proxy.transferOwnership(newOwner);
 
         // Owner should still be the original owner
@@ -374,6 +393,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newOwner = address(0xEEFF33);
 
         // Step 1: Transfer ownership (sets pending owner)
+        vm.prank(owner);
         proxy.transferOwnership(newOwner);
 
         // Step 2: Accept ownership as new owner
@@ -389,6 +409,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newOwner = address(0xEEFF33);
         address randomAddress = address(0xFF0011);
 
+        vm.prank(owner);
         proxy.transferOwnership(newOwner);
 
         // Try to accept as random address (not pending owner)
@@ -401,6 +422,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newOwner = address(0xEEFF33);
 
         // Transfer and accept ownership
+        vm.prank(owner);
         proxy.transferOwnership(newOwner);
         vm.prank(newOwner);
         proxy.acceptOwnership();
@@ -417,6 +439,7 @@ contract LlamaGuardOracleProxyTest is Test {
         address newOwner = address(0xEEFF33);
 
         // Transfer and accept ownership
+        vm.prank(owner);
         proxy.transferOwnership(newOwner);
         vm.prank(newOwner);
         proxy.acceptOwnership();
