@@ -19,11 +19,13 @@ contract LlamaGuardOracleTest is Test {
     string internal constant PRICE_TYPE = "price";
     string internal constant SUPPLY_TYPE = "supply";
     string internal constant RISK_STATE_TYPE = "risk_state";
+    string internal constant BOUNDED_NAV_TYPE = "boundedNAV";
 
     // Hashes computed from string constants (set in setUp)
     bytes32 internal priceHash;
     bytes32 internal supplyHash;
     bytes32 internal riskStateHash;
+    bytes32 internal boundedNavHash;
 
     event ParameterUpdated(
         string referenceId,
@@ -42,12 +44,14 @@ contract LlamaGuardOracleTest is Test {
         priceHash = keccak256(bytes(PRICE_TYPE));
         supplyHash = keccak256(bytes(SUPPLY_TYPE));
         riskStateHash = keccak256(bytes(RISK_STATE_TYPE));
+        boundedNavHash = keccak256(bytes(BOUNDED_NAV_TYPE));
 
         // Setup default update types
-        defaultUpdateTypes = new string[](3);
+        defaultUpdateTypes = new string[](4);
         defaultUpdateTypes[0] = PRICE_TYPE;
         defaultUpdateTypes[1] = SUPPLY_TYPE;
         defaultUpdateTypes[2] = RISK_STATE_TYPE;
+        defaultUpdateTypes[3] = BOUNDED_NAV_TYPE;
 
         // Create initial authorized markets array with defaultMarket
         address[] memory initialMarkets = new address[](1);
@@ -102,9 +106,11 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.updateTypes(0), PRICE_TYPE);
         assertEq(oracle.updateTypes(1), SUPPLY_TYPE);
         assertEq(oracle.updateTypes(2), RISK_STATE_TYPE);
+        assertEq(oracle.updateTypes(3), BOUNDED_NAV_TYPE);
         assertTrue(oracle.isValidUpdateType(PRICE_TYPE));
         assertTrue(oracle.isValidUpdateType(SUPPLY_TYPE));
         assertTrue(oracle.isValidUpdateType(RISK_STATE_TYPE));
+        assertTrue(oracle.isValidUpdateType(BOUNDED_NAV_TYPE));
     }
 
     function testConstructorWithDifferentParameters() public {
@@ -379,6 +385,7 @@ contract LlamaGuardOracleTest is Test {
         assertEq(oracle.updateTypes(0), PRICE_TYPE);
         assertEq(oracle.updateTypes(1), SUPPLY_TYPE);
         assertEq(oracle.updateTypes(2), RISK_STATE_TYPE);
+        assertEq(oracle.updateTypes(3), BOUNDED_NAV_TYPE);
 
         // Add a new type and verify it's appended
         oracle.addUpdateType("new_type");
@@ -396,6 +403,7 @@ contract LlamaGuardOracleTest is Test {
         assertTrue(oracle.isValidUpdateType(PRICE_TYPE));
         assertTrue(oracle.isValidUpdateType(SUPPLY_TYPE));
         assertTrue(oracle.isValidUpdateType(RISK_STATE_TYPE));
+        assertTrue(oracle.isValidUpdateType(BOUNDED_NAV_TYPE));
         assertFalse(oracle.isValidUpdateType("invalid"));
     }
 
