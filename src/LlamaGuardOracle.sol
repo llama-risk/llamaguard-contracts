@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity 0.8.26;
 
 import { AggregatorV3 } from "./AggregatorV3.sol";
 import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
