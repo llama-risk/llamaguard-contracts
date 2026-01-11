@@ -6,10 +6,12 @@ import { HorizonFreezeAgent } from "../../src/horizon-response/agents/HorizonFre
 import { BaseHorizonAgent } from "../../src/horizon-response/agents/BaseHorizonAgent.sol";
 import { ILlamaGuardOracle } from "../../src/interfaces/ILlamaGuardOracle.sol";
 import { MockPoolConfigurator } from "../mocks/MockPoolConfigurator.sol";
+import { MockPoolDataProvider } from "../mocks/MockPoolDataProvider.sol";
 
 contract HorizonFreezeAgentTest is Test {
     HorizonFreezeAgent internal agent;
     MockPoolConfigurator internal poolConfigurator;
+    MockPoolDataProvider internal poolDataProvider;
 
     address internal agentHub;
     address internal market;
@@ -25,6 +27,7 @@ contract HorizonFreezeAgentTest is Test {
         nonAgentHub = makeAddr("nonAgentHub");
 
         poolConfigurator = new MockPoolConfigurator();
+        poolDataProvider = new MockPoolDataProvider();
         agent = new HorizonFreezeAgent(agentHub);
     }
 
@@ -32,18 +35,17 @@ contract HorizonFreezeAgentTest is Test {
     // HELPER FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @dev Encode additionalData as (lowerBound, upperBound, state, supply)
+    /// @dev Encode additionalData as (lowerBound, upperBound, state)
     function _encodeAdditionalData(
         int256 lowerBound,
         int256 upperBound,
-        uint256 state,
-        uint256 supply
+        uint256 state
     )
         internal
         pure
         returns (bytes memory)
     {
-        return abi.encode(lowerBound, upperBound, state, supply);
+        return abi.encode(lowerBound, upperBound, state);
     }
 
     /// @dev Create a RiskParameterUpdate struct for testing
@@ -51,8 +53,7 @@ contract HorizonFreezeAgentTest is Test {
         address marketAddr,
         uint256 state,
         int256 lowerBound,
-        int256 upperBound,
-        uint256 supply
+        int256 upperBound
     )
         internal
         view
@@ -66,13 +67,20 @@ contract HorizonFreezeAgentTest is Test {
             updateTypeHash: BOUNDED_NAV_HASH,
             updateId: 1,
             market: marketAddr,
-            additionalData: _encodeAdditionalData(lowerBound, upperBound, state, supply)
+            additionalData: _encodeAdditionalData(lowerBound, upperBound, state)
         });
     }
 
-    /// @dev Encode agent context with pool configurator address
-    function _encodeAgentContext(address poolConfiguratorAddr) internal pure returns (bytes memory) {
-        return abi.encode(poolConfiguratorAddr);
+    /// @dev Encode agent context with pool configurator and pool data provider addresses
+    function _encodeAgentContext(
+        address poolConfiguratorAddr,
+        address poolDataProviderAddr
+    )
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encode(poolConfiguratorAddr, poolDataProviderAddr);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -98,33 +106,51 @@ contract HorizonFreezeAgentTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // VALIDATE TESTS
+    // VALIDATE TESTS - FREEZE-ONLY LOGIC
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function test_Validate_ReturnsTrueForFrozenState() public view {
+    function test_Validate_ReturnsTrueForFreezeWhenNotFrozen() public view {
+        // Market is not frozen in poolDataProvider by default
         ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(
             market,
             1, // state = FROZEN
             -100, // lowerBound
-            100, // upperBound
-            1000 // supply
+            100 // upperBound
         );
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
-        bool isValid = agent.validate(0, "", update);
+        bool isValid = agent.validate(0, agentContext, update);
         assertTrue(isValid);
     }
 
-    function test_Validate_ReturnsTrueForUnfrozenState() public view {
+    function test_Validate_ReturnsFalseForUnfreezeState() public view {
+        // Unfreeze (state=0) should always be rejected
         ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(
             market,
             0, // state = UNFROZEN
             -100,
-            100,
-            1000
+            100
         );
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
-        bool isValid = agent.validate(0, "", update);
-        assertTrue(isValid);
+        bool isValid = agent.validate(0, agentContext, update);
+        assertFalse(isValid);
+    }
+
+    function test_Validate_ReturnsFalseWhenAlreadyFrozen() public {
+        // Set market as already frozen in poolDataProvider
+        poolDataProvider.setFrozen(market, true);
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(
+            market,
+            1, // state = FROZEN
+            -100,
+            100
+        );
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
+
+        bool isValid = agent.validate(0, agentContext, update);
+        assertFalse(isValid);
     }
 
     function test_Validate_ReturnsFalseForInvalidState() public view {
@@ -132,11 +158,11 @@ contract HorizonFreezeAgentTest is Test {
             market,
             2, // state = INVALID (> 1)
             -100,
-            100,
-            1000
+            100
         );
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
-        bool isValid = agent.validate(0, "", update);
+        bool isValid = agent.validate(0, agentContext, update);
         assertFalse(isValid);
     }
 
@@ -145,20 +171,22 @@ contract HorizonFreezeAgentTest is Test {
             market,
             999, // state = INVALID
             -100,
-            100,
-            1000
+            100
         );
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
-        bool isValid = agent.validate(0, "", update);
+        bool isValid = agent.validate(0, agentContext, update);
         assertFalse(isValid);
     }
 
-    function testFuzz_Validate_OnlyAcceptsZeroOrOne(uint256 state) public view {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, state, -100, 100, 1000);
+    function testFuzz_Validate_OnlyAcceptsFreezeWhenNotFrozen(uint256 state) public view {
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, state, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
-        bool isValid = agent.validate(0, "", update);
+        bool isValid = agent.validate(0, agentContext, update);
 
-        if (state <= 1) {
+        // Only state == 1 (freeze) when market is not frozen should return true
+        if (state == 1) {
             assertTrue(isValid);
         } else {
             assertFalse(isValid);
@@ -189,8 +217,8 @@ contract HorizonFreezeAgentTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_Inject_RevertsWhenCalledByNonAgentHub() public {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(nonAgentHub);
         vm.expectRevert(abi.encodeWithSelector(BaseHorizonAgent.OnlyAgentHub.selector, nonAgentHub));
@@ -198,14 +226,36 @@ contract HorizonFreezeAgentTest is Test {
     }
 
     function test_Inject_SucceedsWhenCalledByAgentHub() public {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext, update);
 
         // Verify the freeze was executed
         assertTrue(poolConfigurator.isFrozen(market));
+    }
+
+    function test_Inject_RevertsWhenValidationFails() public {
+        // Set market as already frozen - validation should fail
+        poolDataProvider.setFrozen(market, true);
+
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
+
+        vm.prank(agentHub);
+        vm.expectRevert(HorizonFreezeAgent.ValidationFailed.selector);
+        agent.inject(0, agentContext, update);
+    }
+
+    function test_Inject_RevertsForUnfreezeState() public {
+        // Try to unfreeze - should fail validation
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 0, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
+
+        vm.prank(agentHub);
+        vm.expectRevert(HorizonFreezeAgent.ValidationFailed.selector);
+        agent.inject(0, agentContext, update);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -217,10 +267,9 @@ contract HorizonFreezeAgentTest is Test {
             market,
             1, // FROZEN
             -100,
-            100,
-            1000
+            100
         );
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext, update);
@@ -231,36 +280,9 @@ contract HorizonFreezeAgentTest is Test {
         assertEq(poolConfigurator.freezeCallCount(), 1);
     }
 
-    function test_ProcessUpdate_UnfreezesReserveWhenStateIsZero() public {
-        // First freeze the reserve
-        ILlamaGuardOracle.RiskParameterUpdate memory freezeUpdate = _createUpdate(market, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
-
-        vm.prank(agentHub);
-        agent.inject(0, agentContext, freezeUpdate);
-        assertTrue(poolConfigurator.isFrozen(market));
-
-        // Now unfreeze
-        ILlamaGuardOracle.RiskParameterUpdate memory unfreezeUpdate = _createUpdate(
-            market,
-            0, // UNFROZEN
-            -100,
-            100,
-            1000
-        );
-
-        vm.prank(agentHub);
-        agent.inject(0, agentContext, unfreezeUpdate);
-
-        assertFalse(poolConfigurator.isFrozen(market));
-        assertEq(poolConfigurator.lastFreezeAsset(), market);
-        assertFalse(poolConfigurator.lastFreezeState());
-        assertEq(poolConfigurator.freezeCallCount(), 2);
-    }
-
     function test_ProcessUpdate_EmitsReserveFreezeUpdatedEvent() public {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         vm.expectEmit(true, false, false, true);
@@ -268,52 +290,35 @@ contract HorizonFreezeAgentTest is Test {
         agent.inject(0, agentContext, update);
     }
 
-    function test_ProcessUpdate_EmitsEventOnUnfreeze() public {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 0, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
-
-        vm.prank(agentHub);
-        vm.expectEmit(true, false, false, true);
-        emit ReserveFreezeUpdated(market, false, 0);
-        agent.inject(0, agentContext, update);
-    }
-
     function test_ProcessUpdate_HandlesMultipleMarkets() public {
         address market1 = makeAddr("market1");
         address market2 = makeAddr("market2");
-        address market3 = makeAddr("market3");
 
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         // Freeze market1
-        ILlamaGuardOracle.RiskParameterUpdate memory update1 = _createUpdate(market1, 1, -100, 100, 1000);
+        ILlamaGuardOracle.RiskParameterUpdate memory update1 = _createUpdate(market1, 1, -100, 100);
         vm.prank(agentHub);
         agent.inject(0, agentContext, update1);
 
         // Freeze market2
-        ILlamaGuardOracle.RiskParameterUpdate memory update2 = _createUpdate(market2, 1, -200, 200, 2000);
+        ILlamaGuardOracle.RiskParameterUpdate memory update2 = _createUpdate(market2, 1, -200, 200);
         vm.prank(agentHub);
         agent.inject(0, agentContext, update2);
 
-        // Unfreeze market3 (was never frozen, but should still work)
-        ILlamaGuardOracle.RiskParameterUpdate memory update3 = _createUpdate(market3, 0, -300, 300, 3000);
-        vm.prank(agentHub);
-        agent.inject(0, agentContext, update3);
-
         assertTrue(poolConfigurator.isFrozen(market1));
         assertTrue(poolConfigurator.isFrozen(market2));
-        assertFalse(poolConfigurator.isFrozen(market3));
-        assertEq(poolConfigurator.freezeCallCount(), 3);
+        assertEq(poolConfigurator.freezeCallCount(), 2);
     }
 
     function test_ProcessUpdate_DecodesPoolConfiguratorFromContext() public {
         // Create a second pool configurator
         MockPoolConfigurator poolConfigurator2 = new MockPoolConfigurator();
 
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100, 1000);
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100);
 
         // Use first configurator
-        bytes memory agentContext1 = _encodeAgentContext(address(poolConfigurator));
+        bytes memory agentContext1 = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
         vm.prank(agentHub);
         agent.inject(0, agentContext1, update);
 
@@ -322,8 +327,8 @@ contract HorizonFreezeAgentTest is Test {
 
         // Use second configurator for a different market
         address market2 = makeAddr("market2");
-        ILlamaGuardOracle.RiskParameterUpdate memory update2 = _createUpdate(market2, 1, -100, 100, 1000);
-        bytes memory agentContext2 = _encodeAgentContext(address(poolConfigurator2));
+        ILlamaGuardOracle.RiskParameterUpdate memory update2 = _createUpdate(market2, 1, -100, 100);
+        bytes memory agentContext2 = _encodeAgentContext(address(poolConfigurator2), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext2, update2);
@@ -336,16 +341,10 @@ contract HorizonFreezeAgentTest is Test {
     // ADDITIONAL DATA DECODING TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function testFuzz_ProcessUpdate_DecodesAdditionalDataCorrectly(
-        int256 lowerBound,
-        int256 upperBound,
-        uint256 supply
-    )
-        public
-    {
+    function testFuzz_ProcessUpdate_DecodesAdditionalDataCorrectly(int256 lowerBound, int256 upperBound) public {
         // Test with state = 1 (freeze)
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, lowerBound, upperBound, supply);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, lowerBound, upperBound);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext, update);
@@ -354,26 +353,14 @@ contract HorizonFreezeAgentTest is Test {
         assertTrue(poolConfigurator.isFrozen(market));
     }
 
-    function testFuzz_ProcessUpdate_StateZeroUnfreezes(int256 lowerBound, int256 upperBound, uint256 supply) public {
-        // Test with state = 0 (unfreeze)
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 0, lowerBound, upperBound, supply);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
-
-        vm.prank(agentHub);
-        agent.inject(0, agentContext, update);
-
-        // Verify unfreeze was called
-        assertFalse(poolConfigurator.isFrozen(market));
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // EDGE CASE TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_ProcessUpdate_WithZeroAddress() public {
         address zeroMarket = address(0);
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(zeroMarket, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(zeroMarket, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext, update);
@@ -387,10 +374,9 @@ contract HorizonFreezeAgentTest is Test {
             market,
             1,
             type(int256).min, // lowerBound
-            type(int256).max, // upperBound
-            type(uint256).max // supply
+            type(int256).max // upperBound
         );
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
 
         vm.prank(agentHub);
         agent.inject(0, agentContext, update);
@@ -398,18 +384,42 @@ contract HorizonFreezeAgentTest is Test {
         assertTrue(poolConfigurator.isFrozen(market));
     }
 
-    function test_ProcessUpdate_RepeatedFreezeIdemptotent() public {
-        ILlamaGuardOracle.RiskParameterUpdate memory update = _createUpdate(market, 1, -100, 100, 1000);
-        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator));
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FREEZE-ONLY SECURITY TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
 
-        // Freeze multiple times
-        vm.startPrank(agentHub);
-        agent.inject(0, agentContext, update);
-        agent.inject(0, agentContext, update);
-        agent.inject(0, agentContext, update);
-        vm.stopPrank();
+    function test_CannotUnfreezeViaOracle() public {
+        // First manually freeze the market in poolConfigurator (simulating previous freeze)
+        poolConfigurator.setReserveFreeze(market, true);
+        // Also mark it as frozen in poolDataProvider (what we query)
+        poolDataProvider.setFrozen(market, true);
 
+        // Try to unfreeze via oracle - should fail
+        ILlamaGuardOracle.RiskParameterUpdate memory unfreezeUpdate = _createUpdate(market, 0, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
+
+        vm.prank(agentHub);
+        vm.expectRevert(HorizonFreezeAgent.ValidationFailed.selector);
+        agent.inject(0, agentContext, unfreezeUpdate);
+
+        // Market should still be frozen
         assertTrue(poolConfigurator.isFrozen(market));
-        assertEq(poolConfigurator.freezeCallCount(), 3);
+    }
+
+    function test_CannotDoubleFreezeViaOracle() public {
+        // First freeze the market
+        ILlamaGuardOracle.RiskParameterUpdate memory freezeUpdate = _createUpdate(market, 1, -100, 100);
+        bytes memory agentContext = _encodeAgentContext(address(poolConfigurator), address(poolDataProvider));
+
+        vm.prank(agentHub);
+        agent.inject(0, agentContext, freezeUpdate);
+
+        // Now mark it as frozen in poolDataProvider (simulating sync)
+        poolDataProvider.setFrozen(market, true);
+
+        // Try to freeze again - should fail validation
+        vm.prank(agentHub);
+        vm.expectRevert(HorizonFreezeAgent.ValidationFailed.selector);
+        agent.inject(0, agentContext, freezeUpdate);
     }
 }

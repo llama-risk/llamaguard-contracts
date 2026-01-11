@@ -4,12 +4,13 @@ pragma solidity ^0.8.26;
 import { BaseHorizonAgent } from "./BaseHorizonAgent.sol";
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
 import { IPoolConfigurator } from "../interfaces/IPoolConfigurator.sol";
+import { IPoolDataProvider } from "../interfaces/IPoolDataProvider.sol";
 
 /**
  * @title HorizonFreezeAgent
  * @notice Agent responsible for freezing markets in the Horizon protocol based on LlamaGuard oracle state
- * @dev Decodes additionalData as (int256 lowerBound, int256 upperBound, uint256 state, uint256 supply)
- *      If state == 1, the reserve is frozen; if state == 0, the reserve is unfrozen
+ * @dev Decodes additionalData as (int256 lowerBound, int256 upperBound, uint256 state)
+ *      If state == 1, the reserve is frozen. Unfreezing requires manual multisig intervention.
  */
 contract HorizonFreezeAgent is BaseHorizonAgent {
     /// @notice State value indicating the reserve should be frozen
@@ -17,6 +18,9 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
 
     /// @notice Emitted when a reserve freeze state is updated
     event ReserveFreezeUpdated(address indexed market, bool frozen, uint256 state);
+
+    /// @notice Error thrown when validation fails during injection
+    error ValidationFailed();
 
     /**
      * @param agentHub The address of the HorizonAgentHub
@@ -26,27 +30,53 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
     /// @inheritdoc BaseHorizonAgent
     function validate(
         uint256,
-        bytes calldata,
+        bytes calldata agentContext,
         ILlamaGuardOracle.RiskParameterUpdate calldata update
     )
         external
-        pure
+        view
         override
         returns (bool)
     {
-        // Decode additionalData to extract state
-        (,, uint256 state,) = _decodeAdditionalData(update.additionalData);
+        (,, uint256 state) = _decodeAdditionalData(update.additionalData);
 
-        // Only validate as true if state indicates a freeze action (state == 1)
-        // or unfreeze action (state == 0)
-        // For now, we accept both freeze and unfreeze states
-        return state <= 1;
+        // Only allow freeze (state == 1), never unfreeze
+        // Unfreezing requires manual multisig intervention
+        if (state != FROZEN_STATE) {
+            return false;
+        }
+
+        // Decode poolDataProvider address from agentContext
+        (, address poolDataProvider) = abi.decode(agentContext, (address, address));
+
+        // Query current reserve config - isFrozen is the 10th return value
+        (,,,,,,,,, bool isFrozen) = IPoolDataProvider(poolDataProvider).getReserveConfigurationData(update.market);
+
+        // Only freeze if NOT already frozen
+        return !isFrozen;
     }
 
     /// @inheritdoc BaseHorizonAgent
     function getMarkets(uint256) external pure override returns (address[] memory) {
         // Markets are determined by the oracle updates, return empty array
         return new address[](0);
+    }
+
+    /// @inheritdoc BaseHorizonAgent
+    /// @dev Overrides base to add re-validation before processing (defense-in-depth)
+    function inject(
+        uint256 agentId,
+        bytes calldata agentContext,
+        ILlamaGuardOracle.RiskParameterUpdate calldata update
+    )
+        external
+        override
+        onlyAgentHub
+    {
+        if (!this.validate(agentId, agentContext, update)) {
+            revert ValidationFailed();
+        }
+        _processUpdate(agentId, agentContext, update);
     }
 
     /// @inheritdoc BaseHorizonAgent
@@ -58,16 +88,16 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
         internal
         override
     {
-        // Decode pool configurator address from agent context
-        address poolConfigurator = abi.decode(agentContext, (address));
+        // Decode pool configurator address from agent context (ignore poolDataProvider - used only in validate)
+        (address poolConfigurator,) = abi.decode(agentContext, (address, address));
 
-        // Decode additionalData: (lowerBound, upperBound, state, supply)
-        (,, uint256 state,) = _decodeAdditionalData(update.additionalData);
+        // Decode additionalData: (lowerBound, upperBound, state)
+        (,, uint256 state) = _decodeAdditionalData(update.additionalData);
 
-        // Determine freeze state: state == 1 means freeze, state == 0 means unfreeze
+        // Determine freeze state: state == 1 means freeze
         bool shouldFreeze = state == FROZEN_STATE;
 
-        // Execute freeze/unfreeze on the pool configurator
+        // Execute freeze on the pool configurator
         IPoolConfigurator(poolConfigurator).setReserveFreeze(update.market, shouldFreeze);
 
         emit ReserveFreezeUpdated(update.market, shouldFreeze, state);
@@ -75,17 +105,16 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
 
     /**
      * @notice Decodes the additionalData bytes into its components
-     * @param additionalData ABI-encoded tuple (int256 lowerBound, int256 upperBound, uint256 state, uint256 supply)
+     * @param additionalData ABI-encoded tuple (int256 lowerBound, int256 upperBound, uint256 state)
      * @return lowerBound The lower bound value
      * @return upperBound The upper bound value
-     * @return state The state value (1 = frozen, 0 = unfrozen)
-     * @return supply The supply value
+     * @return state The state value (1 = frozen)
      */
     function _decodeAdditionalData(bytes calldata additionalData)
         internal
         pure
-        returns (int256 lowerBound, int256 upperBound, uint256 state, uint256 supply)
+        returns (int256 lowerBound, int256 upperBound, uint256 state)
     {
-        (lowerBound, upperBound, state, supply) = abi.decode(additionalData, (int256, int256, uint256, uint256));
+        (lowerBound, upperBound, state) = abi.decode(additionalData, (int256, int256, uint256));
     }
 }
