@@ -549,9 +549,9 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
 
     function _addUpdateToOracle(address marketAddr, uint256 state) internal {
         bytes memory additionalData = abi.encode(int256(-100), int256(100), state);
-        bytes memory newValue = abi.encode(int256(100)); // price
+        bytes memory newV = abi.encode(int256(100)); // price
 
-        oracle.setUpdate(UPDATE_TYPE, marketAddr, block.timestamp, newValue, oracle.updateCounter() + 1, additionalData);
+        oracle.setUpdate(UPDATE_TYPE, marketAddr, block.timestamp, newV, oracle.updateCounter() + 1, additionalData);
     }
 
     function _publishUpdateToOracle(address marketAddr, uint256 state) internal {
