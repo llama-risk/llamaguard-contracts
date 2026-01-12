@@ -19,7 +19,7 @@ interface ILlamaGuardOracle {
         bytes newValue; // ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility
         string referenceId; // External reference, potentially linking to off-chain data
         bytes previousValue; // Previous newValue (price) for historical comparison
-        bytes32 updateTypeHash; // keccak256 hash of update type string for validation
+        string updateType; // Classification of the update for validation purposes
         uint256 updateId; // Unique identifier (equals roundId)
         address market; // Address for market of the parameter update
         bytes additionalData; // ABI-encoded tuple: (uint256 supply, int256 price, uint256 state)
@@ -32,7 +32,7 @@ interface ILlamaGuardOracle {
     struct UpdateInput {
         string referenceId; // External reference ID for the update
         bytes newValue; // ABI-encoded price (int256) - used as the Chainlink round answer
-        bytes32 updateTypeHash; // keccak256 hash of update type string (must be authorized)
+        string updateType; // Classification of the update for validation purposes (must be authorized)
         bytes additionalData; // ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
     }
 
@@ -48,7 +48,7 @@ interface ILlamaGuardOracle {
         bytes newValue,
         bytes previousValue,
         uint256 timestamp,
-        bytes32 indexed updateTypeHash,
+        string indexed updateType,
         uint256 indexed updateId,
         bytes additionalData
     );
@@ -62,8 +62,8 @@ interface ILlamaGuardOracle {
     // ERRORS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Thrown when an unauthorized update type hash is used
-    error UnauthorizedUpdateType(bytes32 updateTypeHash);
+    /// @notice Thrown when an unauthorized update type is used
+    error UnauthorizedUpdateType(string updateType);
 
     /// @notice Thrown when update type string is invalid (empty or too long)
     error InvalidUpdateTypeString(string updateType);
@@ -158,23 +158,6 @@ interface ILlamaGuardOracle {
      */
     function getLatestUpdateByParameterAndMarket(
         string calldata updateType,
-        address market
-    )
-        external
-        view
-        returns (RiskParameterUpdate memory);
-
-    /**
-     * @notice Fetches the most recent update for a specific parameter type by hash
-     * @dev Reverts with InvalidUpdateId(0) if no update exists for the updateTypeHash.
-     *      The input market address will be rewritten to the returned RiskParameterUpdate.market field.
-     * @param updateTypeHash The keccak256 hash of the parameter type identifier
-     * @param market The market address to be written to the returned RiskParameterUpdate.market field
-     * @return The most recent RiskParameterUpdate for the specified updateTypeHash,
-     *         with the market field set to the input market address
-     */
-    function getLatestUpdateByParameterAndMarket(
-        bytes32 updateTypeHash,
         address market
     )
         external

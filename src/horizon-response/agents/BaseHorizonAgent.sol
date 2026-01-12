@@ -2,23 +2,31 @@
 pragma solidity ^0.8.26;
 
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
+import { IPool } from "aave-v3-origin/src/contracts/interfaces/IPool.sol";
 
 /**
  * @title BaseHorizonAgent
- * @notice Abstract base contract for Horizon agents using ILlamaGuardOracle
+ * @notice Abstract base contract for Horizon agents compatible with AgentHub
+ * @dev Uses ILlamaGuardOracle.RiskParameterUpdate for risk parameter updates.
+ *      The struct layout is designed to be ABI-compatible with the AgentHub interface.
  */
 abstract contract BaseHorizonAgent {
+    /// @notice The caller account is not the AgentHub contract
+    error OnlyAgentHub(address account);
+
     /// @notice The address of the AgentHub that can call this agent
     address public immutable AGENT_HUB;
 
-    /// @notice Error thrown when caller is not the AgentHub
-    error OnlyAgentHub(address caller);
+    /// @notice The Aave V3 Pool contract for reserve operations
+    IPool public immutable POOL;
 
     /**
      * @param agentHub The address of the HorizonAgentHub
+     * @param pool The address of the Aave V3 Pool contract
      */
-    constructor(address agentHub) {
+    constructor(address agentHub, address pool) {
         AGENT_HUB = agentHub;
+        POOL = IPool(pool);
     }
 
     modifier onlyAgentHub() {
@@ -26,10 +34,15 @@ abstract contract BaseHorizonAgent {
         _;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AGENT INTERFACE
+    // ═══════════════════════════════════════════════════════════════════════════
+
     /**
-     * @notice Method called by the AgentHub to inject updates from LlamaGuard oracle into the protocol
+     * @notice Inject a risk parameter update into the protocol
+     * @dev Called by AgentHub. ABI-compatible with IBaseAgent.inject()
      * @param agentId The id of the agent for which to do injection
-     * @param agentContext Contains custom config bytes data for the agent (e.g., pool configurator address)
+     * @param agentContext Contains custom config bytes data for the agent
      * @param update Risk parameter update to be injected
      */
     function inject(
@@ -45,7 +58,8 @@ abstract contract BaseHorizonAgent {
     }
 
     /**
-     * @notice Method to perform agent-specific validation for a risk parameter update
+     * @notice Validate a risk parameter update
+     * @dev Called by AgentHub. ABI-compatible with IBaseAgent.validate()
      * @param agentId The id of the agent being validated
      * @param agentContext Contains custom config bytes data for the agent
      * @param update Risk parameter update to be validated
@@ -59,14 +73,41 @@ abstract contract BaseHorizonAgent {
         external
         view
         virtual
-        returns (bool);
+        returns (bool)
+    {
+        return _validateInternal(agentId, agentContext, update);
+    }
 
     /**
-     * @notice Method to get all the market addresses to be used by the agent hub
-     * @param agentId The id of the agent
-     * @return The list of markets for the agent
+     * @notice Get markets for this agent
+     * @dev Called by AgentHub when isMarketsFromAgentEnabled is true.
+     *      Returns all reserves from the Aave V3 Pool.
+     * @return The list of markets for this agent
      */
-    function getMarkets(uint256 agentId) external view virtual returns (address[] memory);
+    function getMarkets(uint256) external view virtual returns (address[] memory) {
+        return POOL.getReservesList();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INTERNAL INTERFACE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @notice Internal validation method to be implemented by inheriting contracts
+     * @param agentId The id of the agent being validated
+     * @param agentContext Contains custom config bytes data for the agent
+     * @param update Risk parameter update to be validated
+     * @return True if the update is valid for the specified agent
+     */
+    function _validateInternal(
+        uint256 agentId,
+        bytes calldata agentContext,
+        ILlamaGuardOracle.RiskParameterUpdate memory update
+    )
+        internal
+        view
+        virtual
+        returns (bool);
 
     /**
      * @notice Processes injection of the risk parameter update for a specific agent

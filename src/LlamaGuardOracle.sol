@@ -107,9 +107,12 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
 
     /// @inheritdoc ILlamaGuardOracle
     function updateLatestRiskRoundData(UpdateInput calldata input) external onlyRole(WRITER_ROLE) {
-        // Validate update type hash
-        if (!_validUpdateTypes[input.updateTypeHash]) {
-            revert UnauthorizedUpdateType(input.updateTypeHash);
+        // Compute hash for internal lookups
+        bytes32 updateTypeHash = keccak256(bytes(input.updateType));
+
+        // Validate update type
+        if (!_validUpdateTypes[updateTypeHash]) {
+            revert UnauthorizedUpdateType(input.updateType);
         }
 
         // Get previous value from history (empty for first update)
@@ -131,21 +134,21 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
             newValue: input.newValue,
             referenceId: input.referenceId,
             previousValue: previousValue,
-            updateTypeHash: input.updateTypeHash,
+            updateType: input.updateType,
             updateId: updateId,
             market: address(0),
             additionalData: input.additionalData
         });
 
         // Update the latest update index for this updateType
-        _latestUpdateIdByType[input.updateTypeHash] = updateId;
+        _latestUpdateIdByType[updateTypeHash] = updateId;
 
         emit ParameterUpdated(
             input.referenceId,
             input.newValue,
             previousValue,
             block.timestamp,
-            input.updateTypeHash,
+            input.updateType,
             updateId,
             input.additionalData
         );
@@ -195,18 +198,6 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         returns (RiskParameterUpdate memory)
     {
         return _getLatestUpdateByParameterAndMarket(keccak256(bytes(updateType)), market);
-    }
-
-    /// @inheritdoc ILlamaGuardOracle
-    function getLatestUpdateByParameterAndMarket(
-        bytes32 updateTypeHash,
-        address market
-    )
-        external
-        view
-        returns (RiskParameterUpdate memory)
-    {
-        return _getLatestUpdateByParameterAndMarket(updateTypeHash, market);
     }
 
     /// @notice Internal implementation for getLatestUpdateByParameterAndMarket

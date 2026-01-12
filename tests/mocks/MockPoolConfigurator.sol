@@ -20,11 +20,27 @@ contract MockPoolConfigurator is IPoolConfigurator {
     /// @notice Last freeze state that was set
     bool public lastFreezeState;
 
+    /// @notice Flag to control whether setReserveFreeze should revert
+    bool public shouldRevert;
+
+    /// @notice Custom revert reason
+    string public revertReason;
+
+    /// @notice Custom error for testing
+    error MockConfiguratorError(string reason);
+
     /// @notice Event emitted when setReserveFreeze is called
     event ReserveFreezeSet(address indexed asset, bool freeze);
 
     /// @inheritdoc IPoolConfigurator
     function setReserveFreeze(address asset, bool freeze) external override {
+        if (shouldRevert) {
+            if (bytes(revertReason).length > 0) {
+                revert MockConfiguratorError(revertReason);
+            }
+            revert("MockPoolConfigurator: reverted");
+        }
+
         frozenReserves[asset] = freeze;
         lastFreezeAsset = asset;
         lastFreezeState = freeze;
@@ -43,5 +59,15 @@ contract MockPoolConfigurator is IPoolConfigurator {
         freezeCallCount = 0;
         lastFreezeAsset = address(0);
         lastFreezeState = false;
+        shouldRevert = false;
+        revertReason = "";
+    }
+
+    /// @notice Set whether setReserveFreeze should revert
+    /// @param _shouldRevert Whether to revert
+    /// @param _revertReason Custom revert reason (optional)
+    function setShouldRevert(bool _shouldRevert, string memory _revertReason) external {
+        shouldRevert = _shouldRevert;
+        revertReason = _revertReason;
     }
 }

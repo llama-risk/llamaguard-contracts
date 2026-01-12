@@ -4,7 +4,11 @@ pragma solidity ^0.8.26;
 import { BaseHorizonAgent } from "./BaseHorizonAgent.sol";
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
 import { IPoolConfigurator } from "../interfaces/IPoolConfigurator.sol";
-import { IPoolDataProvider } from "../interfaces/IPoolDataProvider.sol";
+import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
+import {
+    ReserveConfiguration
+} from "aave-v3-origin/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 /**
  * @title HorizonFreezeAgent
@@ -13,6 +17,9 @@ import { IPoolDataProvider } from "../interfaces/IPoolDataProvider.sol";
  *      If state == 1, the reserve is frozen. Unfreezing requires manual multisig intervention.
  */
 contract HorizonFreezeAgent is BaseHorizonAgent {
+    using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
+    using Address for address;
+
     /// @notice State value indicating the reserve should be frozen
     uint256 public constant FROZEN_STATE = 1;
 
@@ -24,16 +31,33 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
 
     /**
      * @param agentHub The address of the HorizonAgentHub
+     * @param pool The address of the Aave V3 Pool contract
      */
-    constructor(address agentHub) BaseHorizonAgent(agentHub) { }
+    constructor(address agentHub, address pool) BaseHorizonAgent(agentHub, pool) { }
 
-    /// @inheritdoc BaseHorizonAgent
-    function validate(
-        uint256,
+    /// @dev Overrides base inject to add re-validation before processing (defense-in-depth)
+    function inject(
+        uint256 agentId,
         bytes calldata agentContext,
         ILlamaGuardOracle.RiskParameterUpdate calldata update
     )
         external
+        override
+        onlyAgentHub
+    {
+        if (!_validateInternal(agentId, agentContext, update)) {
+            revert ValidationFailed();
+        }
+        _processUpdate(agentId, agentContext, update);
+    }
+
+    /// @inheritdoc BaseHorizonAgent
+    function _validateInternal(
+        uint256,
+        bytes calldata,
+        ILlamaGuardOracle.RiskParameterUpdate memory update
+    )
+        internal
         view
         override
         returns (bool)
@@ -46,37 +70,11 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
             return false;
         }
 
-        // Decode poolDataProvider address from agentContext
-        (, address poolDataProvider) = abi.decode(agentContext, (address, address));
-
-        // Query current reserve config - isFrozen is the 10th return value
-        (,,,,,,,,, bool isFrozen) = IPoolDataProvider(poolDataProvider).getReserveConfigurationData(update.market);
+        // Query current reserve config using POOL.getConfiguration()
+        bool isFrozen = POOL.getConfiguration(update.market).getFrozen();
 
         // Only freeze if NOT already frozen
         return !isFrozen;
-    }
-
-    /// @inheritdoc BaseHorizonAgent
-    function getMarkets(uint256) external pure override returns (address[] memory) {
-        // Markets are determined by the oracle updates, return empty array
-        return new address[](0);
-    }
-
-    /// @inheritdoc BaseHorizonAgent
-    /// @dev Overrides base to add re-validation before processing (defense-in-depth)
-    function inject(
-        uint256 agentId,
-        bytes calldata agentContext,
-        ILlamaGuardOracle.RiskParameterUpdate calldata update
-    )
-        external
-        override
-        onlyAgentHub
-    {
-        if (!this.validate(agentId, agentContext, update)) {
-            revert ValidationFailed();
-        }
-        _processUpdate(agentId, agentContext, update);
     }
 
     /// @inheritdoc BaseHorizonAgent
@@ -88,8 +86,8 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
         internal
         override
     {
-        // Decode pool configurator address from agent context (ignore poolDataProvider - used only in validate)
-        (address poolConfigurator,) = abi.decode(agentContext, (address, address));
+        // Decode pool configurator address from agent context
+        address poolConfigurator = abi.decode(agentContext, (address));
 
         // Decode additionalData: (lowerBound, upperBound, state)
         (,, uint256 state) = _decodeAdditionalData(update.additionalData);
@@ -97,8 +95,10 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
         // Determine freeze state: state == 1 means freeze
         bool shouldFreeze = state == FROZEN_STATE;
 
-        // Execute freeze on the pool configurator
-        IPoolConfigurator(poolConfigurator).setReserveFreeze(update.market, shouldFreeze);
+        // Execute freeze on the pool configurator using functionCall pattern
+        poolConfigurator.functionCall(
+            abi.encodeWithSelector(IPoolConfigurator.setReserveFreeze.selector, update.market, shouldFreeze)
+        );
 
         emit ReserveFreezeUpdated(update.market, shouldFreeze, state);
     }
@@ -110,7 +110,7 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
      * @return upperBound The upper bound value
      * @return state The state value (1 = frozen)
      */
-    function _decodeAdditionalData(bytes calldata additionalData)
+    function _decodeAdditionalData(bytes memory additionalData)
         internal
         pure
         returns (int256 lowerBound, int256 upperBound, uint256 state)
