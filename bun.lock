@@ -5,6 +5,7 @@
     "": {
       "name": "@prb/foundry-template",
       "dependencies": {
+        "@aave-dao/aave-v3-origin": "^3.6.0",
         "@chainlink/contracts": "1.4.0",
         "@openzeppelin/contracts": "5.3.0",
         "@openzeppelin/contracts-upgradeable-v5": "npm:@openzeppelin/contracts-upgradeable@5.1.0",
@@ -20,6 +21,8 @@
     },
   },
   "packages": {
+    "@aave-dao/aave-v3-origin": ["@aave-dao/aave-v3-origin@3.6.0", "", { "dependencies": { "@bgd-labs/solidity-utils": "1.1.2" } }, "sha512-TwK/TpTZGArN0G3AE+0NoafsaXc7BiXdZhYuxcD+8A5OjIGolp0cqu5FZcTDLo/pbavJvMU5v0php/LEJiJ/cQ=="],
+
     "@arbitrum/nitro-contracts": ["@arbitrum/nitro-contracts@3.0.0", "", { "dependencies": { "@offchainlabs/upgrade-executor": "1.1.0-beta.0", "@openzeppelin/contracts": "4.7.3", "@openzeppelin/contracts-upgradeable": "4.7.3", "patch-package": "^6.4.7", "solady": "0.0.182" } }, "sha512-7VzNW9TxvrX9iONDDsi7AZlEUPa6z+cjBkB4Mxlnog9VQZAapRC3CdRXyUzHnBYmUhRzyNJdyxkWPw59QGcLmA=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.23.5", "", { "dependencies": { "@babel/highlight": "^7.23.4", "chalk": "^2.4.2" } }, "sha512-CgH3s1a96LipHCmSUmYFPwY7MNx8C3avkq7i4Wl3cfa662ldtUe4VM1TPXX70pfmrlWTb6jLqTYrZyT2ZTJBgA=="],
@@ -29,6 +32,8 @@
     "@babel/highlight": ["@babel/highlight@7.23.4", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.22.20", "chalk": "^2.4.2", "js-tokens": "^4.0.0" } }, "sha512-acGdbYSfp2WheJoJm/EBBBLh/ID8KDc64ISZ9DYtBmC8/Q204PZJLHyzeB5qMzJ5trcOkybd78M4x2KWsUq++A=="],
 
     "@babel/runtime": ["@babel/runtime@7.28.4", "", {}, "sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ=="],
+
+    "@bgd-labs/solidity-utils": ["@bgd-labs/solidity-utils@1.1.2", "", { "dependencies": { "@openzeppelin/contracts": "^5.1.0", "@openzeppelin/contracts-upgradeable": "^5.1.0" } }, "sha512-GgKwrjgdfnd9yKiWX1LDWysbVIyw/HTvqewq+4I2FAJXJt7AdUgSOCSi/cJi4dymsQmE1u/zgXHSeFH5fI+XsA=="],
 
     "@bytecodealliance/preview2-shim": ["@bytecodealliance/preview2-shim@0.17.2", "", {}, "sha512-mNm/lblgES8UkVle8rGImXOz4TtL3eU3inHay/7TVchkKrb/lgcVvTK0+VAw8p5zQ0rgQsXm1j5dOlAAd+MeoA=="],
 
@@ -581,6 +586,8 @@
     "@babel/code-frame/chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ=="],
 
     "@babel/highlight/chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ=="],
+
+    "@bgd-labs/solidity-utils/@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@5.1.0", "", { "peerDependencies": { "@openzeppelin/contracts": "5.1.0" } }, "sha512-AIElwP5Ck+cslNE+Hkemf5SxjJoF4wBvvjxc27Rp+9jaPs/CLIaUBMYe1FNzhdiN0cYuwGRmYaRHmmntuiju4Q=="],
 
     "@chainlink/contracts/@openzeppelin/contracts": ["@openzeppelin/contracts@4.9.6", "", {}, "sha512-xSmezSupL+y9VkHZJGDoCBpmnB2ogM13ccaYDWqJTfS3dbuHkgjuwDFUmaFauBCboQMGB/S5UqUl2y54X99BmA=="],
 
