@@ -3,10 +3,10 @@ pragma solidity >=0.8.26 <0.9.0;
 
 import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
-import { DeployParameterRegistry } from "../../script/DeployParameterRegistry.s.sol";
-import { DeployMainnet } from "../../script/DeployMainnet.s.sol";
-import { DeployConfig } from "../../script/DeployConfig.sol";
-import { AssetConfigs } from "../../script/AssetConfigs.sol";
+import { DeployParameterRegistry } from "../../script/parameter-registry/DeployParameterRegistry.s.sol";
+import { DeployMainnet } from "../../script/parameter-registry/DeployMainnet.s.sol";
+import { DeployConfig } from "../../script/parameter-registry/DeployConfig.sol";
+import { AssetConfigs } from "../../script/parameter-registry/AssetConfigs.sol";
 import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
 
 /// @title ParameterRegistryDeploymentTest
@@ -73,11 +73,11 @@ contract ParameterRegistryDeploymentTest is Test {
         assertEq(registry.pendingOwner(), pendingOwner, "Pending owner should be set");
 
         // Verify assets are configured
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getMainnetAssets();
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (assets[i].oracle != address(0)) {
-                assertTrue(registry.assetExists(assets[i].assetAddress), "Asset should exist");
-                assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName, "Asset name should match");
+        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getMainnetAssets();
+        for (uint256 i = 0; i < a_.length; i++) {
+            if (a_[i].oracle != address(0)) {
+                assertTrue(registry.assetExists(a_[i].assetAddress), "Asset should exist");
+                assertEq(registry.getAssetName(a_[i].assetAddress), a_[i].assetName, "Asset name should match");
             }
         }
     }
@@ -105,12 +105,12 @@ contract ParameterRegistryDeploymentTest is Test {
         }
 
         // Verify Sepolia assets
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getSepoliaAssets();
-        assertTrue(assets.length > 0, "Should have Sepolia assets");
+        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getSepoliaAssets();
+        assertTrue(a_.length > 0, "Should have Sepolia assets");
 
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (assets[i].oracle != address(0)) {
-                assertTrue(registry.assetExists(assets[i].assetAddress), "Asset should exist");
+        for (uint256 i = 0; i < a_.length; i++) {
+            if (a_[i].oracle != address(0)) {
+                assertTrue(registry.assetExists(a_[i].assetAddress), "Asset should exist");
             }
         }
     }
@@ -123,12 +123,12 @@ contract ParameterRegistryDeploymentTest is Test {
         assertNotEq(address(registry), address(0), "Registry should be deployed");
 
         // Verify Anvil mock assets
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getAnvilAssets();
-        assertEq(assets.length, 3, "Anvil should have 3 mock assets");
+        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getAnvilAssets();
+        assertEq(a_.length, 3, "Anvil should have 3 mock assets");
 
-        for (uint256 i = 0; i < assets.length; i++) {
-            assertTrue(registry.assetExists(assets[i].assetAddress), "Mock asset should exist");
-            assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName, "Mock asset name should match");
+        for (uint256 i = 0; i < a_.length; i++) {
+            assertTrue(registry.assetExists(a_[i].assetAddress), "Mock asset should exist");
+            assertEq(registry.getAssetName(a_[i].assetAddress), a_[i].assetName, "Mock asset name should match");
         }
     }
 
@@ -379,17 +379,17 @@ contract ParameterRegistryDeploymentTest is Test {
         vm.chainId(1); // Set chain ID for mainnet deployment
         ParameterRegistry registry = deployMainnet.deployOnly();
 
-        address[] memory assets = new address[](5);
+        address[] memory a_ = new address[](5);
         for (uint256 i = 0; i < 5; i++) {
-            assets[i] = makeAddr(string(abi.encodePacked("asset", i)));
+            a_[i] = makeAddr(string(abi.encodePacked("asset", i)));
         }
 
         vm.startPrank(deployer);
 
         // Configure multiple assets
-        for (uint256 i = 0; i < assets.length; i++) {
+        for (uint256 i = 0; i < a_.length; i++) {
             registry.setParametersForAsset(
-                assets[i],
+                a_[i],
                 string(abi.encodePacked("Asset ", i)),
                 makeAddr(string(abi.encodePacked("oracle", i))),
                 1000 + uint64(i * 100),
@@ -404,9 +404,9 @@ contract ParameterRegistryDeploymentTest is Test {
         }
 
         // Verify all assets exist
-        for (uint256 i = 0; i < assets.length; i++) {
-            assertTrue(registry.assetExists(assets[i]), "Asset should exist");
-            assertEq(registry.getAssetName(assets[i]), string(abi.encodePacked("Asset ", i)), "Asset name should match");
+        for (uint256 i = 0; i < a_.length; i++) {
+            assertTrue(registry.assetExists(a_[i]), "Asset should exist");
+            assertEq(registry.getAssetName(a_[i]), string(abi.encodePacked("Asset ", i)), "Asset name should match");
         }
 
         vm.stopPrank();

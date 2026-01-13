@@ -1,6 +1,6 @@
 {
-  "name": "@llamarisk/parameter-registry",
-  "description": "Parameter registry for SmartNav",
+  "name": "@llamarisk/llamaguard-contracts",
+  "description": "LlamaGuard oracle contracts for on-chain risk parameter delivery",
   "version": "1.0.0",
   "author": {
     "name": "zekiblue",
@@ -13,7 +13,8 @@
   "devDependencies": {
     "forge-std": "github:foundry-rs/forge-std#v1.9.7",
     "prettier": "^3.5",
-    "solhint": "^5.1"
+    "solhint": "^5.1",
+    "prettier-plugin-solidity": "^2.2.0"
   },
   "keywords": [
     "blockchain",
