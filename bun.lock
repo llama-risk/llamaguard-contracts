@@ -5,7 +5,7 @@
     "": {
       "name": "@prb/foundry-template",
       "dependencies": {
-        "@aave-dao/aave-v3-origin": "^3.6.0",
+        "@aave-dao/aave-v3-horizon": "github:aave/aave-v3-horizon",
         "@chainlink/contracts": "1.4.0",
         "@openzeppelin/contracts": "5.3.0",
         "@openzeppelin/contracts-upgradeable-v5": "npm:@openzeppelin/contracts-upgradeable@5.1.0",
@@ -21,7 +21,7 @@
     },
   },
   "packages": {
-    "@aave-dao/aave-v3-origin": ["@aave-dao/aave-v3-origin@3.6.0", "", { "dependencies": { "@bgd-labs/solidity-utils": "1.1.2" } }, "sha512-TwK/TpTZGArN0G3AE+0NoafsaXc7BiXdZhYuxcD+8A5OjIGolp0cqu5FZcTDLo/pbavJvMU5v0php/LEJiJ/cQ=="],
+    "@aave-dao/aave-v3-horizon": ["@aave-dao/aave-v3-origin@github:aave/aave-v3-horizon#6e2a51e", { "dependencies": { "@bgd-labs/solidity-utils": "1.1.2", "catapulta-verify": "^1.3.0" } }, "aave-aave-v3-horizon-6e2a51e"],
 
     "@arbitrum/nitro-contracts": ["@arbitrum/nitro-contracts@3.0.0", "", { "dependencies": { "@offchainlabs/upgrade-executor": "1.1.0-beta.0", "@openzeppelin/contracts": "4.7.3", "@openzeppelin/contracts-upgradeable": "4.7.3", "patch-package": "^6.4.7", "solady": "0.0.182" } }, "sha512-7VzNW9TxvrX9iONDDsi7AZlEUPa6z+cjBkB4Mxlnog9VQZAapRC3CdRXyUzHnBYmUhRzyNJdyxkWPw59QGcLmA=="],
 
@@ -228,6 +228,8 @@
     "cacheable-request": ["cacheable-request@10.2.14", "", { "dependencies": { "@types/http-cache-semantics": "^4.0.2", "get-stream": "^6.0.1", "http-cache-semantics": "^4.1.1", "keyv": "^4.5.3", "mimic-response": "^4.0.0", "normalize-url": "^8.0.0", "responselike": "^3.0.0" } }, "sha512-zkDT5WAF4hSSoUgyfg5tFIxz8XQK+25W/TLVojJTMKBaxevLBBtLxgqguAuVQB8PVW79FVjHcU+GJ9tVbDZ9mQ=="],
 
     "callsites": ["callsites@3.1.0", "", {}, "sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ=="],
+
+    "catapulta-verify": ["catapulta-verify@1.4.3", "", { "bin": { "catapulta-verify": "out/index.mjs" } }, "sha512-9FPHSOKL/hRm5L62YEj35dnXq+YikU/6u6XWPqZ5nG3x95Ouwk++3F/ffSt1n4HIQXusmYHZvEOx2GUKd6tQjA=="],
 
     "chai": ["chai@4.5.0", "", { "dependencies": { "assertion-error": "^1.1.0", "check-error": "^1.0.3", "deep-eql": "^4.1.3", "get-func-name": "^2.0.2", "loupe": "^2.3.6", "pathval": "^1.1.1", "type-detect": "^4.1.0" } }, "sha512-RITGBfijLkBddZvnn8jdqoTypxvqbOLYQkGGxXzeFjVHvudaPw0HNFD9x928/eUwYWd2dPCugVqspGALTZZQKw=="],
 

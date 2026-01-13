@@ -1,20 +1,20 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity ^0.8.27;
 
 import { BaseHorizonAgent } from "./BaseHorizonAgent.sol";
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
 import { IPoolConfigurator } from "../interfaces/IPoolConfigurator.sol";
-import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
+import { DataTypes } from "aave-v3-horizon/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {
     ReserveConfiguration
-} from "aave-v3-origin/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol";
+} from "aave-v3-horizon/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 /**
  * @title HorizonFreezeAgent
  * @notice Agent responsible for freezing markets in the Horizon protocol based on LlamaGuard oracle state
- * @dev Decodes additionalData as (int256 lowerBound, int256 upperBound, uint256 state)
- *      If state == 1, the reserve is frozen. Unfreezing requires manual multisig intervention.
+ * @dev Decodes additionalData as (int256 lowerBound, int256 upperBound, uint256 freezeState)
+ *      If freezeState == 1, the reserve is frozen. Unfreezing requires manual multisig intervention.
  */
 contract HorizonFreezeAgent is BaseHorizonAgent {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
@@ -24,7 +24,7 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
     uint256 public constant FROZEN_STATE = 1;
 
     /// @notice Emitted when a reserve freeze state is updated
-    event ReserveFreezeUpdated(address indexed market, bool frozen, uint256 state);
+    event ReserveFreezeUpdated(address indexed market, bool frozen, uint256 freezeState);
 
     /// @notice Error thrown when validation fails during injection
     error ValidationFailed();
@@ -62,11 +62,11 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
         override
         returns (bool)
     {
-        (,, uint256 state) = _decodeAdditionalData(update.additionalData);
+        (,, uint256 newFreezeState) = _decodeAdditionalData(update.additionalData);
 
-        // Only allow freeze (state == 1), never unfreeze
+        // Only allow freeze (freezeState == 1), never unfreeze
         // Unfreezing requires manual multisig intervention
-        if (state != FROZEN_STATE) {
+        if (newFreezeState != FROZEN_STATE) {
             return false;
         }
 
@@ -89,32 +89,32 @@ contract HorizonFreezeAgent is BaseHorizonAgent {
         // Decode pool configurator address from agent context
         address poolConfigurator = abi.decode(agentContext, (address));
 
-        // Decode additionalData: (lowerBound, upperBound, state)
-        (,, uint256 state) = _decodeAdditionalData(update.additionalData);
+        // Decode additionalData: (lowerBound, upperBound, freezeState)
+        (,, uint256 newFreezeState) = _decodeAdditionalData(update.additionalData);
 
-        // Determine freeze state: state == 1 means freeze
-        bool shouldFreeze = state == FROZEN_STATE;
+        // Determine freeze state: freezeState == 1 means freeze
+        bool shouldFreeze = newFreezeState == FROZEN_STATE;
 
         // Execute freeze on the pool configurator using functionCall pattern
         poolConfigurator.functionCall(
             abi.encodeWithSelector(IPoolConfigurator.setReserveFreeze.selector, update.market, shouldFreeze)
         );
 
-        emit ReserveFreezeUpdated(update.market, shouldFreeze, state);
+        emit ReserveFreezeUpdated(update.market, shouldFreeze, newFreezeState);
     }
 
     /**
      * @notice Decodes the additionalData bytes into its components
-     * @param additionalData ABI-encoded tuple (int256 lowerBound, int256 upperBound, uint256 state)
+     * @param additionalData ABI-encoded tuple (int256 lowerBound, int256 upperBound, uint256 freezeState)
      * @return lowerBound The lower bound value
      * @return upperBound The upper bound value
-     * @return state The state value (1 = frozen)
+     * @return freezeState The freeze state value (1 = frozen)
      */
     function _decodeAdditionalData(bytes memory additionalData)
         internal
         pure
-        returns (int256 lowerBound, int256 upperBound, uint256 state)
+        returns (int256 lowerBound, int256 upperBound, uint256 freezeState)
     {
-        (lowerBound, upperBound, state) = abi.decode(additionalData, (int256, int256, uint256));
+        (lowerBound, upperBound, freezeState) = abi.decode(additionalData, (int256, int256, uint256));
     }
 }

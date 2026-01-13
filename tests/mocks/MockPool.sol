@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
+import { DataTypes } from "aave-v3-horizon/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {
     ReserveConfiguration
-} from "aave-v3-origin/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol";
+} from "aave-v3-horizon/src/contracts/protocol/libraries/configuration/ReserveConfiguration.sol";
 
 /**
  * @title MockPool

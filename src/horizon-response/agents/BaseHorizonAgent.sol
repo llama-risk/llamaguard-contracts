@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity ^0.8.27;
 
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
-import { IPool } from "aave-v3-origin/src/contracts/interfaces/IPool.sol";
+import { IPool } from "aave-v3-horizon/src/contracts/interfaces/IPool.sol";
 
 /**
  * @title BaseHorizonAgent
@@ -13,6 +13,9 @@ import { IPool } from "aave-v3-origin/src/contracts/interfaces/IPool.sol";
 abstract contract BaseHorizonAgent {
     /// @notice The caller account is not the AgentHub contract
     error OnlyAgentHub(address account);
+
+    /// @notice The provided address is zero
+    error ZeroAddress();
 
     /// @notice The address of the AgentHub that can call this agent
     address public immutable AGENT_HUB;
@@ -25,6 +28,8 @@ abstract contract BaseHorizonAgent {
      * @param pool The address of the Aave V3 Pool contract
      */
     constructor(address agentHub, address pool) {
+        if (agentHub == address(0)) revert ZeroAddress();
+        if (pool == address(0)) revert ZeroAddress();
         AGENT_HUB = agentHub;
         POOL = IPool(pool);
     }
