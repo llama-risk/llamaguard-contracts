@@ -21,7 +21,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     mapping(bytes32 updateTypeHash => bool isValid) private _validUpdateTypes;
 
     /// @notice Mapping from updateId (roundId) to RiskParameterUpdate struct
-    mapping(uint256 => RiskParameterUpdate) public updateHistory;
+    mapping(uint256 updateId => RiskParameterUpdate update) public updateHistory;
 
     /// @notice Mapping to track latest updateId for each updateType
     /// @dev Enables O(1) lookups via getLatestUpdateByParameterAndMarket()

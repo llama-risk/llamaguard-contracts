@@ -17,9 +17,9 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/inte
  * Do NOT deploy directly - it has no access control on its own.
  */
 contract AggregatorV3 is AggregatorV3Interface {
-    uint8 private _decimals;
+    uint8 private immutable _decimals;
     string private _description;
-    uint256 private _version;
+    uint256 private immutable _version;
 
     /// @notice Structure for storing round data
     struct RoundData {

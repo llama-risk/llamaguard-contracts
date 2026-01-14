@@ -38,7 +38,7 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
 
     function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
         ILlamaGuardOracle newLlamaguardOracle = ILlamaGuardOracle(newLlamaGuardOracle);
-        if (newLlamaguardOracle.hasWriteAccess(address(this)) == false) revert InvalidLlamaGuardOracle();
+        if (!newLlamaguardOracle.hasWriteAccess(address(this))) revert InvalidLlamaGuardOracle();
         llamaguardOracle = newLlamaguardOracle;
     }
 
