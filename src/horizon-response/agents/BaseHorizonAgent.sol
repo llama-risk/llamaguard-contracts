@@ -28,14 +28,14 @@ abstract contract BaseHorizonAgent {
      * @param pool The address of the Aave V3 Pool contract
      */
     constructor(address agentHub, address pool) {
-        if (agentHub == address(0)) revert ZeroAddress();
-        if (pool == address(0)) revert ZeroAddress();
+        require(agentHub != address(0), ZeroAddress());
+        require(pool != address(0), ZeroAddress());
         AGENT_HUB = agentHub;
         POOL = IPool(pool);
     }
 
     modifier onlyAgentHub() {
-        if (msg.sender != AGENT_HUB) revert OnlyAgentHub(msg.sender);
+        require(msg.sender == AGENT_HUB, OnlyAgentHub(msg.sender));
         _;
     }
 

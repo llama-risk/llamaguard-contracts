@@ -70,15 +70,11 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @param updateType The update type string to add
     function _addUpdateType(string memory updateType) internal {
         // Validate string length
-        if (bytes(updateType).length == 0 || bytes(updateType).length > 64) {
-            revert InvalidUpdateTypeString(updateType);
-        }
+        require(bytes(updateType).length != 0 && bytes(updateType).length <= 64, InvalidUpdateTypeString(updateType));
 
         // Check for duplicates
         bytes32 typeHash = keccak256(bytes(updateType));
-        if (_validUpdateTypes[typeHash]) {
-            revert UpdateTypeAlreadyExists(updateType);
-        }
+        require(!_validUpdateTypes[typeHash], UpdateTypeAlreadyExists(updateType));
 
         // Add the new type
         _validUpdateTypes[typeHash] = true;
@@ -90,12 +86,8 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @notice Internal helper to add an authorized market
     /// @param market The market address to authorize
     function _addAuthorizedMarket(address market) internal {
-        if (market == address(0)) {
-            revert InvalidMarketAddress(market);
-        }
-        if (_authorizedMarkets[market]) {
-            revert MarketAlreadyAuthorized(market);
-        }
+        require(market != address(0), InvalidMarketAddress(market));
+        require(!_authorizedMarkets[market], MarketAlreadyAuthorized(market));
 
         _authorizedMarkets[market] = true;
         emit AuthorizedMarketAdded(market);
@@ -111,9 +103,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         bytes32 updateTypeHash = keccak256(bytes(input.updateType));
 
         // Validate update type
-        if (!_validUpdateTypes[updateTypeHash]) {
-            revert UnauthorizedUpdateType(input.updateType);
-        }
+        require(_validUpdateTypes[updateTypeHash], UnauthorizedUpdateType(input.updateType));
 
         // Get previous value from history (empty for first update)
         bytes memory previousValue = updateHistory[this.getLatestRoundId()].newValue;
@@ -166,14 +156,10 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     /// @inheritdoc ILlamaGuardOracle
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory) {
         uint80 latestRound = this.getLatestRoundId();
-        if (updateId == 0 || updateId > latestRound) {
-            revert InvalidUpdateId(updateId);
-        }
+        require(updateId != 0 && updateId <= latestRound, InvalidUpdateId(updateId));
 
         RiskParameterUpdate memory update = updateHistory[updateId];
-        if (update.timestamp == 0) {
-            revert InvalidUpdateId(updateId);
-        }
+        require(update.timestamp != 0, InvalidUpdateId(updateId));
 
         return update;
     }
@@ -215,9 +201,7 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
         uint256 updateId = _latestUpdateIdByType[updateTypeHash];
 
         // Strict validation: revert if no update exists
-        if (updateId == 0) {
-            revert InvalidUpdateId(updateId);
-        }
+        require(updateId != 0, InvalidUpdateId(updateId));
 
         RiskParameterUpdate memory update = updateHistory[updateId];
         // Rewrite the input market to the returned RiskParameterUpdate
@@ -241,12 +225,8 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
 
     /// @inheritdoc ILlamaGuardOracle
     function removeAuthorizedMarket(address market) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (market == address(0)) {
-            revert InvalidMarketAddress(market);
-        }
-        if (!_authorizedMarkets[market]) {
-            revert MarketNotFound(market);
-        }
+        require(market != address(0), InvalidMarketAddress(market));
+        require(_authorizedMarkets[market], MarketNotFound(market));
 
         _authorizedMarkets[market] = false;
         emit AuthorizedMarketRemoved(market);

@@ -22,7 +22,7 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
         Ownable(msg.sender)
         AbstractCreReceiver(workflowId, expectedForwarder, expectedAuthor, expectedWorkflowName)
     {
-        if (llamaGuardOracleAddress == address(0)) revert InvalidLlamaGuardOracle();
+        require(llamaGuardOracleAddress != address(0), InvalidLlamaGuardOracle());
 
         llamaguardOracle = ILlamaGuardOracle(llamaGuardOracleAddress);
         description = _description;
@@ -38,7 +38,7 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
 
     function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
         ILlamaGuardOracle newLlamaguardOracle = ILlamaGuardOracle(newLlamaGuardOracle);
-        if (!newLlamaguardOracle.hasWriteAccess(address(this))) revert InvalidLlamaGuardOracle();
+        require(newLlamaguardOracle.hasWriteAccess(address(this)), InvalidLlamaGuardOracle());
         llamaguardOracle = newLlamaguardOracle;
     }
 

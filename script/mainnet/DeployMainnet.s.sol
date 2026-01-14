@@ -54,7 +54,7 @@ contract DeployMainnet is BaseScript {
     /// @notice Deploy all oracles for Mainnet based on configuration
     /// @return deployed Struct containing all deployed contract addresses
     function run() public broadcast returns (DeployedContracts memory deployed) {
-        if (block.chainid != 1) revert NotOnMainnet();
+        require(block.chainid == 1, NotOnMainnet());
 
         bool deployOracles = config.getDeploymentFlags();
 
@@ -81,7 +81,7 @@ contract DeployMainnet is BaseScript {
     /// @param index The index of the oracle configuration to deploy
     /// @return deployment The oracle deployment addresses
     function deploySingleOracle(uint256 index) public broadcast returns (OracleDeployment memory deployment) {
-        if (block.chainid != 1) revert NotOnMainnet();
+        require(block.chainid == 1, NotOnMainnet());
 
         MainnetDeployConfig.OracleDeploymentConfig memory oracleConfig = config.getOracleConfigByIndex(index);
 

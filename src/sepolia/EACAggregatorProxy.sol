@@ -28,7 +28,7 @@ contract EACAggregatorProxy is Ownable, AggregatorV3Interface {
      * @param _aggregator Address of the initial aggregator implementation
      */
     constructor(address _aggregator) Ownable(msg.sender) {
-        if (_aggregator == address(0)) revert InvalidAggregator();
+        require(_aggregator != address(0), InvalidAggregator());
         aggregator = AggregatorV3Interface(_aggregator);
     }
 
@@ -37,7 +37,7 @@ contract EACAggregatorProxy is Ownable, AggregatorV3Interface {
      * @param _aggregator Address of the new aggregator
      */
     function proposeAggregator(address _aggregator) external onlyOwner {
-        if (_aggregator == address(0)) revert InvalidAggregator();
+        require(_aggregator != address(0), InvalidAggregator());
         address oldAggregator = address(aggregator);
         aggregator = AggregatorV3Interface(_aggregator);
         emit AggregatorUpdated(oldAggregator, _aggregator);

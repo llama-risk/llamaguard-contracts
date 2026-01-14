@@ -64,7 +64,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy everything for Sepolia based on configuration
     /// @return deployed Struct containing all deployed contract addresses
     function run() public broadcast returns (DeployedContracts memory deployed) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         (bool deployRegistry, bool deployOracles, bool configureAssets, bool seedOracles) = config.getDeploymentFlags();
 
@@ -97,7 +97,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy only ParameterRegistry
     /// @return parameterRegistry The deployed registry
     function deployRegistryOnly() public broadcast returns (ParameterRegistry parameterRegistry) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         OracleDeployment[] memory emptyOracles;
         return _deployParameterRegistry(true, emptyOracles);
@@ -106,7 +106,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy only oracles (without ParameterRegistry)
     /// @return oracles Array of oracle deployments
     function deployOraclesOnly() public broadcast returns (OracleDeployment[] memory oracles) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         (,,, bool seedOracles) = config.getDeploymentFlags();
         return _deployAllOracles(seedOracles);
@@ -116,7 +116,7 @@ contract DeploySepolia is BaseScript {
     /// @param index The index of the oracle configuration to deploy
     /// @return deployment The oracle deployment addresses
     function deploySingleOracle(uint256 index) public broadcast returns (OracleDeployment memory deployment) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         SepoliaDeployConfig.OracleDeploymentConfig memory oracleConfig = config.getOracleConfigByIndex(index);
         (,,, bool seedOracles) = config.getDeploymentFlags();
@@ -137,10 +137,10 @@ contract DeploySepolia is BaseScript {
     /// @notice Seed data on existing deployed oracles
     /// @param proxyAddresses Array of LlamaGuardOracleProxy addresses to seed
     function seedExistingOracles(address[] calldata proxyAddresses) public broadcast {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         SepoliaDeployConfig.OracleDeploymentConfig[] memory configs = config.getOracleConfigs();
-        if (proxyAddresses.length != configs.length) revert ArrayLengthMismatch();
+        require(proxyAddresses.length == configs.length, ArrayLengthMismatch());
 
         console2.log("");
         console2.log("-----------------------------------------");

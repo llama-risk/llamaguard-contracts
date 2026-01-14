@@ -91,7 +91,7 @@ contract AggregatorV3 is AggregatorV3Interface {
         override
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
-        if (_roundData[_roundId].roundId == 0) revert RoundNotFound(_roundId);
+        require(_roundData[_roundId].roundId != 0, RoundNotFound(_roundId));
 
         RoundData memory data = _roundData[_roundId];
         return (data.roundId, data.answer, data.startedAt, data.updatedAt, data.answeredInRound);
