@@ -5,7 +5,7 @@ import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { LlamaGuardOracle } from "../../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../../src/LlamaGuardOracleProxy.sol";
 import { ILlamaGuardOracle } from "../../src/interfaces/ILlamaGuardOracle.sol";
-import { EACAggregatorProxy } from "../../src/sepolia/EACAggregatorProxy.sol";
+import { EACAggregatorProxy } from "./EACAggregatorProxy.sol";
 import { BaseScript } from "../Base.s.sol";
 import { SepoliaDeployConfig } from "./SepoliaDeployConfig.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";

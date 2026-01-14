@@ -2,9 +2,9 @@
 pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
-import { EACAggregatorProxy } from "../src/sepolia/EACAggregatorProxy.sol";
-import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
+import { EACAggregatorProxy } from "../../../script/sepolia/EACAggregatorProxy.sol";
+import { LlamaGuardOracle } from "../../../src/LlamaGuardOracle.sol";
+import { ILlamaGuardOracle } from "../../../src/interfaces/ILlamaGuardOracle.sol";
 
 contract EACAggregatorProxyTest is Test {
     EACAggregatorProxy internal proxy;
