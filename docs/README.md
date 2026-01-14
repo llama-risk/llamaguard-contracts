@@ -17,6 +17,9 @@ oracle infrastructure and Aave Horizon markets.
 
 - **[assets/data-flow-diagram.png](./assets/data-flow-diagram.png)** — Visual representation of the system architecture.
 
+- **[llamaguardnav-v3-cre-overview.md](./llamaguardnav-v3-cre-overview.md)** — Overview of CRE workflow architecture,
+  bounding methodology, and step-by-step execution process for pushing bounded NAV values onchain.
+
 ### Contract Reference
 
 #### Oracle Contracts
@@ -73,12 +76,13 @@ oracle infrastructure and Aave Horizon markets.
 
 ```
 docs/
-├── README.md                      # This file
-├── architecture.md                # System design and data flows
-├── access-control-analysis.md     # Security and permissions analysis
-├── operational_playbook.md        # Deployment and operations guide
+├── README.md                           # This file
+├── architecture.md                     # System design and data flows
+├── access-control-analysis.md          # Security and permissions analysis
+├── llamaguardnav-v3-cre-overview.md    # CRE workflow and bounding methodology
+├── operational_playbook.md             # Deployment and operations guide
 ├── assets/
-│   └── data-flow-diagram.png      # Visual architecture diagram
+│   └── data-flow-diagram.png           # Visual architecture diagram
 └── contracts/
     ├── oracle/
     │   ├── LlamaGuardOracle.md
