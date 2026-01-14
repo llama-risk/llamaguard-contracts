@@ -1,6 +1,7 @@
 # LlamaGuard Contracts
 
-Smart contracts for on-chain risk parameter delivery with Chainlink AggregatorV3 compatibility.
+Smart contracts for on-chain risk parameter delivery with Chainlink AggregatorV3 compatibility and automated response
+agents for Aave Horizon integration.
 
 ## Features
 
@@ -9,6 +10,8 @@ Smart contracts for on-chain risk parameter delivery with Chainlink AggregatorV3
 - **CRE Integration**: Native support for Chainlink Compute Runtime Environment reports
 - **Historical Tracking**: Query past updates with O(1) lookups by update type
 - **Multi-Asset Support**: Manage parameters for multiple assets independently
+- **Horizon Response Agents**: Automated agents for executing protocol actions based on oracle state (e.g., freezing
+  markets)
 
 ## Contracts
 
@@ -20,6 +23,7 @@ Core oracle contract for storing and exposing risk parameter updates.
 - Role-based access control (admin, reader, writer)
 - Typed update categories with validation
 - Historical update tracking
+- Market authorization management
 
 ### LlamaGuardOracleProxy
 
@@ -34,6 +38,28 @@ Multi-asset parameter registry for offchain oracle network consumption.
 
 - Manage parameters for multiple assets independently
 - Owner manages the updater role, updater manages parameters
+
+### HorizonAgentHub
+
+Orchestration hub for Horizon response agents, extending the AgentHub.
+
+- Coordinates agent execution for automated protocol responses
+
+### BaseHorizonAgent
+
+Abstract base contract for Horizon agents compatible with AgentHub.
+
+- Defines inject/validate interface for risk parameter updates
+- Integrates with Aave V3 Pool for reserve operations
+- Provides market discovery via `getMarkets()`
+
+### HorizonFreezeAgent
+
+Agent for freezing Aave Horizon markets based on LlamaGuard oracle state.
+
+- Automatically freezes reserves when freeze state is detected
+- Defense-in-depth validation before execution
+- One-way freeze only (unfreezing requires manual multisig intervention)
 
 ## Installation
 
