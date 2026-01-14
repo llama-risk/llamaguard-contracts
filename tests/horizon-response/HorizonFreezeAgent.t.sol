@@ -551,14 +551,18 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
         bytes memory additionalData = abi.encode(int256(-100), int256(100), state);
         bytes memory newV = abi.encode(int256(100)); // price
 
-        oracle.setUpdate(UPDATE_TYPE, marketAddr, block.timestamp, newV, oracle.updateCounter() + 1, additionalData);
+        oracle.setUpdate(UPDATE_TYPE, marketAddr, block.timestamp, newV, oracle.getLatestRoundId() + 1, additionalData);
     }
 
-    function _publishUpdateToOracle(address marketAddr, uint256 state) internal {
+    function _publishUpdateToOracle(address, uint256 state) internal {
         bytes memory additionalData = abi.encode(int256(-100), int256(100), state);
         bytes memory newValue = abi.encode(int256(100)); // price
 
-        oracle.publishRiskParameterUpdate("test-ref", newValue, UPDATE_TYPE, marketAddr, additionalData);
+        oracle.updateLatestRiskRoundData(
+            ILlamaGuardOracle.UpdateInput({
+                referenceId: "test-ref", newValue: newValue, updateType: UPDATE_TYPE, additionalData: additionalData
+            })
+        );
     }
 
     function _checkAndExecute(uint256 id) internal returns (bool) {
@@ -763,18 +767,6 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
     // HUB VALIDATION - MARKET CONFIGURATION TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function test_HubIntegration_MarketNotAllowed_Skipped() public {
-        // Create update for non-allowed market
-        address unauthorizedMarket = makeAddr("unauthorized");
-        _publishUpdateToOracle(unauthorizedMarket, 1);
-
-        uint256[] memory agentIds = new uint256[](1);
-        agentIds[0] = agentId;
-
-        (bool shouldExecute,) = hub.check(agentIds);
-        assertFalse(shouldExecute, "Should skip non-allowed market");
-    }
-
     function test_HubIntegration_MultipleMarkets_Sequential() public {
         // Add second market
         address market2 = makeAddr("market2");
@@ -803,7 +795,11 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
         // Publish update with arbitrary state
         bytes memory additionalData = abi.encode(int256(-100), int256(100), state);
         bytes memory newValue = abi.encode(int256(100));
-        oracle.publishRiskParameterUpdate("test-ref", newValue, UPDATE_TYPE, market, additionalData);
+        oracle.updateLatestRiskRoundData(
+            ILlamaGuardOracle.UpdateInput({
+                referenceId: "test-ref", newValue: newValue, updateType: UPDATE_TYPE, additionalData: additionalData
+            })
+        );
 
         uint256[] memory agentIds = new uint256[](1);
         agentIds[0] = agentId;
