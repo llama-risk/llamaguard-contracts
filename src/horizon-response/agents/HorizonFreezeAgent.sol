@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import { BaseHorizonAgent } from "./BaseHorizonAgent.sol";
 import { ILlamaGuardOracle } from "../../interfaces/ILlamaGuardOracle.sol";
-import { IPoolConfigurator } from "../interfaces/IPoolConfigurator.sol";
+import { IPoolConfigurator } from "aave-v3-horizon/src/contracts/interfaces/IPoolConfigurator.sol";
 import { DataTypes } from "aave-v3-horizon/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {
     ReserveConfiguration

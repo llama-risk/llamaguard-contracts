@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import { IPoolConfigurator } from "../../src/horizon-response/interfaces/IPoolConfigurator.sol";
-
 /**
  * @title MockPoolConfigurator
  * @notice Mock implementation of IPoolConfigurator for testing HorizonFreezeAgent
  */
-contract MockPoolConfigurator is IPoolConfigurator {
+contract MockPoolConfigurator {
     /// @notice Mapping of asset address to frozen state
     mapping(address => bool) public frozenReserves;
 
@@ -32,8 +30,8 @@ contract MockPoolConfigurator is IPoolConfigurator {
     /// @notice Event emitted when setReserveFreeze is called
     event ReserveFreezeSet(address indexed asset, bool freeze);
 
-    /// @inheritdoc IPoolConfigurator
-    function setReserveFreeze(address asset, bool freeze) external override {
+    /// @notice Freeze or unfreeze a reserve
+    function setReserveFreeze(address asset, bool freeze) external {
         if (shouldRevert) {
             if (bytes(revertReason).length > 0) {
                 revert MockConfiguratorError(revertReason);
