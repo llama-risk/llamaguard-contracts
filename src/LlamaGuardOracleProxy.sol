@@ -42,10 +42,6 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
         llamaguardOracle = newLlamaguardOracle;
     }
 
-    function setIsReportWriteSecured(bool enabled) external onlyOwner {
-        isReportWriteSecured = enabled;
-    }
-
     /// @notice Set or update workflow configuration
     /// @param workflowId The workflow ID to configure
     /// @param expectedForwarder The expected forwarder address

@@ -149,7 +149,7 @@ contract DeploySepolia is BaseScript {
 
         for (uint256 i = 0; i < configs.length; ++i) {
             if (configs[i].seed.enabled && configs[i].seed.sourceOracle != address(0)) {
-                _seedSingleOracle(proxyAddresses[i], configs[i].seed);
+                _seedSingleOracle(proxyAddresses[i], configs[i].proxy, configs[i].seed);
             }
         }
     }
@@ -304,7 +304,7 @@ contract DeploySepolia is BaseScript {
 
         // 4. Seed oracle data if enabled
         if (seedOracle && oracleConfig.seed.enabled && oracleConfig.seed.sourceOracle != address(0)) {
-            _seedSingleOracle(address(proxy), oracleConfig.seed);
+            _seedSingleOracle(address(proxy), oracleConfig.proxy, oracleConfig.seed);
         }
 
         // 5. Deploy EACAggregatorProxy pointing to oracle
@@ -354,8 +354,15 @@ contract DeploySepolia is BaseScript {
 
     /// @notice Seed a single oracle with data from source
     /// @param proxyAddress The LlamaGuardOracleProxy address
+    /// @param proxyConfig The proxy configuration (for workflow metadata)
     /// @param seedConfig The seed configuration
-    function _seedSingleOracle(address proxyAddress, SepoliaDeployConfig.SeedConfig memory seedConfig) internal {
+    function _seedSingleOracle(
+        address proxyAddress,
+        SepoliaDeployConfig.ProxyConfig memory proxyConfig,
+        SepoliaDeployConfig.SeedConfig memory seedConfig
+    )
+        internal
+    {
         console2.log("    Seeding from:", seedConfig.sourceOracle);
 
         // Read latest price from source oracle
@@ -375,9 +382,14 @@ contract DeploySepolia is BaseScript {
 
         bytes memory report = abi.encode(input);
 
-        // Call onReport on the proxy (isReportWriteSecured is false by default)
+        // Build workflow metadata: workflowId (32) + workflowName (10) + workflowOwner (20)
+        bytes memory metadata =
+            abi.encodePacked(proxyConfig.workflowId, proxyConfig.expectedWorkflowName, proxyConfig.expectedAuthor);
+
+        // Call onReport on the proxy with proper workflow metadata
         LlamaGuardOracleProxy proxy = LlamaGuardOracleProxy(proxyAddress);
-        proxy.onReport(bytes(""), report);
+        vm.prank(proxyConfig.expectedForwarder);
+        proxy.onReport(metadata, report);
 
         console2.log("    [OK] Oracle seeded");
     }

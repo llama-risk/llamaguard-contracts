@@ -158,58 +158,8 @@ contract LlamaGuardOracleProxyTest is Test {
         );
     }
 
-    function test_SetIsReportWriteSecured_EnablesWriteSecurity() public {
-        vm.startPrank(owner);
-        // Disable security first
-        proxy.setIsReportWriteSecured(false);
-        assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
-
-        // Re-enable security
-        proxy.setIsReportWriteSecured(true);
-        assertTrue(proxy.isReportWriteSecured(), "Security should be enabled");
-        vm.stopPrank();
-    }
-
-    function test_SetIsReportWriteSecured_DisablesWriteSecurity() public {
-        // Security is enabled by default
-        assertTrue(proxy.isReportWriteSecured(), "Security should be enabled by default");
-
-        // Disable security
-        vm.prank(owner);
-        proxy.setIsReportWriteSecured(false);
-        assertFalse(proxy.isReportWriteSecured(), "Security should be disabled");
-    }
-
-    function test_RevertWhen_SetIsReportWriteSecuredCalledByNonOwner() public {
-        address nonOwner = address(0xBEEF);
-
-        vm.prank(nonOwner);
-        vm.expectRevert();
-        proxy.setIsReportWriteSecured(false);
-    }
-
-    function test_OnReport_BypassesValidationWhenSecurityDisabled() public {
-        // Disable security
-        vm.prank(owner);
-        proxy.setIsReportWriteSecured(false);
-
-        // Build metadata with wrong values - should not revert
-        bytes memory wrongMetadata = _buildMetadata(bytes32("WRONG_ID"), address(0xDEAD), bytes10("WRONG"));
-        bytes memory report = _encodeProxyReport("ref-1", 5000, 999, 7, PRICE_TYPE);
-
-        // Should succeed even with wrong metadata
-        proxy.onReport(wrongMetadata, report);
-
-        // Verify the update was processed via latestRoundData
-        (, int256 answer,,,) = oracle.latestRoundData();
-        assertEq(answer, 999, "Price should be updated");
-
-        // Verify full data via getUpdateById - decode from additionalData for full bundle
-        ILlamaGuardOracle.RiskParameterUpdate memory update = oracle.getUpdateById(1);
-        (uint256 supply, int256 price, uint256 state) = abi.decode(update.additionalData, (uint256, int256, uint256));
-        assertEq(supply, 5000, "Supply should be updated");
-        assertEq(state, 7, "State should be updated");
-        assertEq(price, 999, "Price should be updated");
+    function test_IsReportWriteSecured_IsAlwaysTrue() public view {
+        assertTrue(proxy.isReportWriteSecured(), "Security should always be enabled");
     }
 
     function test_Description_IsSetCorrectly() public view {

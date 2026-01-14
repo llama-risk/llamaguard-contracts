@@ -18,9 +18,8 @@ abstract contract AbstractCreReceiver is IReceiver {
     /// @notice Mapping from workflow ID to its configuration
     mapping(bytes32 workflowId => WorkflowConfig) public workflowConfigs;
 
-    /// @notice When true (default), enforce metadata/forwarder checks before processing.
-    /// When false, skip validations and process the report directly.
-    bool public isReportWriteSecured = true;
+    /// @notice Always enforce metadata/forwarder checks before processing.
+    bool public constant isReportWriteSecured = true;
 
     // Custom errors
     error InvalidAuthor(address received, address expected);

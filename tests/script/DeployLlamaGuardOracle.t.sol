@@ -624,18 +624,6 @@ contract DeployLlamaGuardOracleTest is Test {
         // Workflow should be deactivated
     }
 
-    function test_Proxy_SetIsReportWriteSecured() public {
-        vm.chainId(31_337);
-
-        DeployLlamaGuardOracle.DeployedContracts[] memory deployed = deployScript.runAnyNetwork();
-        LlamaGuardOracleProxy proxy = LlamaGuardOracleProxy(deployed[0].proxy);
-
-        vm.prank(deployer);
-        proxy.setIsReportWriteSecured(true);
-
-        // State is set - would be verified via subsequent report writes
-    }
-
     function test_Proxy_OnlyOwnerCanSetWorkflowConfig() public {
         vm.chainId(31_337);
 
