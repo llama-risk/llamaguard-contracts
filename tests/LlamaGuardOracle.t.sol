@@ -39,6 +39,10 @@ contract LlamaGuardOracleTest is Test {
 
     event UpdateTypeAdded(string indexed updateType);
 
+    // V2 AggregatorInterface events
+    event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
+    event NewRound(uint256 indexed roundId, address indexed startedBy, uint256 startedAt);
+
     function setUp() public {
         // Compute hashes from string constants
         priceHash = keccak256(bytes(PRICE_TYPE));
@@ -486,6 +490,156 @@ contract LlamaGuardOracleTest is Test {
         assertGt(answeredInRound, 0);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // getRoundData(0) EDGE CASE TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_getRoundData_Round0_ReturnsZerosBeforeAnyUpdate() public view {
+        // Round 0 should return all zeros before any updates
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.getRoundData(0);
+
+        assertEq(roundId, 0);
+        assertEq(answer, 0);
+        assertEq(startedAt, 0);
+        assertEq(updatedAt, 0);
+        assertEq(answeredInRound, 0);
+    }
+
+    function test_getRoundData_Round0_ReturnsZerosAfterSingleUpdate() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        // After update, round 1 exists but round 0 should still return zeros
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.getRoundData(0);
+
+        assertEq(roundId, 0);
+        assertEq(answer, 0);
+        assertEq(startedAt, 0);
+        assertEq(updatedAt, 0);
+        assertEq(answeredInRound, 0);
+
+        // Verify round 1 has actual data
+        (uint80 r1Id, int256 r1Answer,,,) = oracle.getRoundData(1);
+        assertEq(r1Id, 1);
+        assertEq(r1Answer, 500);
+    }
+
+    function test_getRoundData_Round0_ReturnsZerosAfterMultipleUpdates() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.startPrank(writer);
+        for (uint256 i = 1; i <= 5; i++) {
+            oracle.updateLatestRiskRoundData(
+                _createUpdateInput(
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 100), PRICE_TYPE, i * 50, i
+                )
+            );
+
+            // After each update, round 0 should still return zeros
+            (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+                oracle.getRoundData(0);
+
+            assertEq(roundId, 0, "roundId should be 0");
+            assertEq(answer, 0, "answer should be 0");
+            assertEq(startedAt, 0, "startedAt should be 0");
+            assertEq(updatedAt, 0, "updatedAt should be 0");
+            assertEq(answeredInRound, 0, "answeredInRound should be 0");
+        }
+        vm.stopPrank();
+
+        // Verify rounds 1-5 have actual data
+        for (uint80 i = 1; i <= 5; i++) {
+            (uint80 rId, int256 rAnswer,,,) = oracle.getRoundData(i);
+            assertEq(rId, i);
+            assertEq(rAnswer, int256(uint256(i) * 100));
+        }
+    }
+
+    function testFuzz_getRoundData_Round0_AlwaysReturnsZeros(uint8 numUpdates) public {
+        // Bound to reasonable range (1-50 updates)
+        numUpdates = uint8(bound(numUpdates, 1, 50));
+
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.startPrank(writer);
+        for (uint256 i = 1; i <= numUpdates; i++) {
+            oracle.updateLatestRiskRoundData(
+                _createUpdateInput(
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 100), PRICE_TYPE, i * 50, i
+                )
+            );
+        }
+        vm.stopPrank();
+
+        // After any number of updates, round 0 should still return zeros
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.getRoundData(0);
+
+        assertEq(roundId, 0, "roundId should be 0");
+        assertEq(answer, 0, "answer should be 0");
+        assertEq(startedAt, 0, "startedAt should be 0");
+        assertEq(updatedAt, 0, "updatedAt should be 0");
+        assertEq(answeredInRound, 0, "answeredInRound should be 0");
+    }
+
+    function test_getRoundData_NonExistentFutureRound_ReturnsZeros() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        // Query a round that doesn't exist (999)
+        (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) =
+            oracle.getRoundData(999);
+
+        assertEq(roundId, 0);
+        assertEq(answer, 0);
+        assertEq(startedAt, 0);
+        assertEq(updatedAt, 0);
+        assertEq(answeredInRound, 0);
+    }
+
+    function test_getRoundData_Round0_IndependentOfLatestRoundData() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        // latestRoundData should return round 1 with actual values
+        (
+            uint80 latestRoundId,
+            int256 latestAnswer,
+            uint256 latestStartedAt,
+            uint256 latestUpdatedAt,
+            uint80 latestAnsweredInRound
+        ) = oracle.latestRoundData();
+
+        assertEq(latestRoundId, 1);
+        assertEq(latestAnswer, 500);
+        assertGt(latestStartedAt, 0);
+        assertGt(latestUpdatedAt, 0);
+        assertEq(latestAnsweredInRound, 1);
+
+        // getRoundData(0) should still return all zeros
+        (
+            uint80 round0Id,
+            int256 round0Answer,
+            uint256 round0StartedAt,
+            uint256 round0UpdatedAt,
+            uint80 round0AnsweredInRound
+        ) = oracle.getRoundData(0);
+
+        assertEq(round0Id, 0);
+        assertEq(round0Answer, 0);
+        assertEq(round0StartedAt, 0);
+        assertEq(round0UpdatedAt, 0);
+        assertEq(round0AnsweredInRound, 0);
+    }
+
     function testSequentialUpdatesInSameTransaction() public {
         oracle.grantRole(oracle.WRITER_ROLE(), writer);
         vm.startPrank(writer);
@@ -889,5 +1043,117 @@ contract LlamaGuardOracleTest is Test {
         // Act & Assert: Deploy oracle should revert on duplicate market
         vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.MarketAlreadyAuthorized.selector, market1));
         new LlamaGuardOracle(8, "Test", 1, defaultUpdateTypes, initialMarkets);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AGGREGATOR V2 INTERFACE TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_V2_latestAnswer_ReturnsCurrentPrice() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        assertEq(oracle.latestAnswer(), 500);
+    }
+
+    function test_V2_latestAnswer_ReturnsZeroInitially() public view {
+        assertEq(oracle.latestAnswer(), 0);
+    }
+
+    function test_V2_latestTimestamp_ReturnsBlockTimestamp() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        uint256 beforeTs = block.timestamp;
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        assertGe(oracle.latestTimestamp(), beforeTs);
+    }
+
+    function test_V2_latestTimestamp_ReturnsZeroInitially() public view {
+        assertEq(oracle.latestTimestamp(), 0);
+    }
+
+    function test_V2_latestRound_ReturnsRoundIdAsUint256() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        assertEq(oracle.latestRound(), 1);
+    }
+
+    function test_V2_latestRound_ReturnsZeroInitially() public view {
+        assertEq(oracle.latestRound(), 0);
+    }
+
+    function test_V2_getAnswer_ReturnsHistoricalPrice() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.startPrank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_TYPE, 100, 1));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_TYPE, 200, 2));
+        vm.stopPrank();
+
+        assertEq(oracle.getAnswer(1), 50);
+        assertEq(oracle.getAnswer(2), 75);
+    }
+
+    function test_V2_getTimestamp_ReturnsHistoricalTimestamp() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.warp(1000);
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 50, PRICE_TYPE, 100, 1));
+
+        vm.warp(2000);
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 75, PRICE_TYPE, 200, 2));
+
+        assertEq(oracle.getTimestamp(1), 1000);
+        assertEq(oracle.getTimestamp(2), 2000);
+    }
+
+    function test_V2_AnswerUpdatedEvent_EmittedOnUpdate() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        vm.expectEmit(true, true, false, true);
+        emit AnswerUpdated(500, 1, block.timestamp);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+    }
+
+    function test_V2_NewRoundEvent_EmittedOnUpdate() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        vm.expectEmit(true, true, false, true);
+        emit NewRound(1, writer, block.timestamp);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+    }
+
+    function testFuzz_V2_latestAnswer_MatchesLatestRoundData(int256 price_) public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_TYPE, 1000, 2));
+
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(oracle.latestAnswer(), answer);
+    }
+
+    function testFuzz_V2_latestTimestamp_MatchesLatestRoundData(uint256 warpTime) public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        warpTime = bound(warpTime, 1, type(uint128).max);
+        vm.warp(warpTime);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 500, PRICE_TYPE, 1000, 2));
+
+        (,,, uint256 updatedAt,) = oracle.latestRoundData();
+        assertEq(oracle.latestTimestamp(), updatedAt);
     }
 }

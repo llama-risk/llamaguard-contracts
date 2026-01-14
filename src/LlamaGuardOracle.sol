@@ -1,13 +1,49 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import { AggregatorV3 } from "./AggregatorV3.sol";
+import { AggregatorV2V3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV2V3Interface.sol";
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import { AggregatorInterface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorInterface.sol";
 import { ILlamaGuardOracle } from "./interfaces/ILlamaGuardOracle.sol";
 import { AbstractReadWriteAccessController } from "./abstracts/AbstractReadWriteAccessController.sol";
 
-contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteAccessController {
+/**
+ * @title LlamaGuardOracle
+ * @notice Chainlink-compatible oracle with risk parameter tracking
+ * @dev Implements AggregatorV2V3Interface for full Chainlink compatibility (V2 + V3 methods).
+ *      Historical round data is immutable once created. Access control via WRITER_ROLE.
+ */
+contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, AbstractReadWriteAccessController {
     // ═══════════════════════════════════════════════════════════════════════════
-    // STATE VARIABLES
+    // AGGREGATOR STATE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @inheritdoc AggregatorV3Interface
+    uint8 public immutable override decimals;
+
+    /// @inheritdoc AggregatorV3Interface
+    uint256 public immutable override version;
+
+    /// @inheritdoc AggregatorV3Interface
+    string public override description;
+
+    /// @notice Structure for storing round data
+    struct RoundData {
+        uint80 roundId;
+        int256 answer;
+        uint256 startedAt;
+        uint256 updatedAt;
+        uint80 answeredInRound;
+    }
+
+    /// @notice Storage for round data
+    mapping(uint80 roundId => RoundData data) private _roundData;
+
+    /// @notice Latest round ID
+    uint80 private _latestRoundId;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RISK PARAMETER STATE
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Array of all valid update type strings
@@ -32,25 +68,36 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     mapping(address market => bool isAuthorized) private _authorizedMarkets;
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // EVENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Emitted when round data is updated
+    event RoundDataUpdated(uint80 indexed roundId, int256 answer, uint256 startedAt, uint256 updatedAt);
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Initialize the oracle with configuration and initial update types
-    /// @param decimals The number of decimals for price values
-    /// @param description Human-readable description of the oracle feed
-    /// @param version Version number of the oracle
+    /// @param decimals_ The number of decimals for price values
+    /// @param description_ Human-readable description of the oracle feed
+    /// @param version_ Version number of the oracle
     /// @param initialUpdateTypes Array of initial valid update type strings
     /// @param initialAuthorizedMarkets Array of initially authorized market addresses
     constructor(
-        uint8 decimals,
-        string memory description,
-        uint256 version,
+        uint8 decimals_,
+        string memory description_,
+        uint256 version_,
         string[] memory initialUpdateTypes,
         address[] memory initialAuthorizedMarkets
     )
         AbstractReadWriteAccessController(msg.sender)
-        AggregatorV3(decimals, description, version)
     {
+        // Initialize aggregator state
+        decimals = decimals_;
+        description = description_;
+        version = version_;
+
         // Initialize update types
         for (uint256 i = 0; i < initialUpdateTypes.length; i++) {
             _addUpdateType(initialUpdateTypes[i]);
@@ -63,8 +110,90 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // AGGREGATOR V3 INTERFACE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @inheritdoc AggregatorV3Interface
+    function getRoundData(uint80 _roundId)
+        external
+        view
+        override
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+    {
+        RoundData memory data = _roundData[_roundId];
+        return (data.roundId, data.answer, data.startedAt, data.updatedAt, data.answeredInRound);
+    }
+
+    /// @inheritdoc AggregatorV3Interface
+    function latestRoundData()
+        external
+        view
+        override
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
+    {
+        RoundData memory data = _roundData[_latestRoundId];
+        return (data.roundId, data.answer, data.startedAt, data.updatedAt, data.answeredInRound);
+    }
+
+    /// @notice Get the latest round ID
+    /// @return The latest round ID
+    function getLatestRoundId() external view returns (uint80) {
+        return _latestRoundId;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AGGREGATOR V2 INTERFACE (LEGACY)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @inheritdoc AggregatorInterface
+    function latestAnswer() external view override returns (int256) {
+        return _roundData[_latestRoundId].answer;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function latestTimestamp() external view override returns (uint256) {
+        return _roundData[_latestRoundId].updatedAt;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function latestRound() external view override returns (uint256) {
+        return uint256(_latestRoundId);
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function getAnswer(uint256 roundId) external view override returns (int256) {
+        return _roundData[uint80(roundId)].answer;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function getTimestamp(uint256 roundId) external view override returns (uint256) {
+        return _roundData[uint80(roundId)].updatedAt;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // INTERNAL HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Update the latest round data
+    /// @dev Emits RoundDataUpdated, AnswerUpdated (V2), and NewRound (V2) events
+    /// @param answer The new price answer
+    function _updateLatestRoundData(int256 answer) internal {
+        _latestRoundId++;
+
+        _roundData[_latestRoundId] = RoundData({
+            roundId: _latestRoundId,
+            answer: answer,
+            startedAt: block.timestamp,
+            updatedAt: block.timestamp,
+            answeredInRound: _latestRoundId
+        });
+
+        emit RoundDataUpdated(_latestRoundId, answer, block.timestamp, block.timestamp);
+
+        // V2 AggregatorInterface events
+        emit AnswerUpdated(answer, uint256(_latestRoundId), block.timestamp);
+        emit NewRound(uint256(_latestRoundId), msg.sender, block.timestamp);
+    }
 
     /// @notice Internal helper to add a new update type
     /// @param updateType The update type string to add
@@ -155,8 +284,8 @@ contract LlamaGuardOracle is AggregatorV3, ILlamaGuardOracle, AbstractReadWriteA
 
     /// @inheritdoc ILlamaGuardOracle
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory) {
-        uint80 latestRound = this.getLatestRoundId();
-        require(updateId != 0 && updateId <= latestRound, InvalidUpdateId(updateId));
+        uint80 latestRound_ = this.getLatestRoundId();
+        require(updateId != 0 && updateId <= latestRound_, InvalidUpdateId(updateId));
 
         RiskParameterUpdate memory update = updateHistory[updateId];
         require(update.timestamp != 0, InvalidUpdateId(updateId));
