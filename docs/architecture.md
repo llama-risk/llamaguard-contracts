@@ -163,9 +163,9 @@ graph TD
 4. If within bounds, CRE Workflow updates LlamaGuardOracle with new price and normal state
 5. Horizon Pool reads the validated price via `latestAnswer()` from the Chainlink Proxy for lending operations
 
-### Freeze Trigger (Lower Bound Breach)
+### Freeze Trigger (Lower or Upper Bound Breach)
 
-1. CRE Workflow detects NAV breach of the lower bound
+1. CRE Workflow detects NAV breach of the lower or upper bound
 2. CRE Workflow updates LlamaGuardOracle with price and breach state
 3. CRE triggers HorizonAgentHub `execute()` function
 4. HorizonAgentHub reads state from LlamaGuardOracle
@@ -205,7 +205,7 @@ stateDiagram-v2
         RootCauseIdentified --> AwaitingReview: Issue unresolved
     }
 
-    Active --> Frozen: Lower bound breach
+    Active --> Frozen: Lower or Upper bound breach
     Frozen --> Active: Manual unfreeze
 
     note right of Frozen
