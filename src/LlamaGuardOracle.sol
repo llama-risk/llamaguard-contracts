@@ -235,7 +235,7 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         require(_validUpdateTypes[updateTypeHash], UnauthorizedUpdateType(input.updateType));
 
         // Get previous value from history (empty for first update)
-        bytes memory previousValue = updateHistory[this.getLatestRoundId()].newValue;
+        bytes memory previousValue = updateHistory[_latestRoundId].newValue;
 
         // Decode price from newValue and update round data for AggregatorV3 compatibility
         // newValue contains only the price (int256), while additionalData contains the full bundle
@@ -245,7 +245,8 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         }
 
         // Get new roundId as updateId and store in history
-        uint256 updateId = this.getLatestRoundId();
+        // _latestRoundId was incremented by _updateLatestRoundData
+        uint256 updateId = _latestRoundId;
 
         // Store in history (market is set to address(0) for global updates)
         updateHistory[updateId] = RiskParameterUpdate({
@@ -284,8 +285,7 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
 
     /// @inheritdoc ILlamaGuardOracle
     function getUpdateById(uint256 updateId) external view returns (RiskParameterUpdate memory) {
-        uint80 latestRound_ = this.getLatestRoundId();
-        require(updateId != 0 && updateId <= latestRound_, InvalidUpdateId(updateId));
+        require(updateId != 0 && updateId <= _latestRoundId, InvalidUpdateId(updateId));
 
         RiskParameterUpdate memory update = updateHistory[updateId];
         require(update.timestamp != 0, InvalidUpdateId(updateId));

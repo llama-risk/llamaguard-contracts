@@ -58,6 +58,59 @@ jobs:
           echo "## Build result" >> $GITHUB_STEP_SUMMARY
           echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
 
+  security:
+    needs: ["build"]
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v4"
+
+      - name: "Install Python"
+        uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.11"
+
+      - name: "Install Slither"
+        run: pip3 install slither-analyzer
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install Bun"
+        uses: "oven-sh/setup-bun@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "bun install"
+
+      - name: "Run Slither"
+        run: |
+          slither . --json slither-report.json 2>&1 | tee slither-output.txt || true
+
+      - name: "Check for high/medium severity issues"
+        run: |
+          # Parse results and fail on high severity
+          HIGH=$(cat slither-report.json | jq '[.results.detectors[] | select(.impact == "High")] | length')
+          MEDIUM=$(cat slither-report.json | jq '[.results.detectors[] | select(.impact == "Medium")] | length')
+          echo "High severity issues: $HIGH"
+          echo "Medium severity issues: $MEDIUM"
+          echo "## Slither Security Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "- High severity: $HIGH" >> $GITHUB_STEP_SUMMARY
+          echo "- Medium severity: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+          if [ "$HIGH" -gt 0 ]; then
+            echo "❌ Found $HIGH high severity issues!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ No high severity issues found" >> $GITHUB_STEP_SUMMARY
+
+      - name: "Upload Slither Report"
+        uses: "actions/upload-artifact@v4"
+        if: always()
+        with:
+          name: slither-report
+          path: |
+            slither-report.json
+            slither-output.txt
+
   test:
     needs: ["lint", "build"]
     runs-on: "ubuntu-latest"
