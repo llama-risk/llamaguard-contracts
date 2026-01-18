@@ -11,7 +11,7 @@
   optimizer_runs = 10_000
   out = "out"
   script = "script"
-  solc = "0.8.26"
+  solc = "0.8.27"
   src = "src"
   test = "tests"
 libs = ["node_modules", "lib"]
@@ -45,3 +45,6 @@ libs = ["node_modules", "lib"]
   optimism = "https://optimism-rpc.publicnode.com"
   polygon = "https://polygon-bor-rpc.publicnode.com"
   sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
+
+[lint]
+  ignore = ["tests/**/*.sol", "script/**/*.sol"]

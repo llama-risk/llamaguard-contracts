@@ -2,9 +2,9 @@
 pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
-import { EACAggregatorProxy } from "../src/sepolia/EACAggregatorProxy.sol";
-import { LlamaGuardOracle } from "../src/LlamaGuardOracle.sol";
-import { ILlamaGuardOracle } from "../src/interfaces/ILlamaGuardOracle.sol";
+import { EACAggregatorProxy } from "../../../script/sepolia/EACAggregatorProxy.sol";
+import { LlamaGuardOracle } from "../../../src/LlamaGuardOracle.sol";
+import { ILlamaGuardOracle } from "../../../src/interfaces/ILlamaGuardOracle.sol";
 
 contract EACAggregatorProxyTest is Test {
     EACAggregatorProxy internal proxy;
@@ -18,15 +18,17 @@ contract EACAggregatorProxyTest is Test {
 
     string[] internal defaultUpdateTypes;
 
-    // Pre-computed hash for price update type
-    bytes32 internal constant PRICE_HASH = keccak256(bytes("price"));
+    // Update type string constants
+    string internal constant PRICE_TYPE = "price";
+    string internal constant BOUNDED_NAV_TYPE = "boundedNAV";
 
     function setUp() public {
         // Setup default update types
-        defaultUpdateTypes = new string[](3);
+        defaultUpdateTypes = new string[](4);
         defaultUpdateTypes[0] = "price";
         defaultUpdateTypes[1] = "supply";
         defaultUpdateTypes[2] = "risk_state";
+        defaultUpdateTypes[3] = "boundedNAV";
 
         // Deploy oracle with initial authorized market and grant write role to dataProxy
         address[] memory initialMarkets = new address[](1);
@@ -42,7 +44,7 @@ contract EACAggregatorProxyTest is Test {
     function _createUpdateInput(
         string memory referenceId,
         int256 price_,
-        bytes32 updateTypeHash,
+        string memory updateType,
         uint256 supply_,
         uint256 state_
     )
@@ -53,13 +55,13 @@ contract EACAggregatorProxyTest is Test {
         return ILlamaGuardOracle.UpdateInput({
             referenceId: referenceId,
             newValue: abi.encode(price_),
-            updateTypeHash: updateTypeHash,
+            updateType: updateType,
             additionalData: abi.encode(supply_, price_, state_)
         });
     }
 
     function _callUpdateData(uint256 supply_, int256 price_, uint256 state_) internal {
-        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_HASH, supply_, state_));
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", price_, PRICE_TYPE, supply_, state_));
     }
 
     function testConstructor() public view {
@@ -176,7 +178,7 @@ contract EACAggregatorProxyTest is Test {
         newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
 
         vm.prank(dataProxy);
-        newOracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 750, PRICE_HASH, 2000, 3));
+        newOracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 750, PRICE_TYPE, 2000, 3));
 
         proxy.proposeAggregator(address(newOracle));
 
@@ -194,7 +196,7 @@ contract EACAggregatorProxyTest is Test {
             vm.prank(dataProxy);
             oracle.updateLatestRiskRoundData(
                 _createUpdateInput(
-                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), PRICE_HASH, i * 100, i
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 50), PRICE_TYPE, i * 100, i
                 )
             );
         }

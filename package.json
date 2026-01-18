@@ -7,8 +7,12 @@
     "url": "https://github.com/zekiblue"
   },
   "dependencies": {
+    "@aave-dao/aave-v3-horizon": "github:aave/aave-v3-horizon",
     "@chainlink/contracts": "1.4.0",
-    "@openzeppelin/contracts": "5.3.0"
+    "@openzeppelin/contracts": "5.3.0",
+    "@openzeppelin/contracts-upgradeable-v5": "npm:@openzeppelin/contracts-upgradeable@5.1.0",
+    "@openzeppelin/contracts-v5": "npm:@openzeppelin/contracts@5.1.0",
+    "chaos-agents": "github:ChaosLabsInc/chaos-agents"
   },
   "devDependencies": {
     "forge-std": "github:foundry-rs/forge-std#v1.9.7",
@@ -34,7 +38,7 @@
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
     "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
     "test": "forge test",
-    "test:coverage": "forge coverage",
-    "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
+    "test:coverage": "forge coverage --ir-minimum --skip '**/horizon-response/**'",
+    "test:coverage:report": "forge coverage --ir-minimum --skip '**/horizon-response/**' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
   }
 }

@@ -5,7 +5,7 @@ import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { LlamaGuardOracle } from "../../src/LlamaGuardOracle.sol";
 import { LlamaGuardOracleProxy } from "../../src/LlamaGuardOracleProxy.sol";
 import { ILlamaGuardOracle } from "../../src/interfaces/ILlamaGuardOracle.sol";
-import { EACAggregatorProxy } from "../../src/sepolia/EACAggregatorProxy.sol";
+import { EACAggregatorProxy } from "./EACAggregatorProxy.sol";
 import { BaseScript } from "../Base.s.sol";
 import { SepoliaDeployConfig } from "./SepoliaDeployConfig.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
@@ -64,7 +64,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy everything for Sepolia based on configuration
     /// @return deployed Struct containing all deployed contract addresses
     function run() public broadcast returns (DeployedContracts memory deployed) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         (bool deployRegistry, bool deployOracles, bool configureAssets, bool seedOracles) = config.getDeploymentFlags();
 
@@ -97,7 +97,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy only ParameterRegistry
     /// @return parameterRegistry The deployed registry
     function deployRegistryOnly() public broadcast returns (ParameterRegistry parameterRegistry) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         OracleDeployment[] memory emptyOracles;
         return _deployParameterRegistry(true, emptyOracles);
@@ -106,7 +106,7 @@ contract DeploySepolia is BaseScript {
     /// @notice Deploy only oracles (without ParameterRegistry)
     /// @return oracles Array of oracle deployments
     function deployOraclesOnly() public broadcast returns (OracleDeployment[] memory oracles) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         (,,, bool seedOracles) = config.getDeploymentFlags();
         return _deployAllOracles(seedOracles);
@@ -116,7 +116,7 @@ contract DeploySepolia is BaseScript {
     /// @param index The index of the oracle configuration to deploy
     /// @return deployment The oracle deployment addresses
     function deploySingleOracle(uint256 index) public broadcast returns (OracleDeployment memory deployment) {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         SepoliaDeployConfig.OracleDeploymentConfig memory oracleConfig = config.getOracleConfigByIndex(index);
         (,,, bool seedOracles) = config.getDeploymentFlags();
@@ -137,10 +137,10 @@ contract DeploySepolia is BaseScript {
     /// @notice Seed data on existing deployed oracles
     /// @param proxyAddresses Array of LlamaGuardOracleProxy addresses to seed
     function seedExistingOracles(address[] calldata proxyAddresses) public broadcast {
-        if (block.chainid != 11_155_111) revert NotOnSepolia();
+        require(block.chainid == 11_155_111, NotOnSepolia());
 
         SepoliaDeployConfig.OracleDeploymentConfig[] memory configs = config.getOracleConfigs();
-        if (proxyAddresses.length != configs.length) revert ArrayLengthMismatch();
+        require(proxyAddresses.length == configs.length, ArrayLengthMismatch());
 
         console2.log("");
         console2.log("-----------------------------------------");
@@ -149,7 +149,7 @@ contract DeploySepolia is BaseScript {
 
         for (uint256 i = 0; i < configs.length; ++i) {
             if (configs[i].seed.enabled && configs[i].seed.sourceOracle != address(0)) {
-                _seedSingleOracle(proxyAddresses[i], configs[i].seed);
+                _seedSingleOracle(proxyAddresses[i], configs[i].proxy, configs[i].seed);
             }
         }
     }
@@ -304,7 +304,7 @@ contract DeploySepolia is BaseScript {
 
         // 4. Seed oracle data if enabled
         if (seedOracle && oracleConfig.seed.enabled && oracleConfig.seed.sourceOracle != address(0)) {
-            _seedSingleOracle(address(proxy), oracleConfig.seed);
+            _seedSingleOracle(address(proxy), oracleConfig.proxy, oracleConfig.seed);
         }
 
         // 5. Deploy EACAggregatorProxy pointing to oracle
@@ -354,8 +354,15 @@ contract DeploySepolia is BaseScript {
 
     /// @notice Seed a single oracle with data from source
     /// @param proxyAddress The LlamaGuardOracleProxy address
+    /// @param proxyConfig The proxy configuration (for workflow metadata)
     /// @param seedConfig The seed configuration
-    function _seedSingleOracle(address proxyAddress, SepoliaDeployConfig.SeedConfig memory seedConfig) internal {
+    function _seedSingleOracle(
+        address proxyAddress,
+        SepoliaDeployConfig.ProxyConfig memory proxyConfig,
+        SepoliaDeployConfig.SeedConfig memory seedConfig
+    )
+        internal
+    {
         console2.log("    Seeding from:", seedConfig.sourceOracle);
 
         // Read latest price from source oracle
@@ -368,16 +375,21 @@ contract DeploySepolia is BaseScript {
         ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
             referenceId: seedConfig.referenceId,
             newValue: abi.encode(price),
-            updateTypeHash: keccak256(bytes(seedConfig.updateType)),
+            updateType: seedConfig.updateType,
             additionalData: abi.encode(uint256(0), price, uint256(0)) // (supply, price, state) - using 0 for supply and
             // state
         });
 
         bytes memory report = abi.encode(input);
 
-        // Call onReport on the proxy (isReportWriteSecured is false by default)
+        // Build workflow metadata: workflowId (32) + workflowName (10) + workflowOwner (20)
+        bytes memory metadata =
+            abi.encodePacked(proxyConfig.workflowId, proxyConfig.expectedWorkflowName, proxyConfig.expectedAuthor);
+
+        // Call onReport on the proxy with proper workflow metadata
         LlamaGuardOracleProxy proxy = LlamaGuardOracleProxy(proxyAddress);
-        proxy.onReport(bytes(""), report);
+        vm.prank(proxyConfig.expectedForwarder);
+        proxy.onReport(metadata, report);
 
         console2.log("    [OK] Oracle seeded");
     }

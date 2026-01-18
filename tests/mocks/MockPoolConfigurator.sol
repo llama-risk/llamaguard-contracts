@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+/**
+ * @title MockPoolConfigurator
+ * @notice Mock implementation of IPoolConfigurator for testing HorizonFreezeAgent
+ */
+contract MockPoolConfigurator {
+    /// @notice Mapping of asset address to frozen state
+    mapping(address => bool) public frozenReserves;
+
+    /// @notice Counter for tracking number of freeze calls
+    uint256 public freezeCallCount;
+
+    /// @notice Last asset that was frozen/unfrozen
+    address public lastFreezeAsset;
+
+    /// @notice Last freeze state that was set
+    bool public lastFreezeState;
+
+    /// @notice Flag to control whether setReserveFreeze should revert
+    bool public shouldRevert;
+
+    /// @notice Custom revert reason
+    string public revertReason;
+
+    /// @notice Custom error for testing
+    error MockConfiguratorError(string reason);
+
+    /// @notice Event emitted when setReserveFreeze is called
+    event ReserveFreezeSet(address indexed asset, bool freeze);
+
+    /// @notice Freeze or unfreeze a reserve
+    function setReserveFreeze(address asset, bool freeze) external {
+        if (shouldRevert) {
+            if (bytes(revertReason).length > 0) {
+                revert MockConfiguratorError(revertReason);
+            }
+            revert("MockPoolConfigurator: reverted");
+        }
+
+        frozenReserves[asset] = freeze;
+        lastFreezeAsset = asset;
+        lastFreezeState = freeze;
+        freezeCallCount++;
+
+        emit ReserveFreezeSet(asset, freeze);
+    }
+
+    /// @notice Check if a reserve is frozen
+    function isFrozen(address asset) external view returns (bool) {
+        return frozenReserves[asset];
+    }
+
+    /// @notice Reset the mock state for clean testing
+    function reset() external {
+        freezeCallCount = 0;
+        lastFreezeAsset = address(0);
+        lastFreezeState = false;
+        shouldRevert = false;
+        revertReason = "";
+    }
+
+    /// @notice Set whether setReserveFreeze should revert
+    /// @param _shouldRevert Whether to revert
+    /// @param _revertReason Custom revert reason (optional)
+    function setShouldRevert(bool _shouldRevert, string memory _revertReason) external {
+        shouldRevert = _shouldRevert;
+        revertReason = _revertReason;
+    }
+}

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity 0.8.27;
 
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
@@ -28,7 +28,7 @@ contract EACAggregatorProxy is Ownable, AggregatorV3Interface {
      * @param _aggregator Address of the initial aggregator implementation
      */
     constructor(address _aggregator) Ownable(msg.sender) {
-        if (_aggregator == address(0)) revert InvalidAggregator();
+        require(_aggregator != address(0), InvalidAggregator());
         aggregator = AggregatorV3Interface(_aggregator);
     }
 
@@ -37,7 +37,7 @@ contract EACAggregatorProxy is Ownable, AggregatorV3Interface {
      * @param _aggregator Address of the new aggregator
      */
     function proposeAggregator(address _aggregator) external onlyOwner {
-        if (_aggregator == address(0)) revert InvalidAggregator();
+        require(_aggregator != address(0), InvalidAggregator());
         address oldAggregator = address(aggregator);
         aggregator = AggregatorV3Interface(_aggregator);
         emit AggregatorUpdated(oldAggregator, _aggregator);

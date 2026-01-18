@@ -1,9 +1,9 @@
-Copyright (C) 2025 LlamaRisk
+Copyright (C) 2026 LlamaRisk
 
 Use of this software is governed by the Business Source License included in the LICENSE.md file and at
 https://mariadb.com/bsl11.
 
-Change Date: 2028-12-31
+Change Date: 2029-03-01
 
 On the date above, in accordance with the Business Source License, use of this software will be governed by the open
 source license specified in the LICENSE.md file.

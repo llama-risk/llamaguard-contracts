@@ -5,8 +5,12 @@
     "": {
       "name": "@prb/foundry-template",
       "dependencies": {
+        "@aave-dao/aave-v3-horizon": "github:aave/aave-v3-horizon",
         "@chainlink/contracts": "1.4.0",
         "@openzeppelin/contracts": "5.3.0",
+        "@openzeppelin/contracts-upgradeable-v5": "npm:@openzeppelin/contracts-upgradeable@5.1.0",
+        "@openzeppelin/contracts-v5": "npm:@openzeppelin/contracts@5.1.0",
+        "chaos-agents": "github:ChaosLabsInc/chaos-agents",
       },
       "devDependencies": {
         "forge-std": "github:foundry-rs/forge-std#v1.9.7",
@@ -17,6 +21,8 @@
     },
   },
   "packages": {
+    "@aave-dao/aave-v3-horizon": ["@aave-dao/aave-v3-origin@github:aave/aave-v3-horizon#6e2a51e", { "dependencies": { "@bgd-labs/solidity-utils": "1.1.2", "catapulta-verify": "^1.3.0" } }, "aave-aave-v3-horizon-6e2a51e"],
+
     "@arbitrum/nitro-contracts": ["@arbitrum/nitro-contracts@3.0.0", "", { "dependencies": { "@offchainlabs/upgrade-executor": "1.1.0-beta.0", "@openzeppelin/contracts": "4.7.3", "@openzeppelin/contracts-upgradeable": "4.7.3", "patch-package": "^6.4.7", "solady": "0.0.182" } }, "sha512-7VzNW9TxvrX9iONDDsi7AZlEUPa6z+cjBkB4Mxlnog9VQZAapRC3CdRXyUzHnBYmUhRzyNJdyxkWPw59QGcLmA=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.23.5", "", { "dependencies": { "@babel/highlight": "^7.23.4", "chalk": "^2.4.2" } }, "sha512-CgH3s1a96LipHCmSUmYFPwY7MNx8C3avkq7i4Wl3cfa662ldtUe4VM1TPXX70pfmrlWTb6jLqTYrZyT2ZTJBgA=="],
@@ -26,6 +32,8 @@
     "@babel/highlight": ["@babel/highlight@7.23.4", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.22.20", "chalk": "^2.4.2", "js-tokens": "^4.0.0" } }, "sha512-acGdbYSfp2WheJoJm/EBBBLh/ID8KDc64ISZ9DYtBmC8/Q204PZJLHyzeB5qMzJ5trcOkybd78M4x2KWsUq++A=="],
 
     "@babel/runtime": ["@babel/runtime@7.28.4", "", {}, "sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ=="],
+
+    "@bgd-labs/solidity-utils": ["@bgd-labs/solidity-utils@1.1.2", "", { "dependencies": { "@openzeppelin/contracts": "^5.1.0", "@openzeppelin/contracts-upgradeable": "^5.1.0" } }, "sha512-GgKwrjgdfnd9yKiWX1LDWysbVIyw/HTvqewq+4I2FAJXJt7AdUgSOCSi/cJi4dymsQmE1u/zgXHSeFH5fI+XsA=="],
 
     "@bytecodealliance/preview2-shim": ["@bytecodealliance/preview2-shim@0.17.2", "", {}, "sha512-mNm/lblgES8UkVle8rGImXOz4TtL3eU3inHay/7TVchkKrb/lgcVvTK0+VAw8p5zQ0rgQsXm1j5dOlAAd+MeoA=="],
 
@@ -149,6 +157,10 @@
 
     "@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@4.9.6", "", {}, "sha512-m4iHazOsOCv1DgM7eD7GupTJ+NFVujRZt1wzddDPSVGpWdKq1SKkla5htKG7+IS4d2XOCtzkUNwRZ7Vq5aEUMA=="],
 
+    "@openzeppelin/contracts-upgradeable-v5": ["@openzeppelin/contracts-upgradeable@5.1.0", "", { "peerDependencies": { "@openzeppelin/contracts": "5.1.0" } }, "sha512-AIElwP5Ck+cslNE+Hkemf5SxjJoF4wBvvjxc27Rp+9jaPs/CLIaUBMYe1FNzhdiN0cYuwGRmYaRHmmntuiju4Q=="],
+
+    "@openzeppelin/contracts-v5": ["@openzeppelin/contracts@5.1.0", "", {}, "sha512-p1ULhl7BXzjjbha5aqst+QMLY+4/LCWADXOCsmLHRM77AqiPjnd9vvUN9sosUfhL9JGKpZ0TjEGxgvnizmWGSA=="],
+
     "@pnpm/config.env-replace": ["@pnpm/config.env-replace@1.1.0", "", {}, "sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w=="],
 
     "@pnpm/network.ca-file": ["@pnpm/network.ca-file@1.0.2", "", { "dependencies": { "graceful-fs": "4.2.10" } }, "sha512-YcPQ8a0jwYU9bTdJDpXjMi7Brhkr1mXsXrUJvjqM2mQDgkRiz8jFaQGOdaLxgjtUfQgZhKy/O3cG/YwmgKaxLA=="],
@@ -217,9 +229,13 @@
 
     "callsites": ["callsites@3.1.0", "", {}, "sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ=="],
 
+    "catapulta-verify": ["catapulta-verify@1.4.3", "", { "bin": { "catapulta-verify": "out/index.mjs" } }, "sha512-9FPHSOKL/hRm5L62YEj35dnXq+YikU/6u6XWPqZ5nG3x95Ouwk++3F/ffSt1n4HIQXusmYHZvEOx2GUKd6tQjA=="],
+
     "chai": ["chai@4.5.0", "", { "dependencies": { "assertion-error": "^1.1.0", "check-error": "^1.0.3", "deep-eql": "^4.1.3", "get-func-name": "^2.0.2", "loupe": "^2.3.6", "pathval": "^1.1.1", "type-detect": "^4.1.0" } }, "sha512-RITGBfijLkBddZvnn8jdqoTypxvqbOLYQkGGxXzeFjVHvudaPw0HNFD9x928/eUwYWd2dPCugVqspGALTZZQKw=="],
 
     "chalk": ["chalk@4.1.2", "", { "dependencies": { "ansi-styles": "^4.1.0", "supports-color": "^7.1.0" } }, "sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA=="],
+
+    "chaos-agents": ["chaos-agents@github:ChaosLabsInc/chaos-agents#f02af71", {}, "ChaosLabsInc-chaos-agents-f02af71"],
 
     "chardet": ["chardet@0.7.0", "", {}, "sha512-mT8iDcrh03qDGRRmoA2hmBJnxpllMR+0/0qlzjqZES6NdiWDcZkCNAk4rPFZ9Q85r27unkiNNg8ZOiwZXBHwcA=="],
 
@@ -572,6 +588,8 @@
     "@babel/code-frame/chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ=="],
 
     "@babel/highlight/chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ=="],
+
+    "@bgd-labs/solidity-utils/@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@5.1.0", "", { "peerDependencies": { "@openzeppelin/contracts": "5.1.0" } }, "sha512-AIElwP5Ck+cslNE+Hkemf5SxjJoF4wBvvjxc27Rp+9jaPs/CLIaUBMYe1FNzhdiN0cYuwGRmYaRHmmntuiju4Q=="],
 
     "@chainlink/contracts/@openzeppelin/contracts": ["@openzeppelin/contracts@4.9.6", "", {}, "sha512-xSmezSupL+y9VkHZJGDoCBpmnB2ogM13ccaYDWqJTfS3dbuHkgjuwDFUmaFauBCboQMGB/S5UqUl2y54X99BmA=="],
 

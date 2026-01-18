@@ -210,7 +210,7 @@ contract SepoliaDeployConfig {
     /// @return config The oracle deployment configuration
     function getOracleConfigByIndex(uint256 index) public pure returns (OracleDeploymentConfig memory config) {
         OracleDeploymentConfig[] memory configs = getOracleConfigs();
-        if (index >= configs.length) revert IndexOutOfBounds();
+        require(index < configs.length, IndexOutOfBounds());
         return configs[index];
     }
 
