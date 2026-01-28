@@ -67,6 +67,17 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
     /// @dev O(1) lookup for market authorization checks
     mapping(address market => bool isAuthorized) private _authorizedMarkets;
 
+    /// @notice Maximum allowed price deviation in basis points (0 = disabled)
+    /// @dev When non-zero, new prices must be within this deviation from the previous price
+    uint256 public maxPriceDeviation;
+
+    /// @notice Sentinel value indicating no additionalData length validation
+    uint256 public constant ADDITIONAL_DATA_LENGTH_NOT_SET = type(uint256).max;
+
+    /// @notice Expected byte length for additionalData per update type
+    /// @dev type(uint256).max = no validation, 0 = must be empty, N = must be exactly N bytes
+    mapping(bytes32 updateTypeHash => uint256 expectedLength) private _updateTypeExpectedLength;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // EVENTS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -98,9 +109,9 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         description = description_;
         version = version_;
 
-        // Initialize update types
+        // Initialize update types (no length validation by default)
         for (uint256 i = 0; i < initialUpdateTypes.length; i++) {
-            _addUpdateType(initialUpdateTypes[i]);
+            _addUpdateType(initialUpdateTypes[i], ADDITIONAL_DATA_LENGTH_NOT_SET);
         }
 
         // Initialize authorized markets
@@ -195,9 +206,28 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         emit NewRound(uint256(_latestRoundId), msg.sender, block.timestamp);
     }
 
+    /// @notice Calculate the deviation between two prices in basis points
+    /// @param previousPrice The previous price value
+    /// @param newPrice The new price value
+    /// @return The deviation in basis points (10000 = 100%)
+    function _calculateDeviation(int256 previousPrice, int256 newPrice) internal pure returns (uint256) {
+        if (previousPrice == 0) return 0;
+
+        // Calculate absolute difference
+        int256 diff = newPrice > previousPrice ? newPrice - previousPrice : previousPrice - newPrice;
+        uint256 absDiff = diff >= 0 ? uint256(diff) : uint256(-diff);
+
+        // Calculate absolute previous price for denominator
+        uint256 absPreviousPrice = previousPrice >= 0 ? uint256(previousPrice) : uint256(-previousPrice);
+
+        // Return deviation in basis points
+        return (absDiff * 10_000) / absPreviousPrice;
+    }
+
     /// @notice Internal helper to add a new update type
     /// @param updateType The update type string to add
-    function _addUpdateType(string memory updateType) internal {
+    /// @param expectedLength Expected additionalData byte length (type(uint256).max = no validation, 0 = must be empty)
+    function _addUpdateType(string memory updateType, uint256 expectedLength) internal {
         // Validate string length
         require(bytes(updateType).length != 0 && bytes(updateType).length <= 64, InvalidUpdateTypeString(updateType));
 
@@ -207,9 +237,31 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
 
         // Add the new type
         _validUpdateTypes[typeHash] = true;
+        _updateTypeExpectedLength[typeHash] = expectedLength;
         updateTypes.push(updateType);
 
-        emit UpdateTypeAdded(updateType);
+        emit UpdateTypeAdded(updateType, expectedLength);
+    }
+
+    /// @notice Internal helper to remove an update type
+    /// @param updateType The update type string to remove
+    function _removeUpdateType(string memory updateType) internal {
+        bytes32 typeHash = keccak256(bytes(updateType));
+        require(_validUpdateTypes[typeHash], UpdateTypeNotFound(updateType));
+
+        _validUpdateTypes[typeHash] = false;
+
+        // Remove from array by swap-and-pop
+        uint256 length = updateTypes.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (keccak256(bytes(updateTypes[i])) == typeHash) {
+                updateTypes[i] = updateTypes[length - 1];
+                updateTypes.pop();
+                break;
+            }
+        }
+
+        emit UpdateTypeRemoved(updateType);
     }
 
     /// @notice Internal helper to add an authorized market
@@ -234,6 +286,15 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         // Validate update type
         require(_validUpdateTypes[updateTypeHash], UnauthorizedUpdateType(input.updateType));
 
+        // Validate additionalData length if configured
+        uint256 expectedLength = _updateTypeExpectedLength[updateTypeHash];
+        if (expectedLength != ADDITIONAL_DATA_LENGTH_NOT_SET) {
+            require(
+                input.additionalData.length == expectedLength,
+                InvalidAdditionalDataLength(input.additionalData.length, expectedLength)
+            );
+        }
+
         // Get previous value from history (empty for first update)
         bytes memory previousValue = updateHistory[_latestRoundId].newValue;
 
@@ -241,6 +302,19 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         // newValue contains only the price (int256), while additionalData contains the full bundle
         {
             int256 price = abi.decode(input.newValue, (int256));
+
+            // Validate price deviation if enabled and there's a previous price
+            if (maxPriceDeviation > 0 && _latestRoundId > 0) {
+                int256 previousPrice = _roundData[_latestRoundId].answer;
+                if (previousPrice != 0) {
+                    uint256 deviation = _calculateDeviation(previousPrice, price);
+                    require(
+                        deviation <= maxPriceDeviation,
+                        PriceDeviationExceeded(previousPrice, price, deviation, maxPriceDeviation)
+                    );
+                }
+            }
+
             _updateLatestRoundData(price);
         }
 
@@ -275,8 +349,43 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
     }
 
     /// @inheritdoc ILlamaGuardOracle
-    function addUpdateType(string calldata newUpdateType) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _addUpdateType(newUpdateType);
+    function addUpdateType(
+        string calldata newUpdateType,
+        uint256 expectedAdditionalDataLength
+    )
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        _addUpdateType(newUpdateType, expectedAdditionalDataLength);
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function removeUpdateType(string calldata updateType) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _removeUpdateType(updateType);
+    }
+
+    /// @notice Set the maximum allowed price deviation
+    /// @dev Set to 0 to disable price deviation checks. Value is in basis points (10000 = 100%).
+    /// @param newMaxDeviation The new maximum price deviation in basis points
+    function setMaxPriceDeviation(uint256 newMaxDeviation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 previousValue = maxPriceDeviation;
+        maxPriceDeviation = newMaxDeviation;
+        emit MaxPriceDeviationUpdated(previousValue, newMaxDeviation);
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function setExpectedAdditionalDataLength(
+        string calldata updateType,
+        uint256 expectedLength
+    )
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        bytes32 typeHash = keccak256(bytes(updateType));
+        require(_validUpdateTypes[typeHash], UpdateTypeNotFound(updateType));
+
+        _updateTypeExpectedLength[typeHash] = expectedLength;
+        emit ExpectedAdditionalDataLengthUpdated(updateType, expectedLength);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -296,6 +405,11 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
     /// @inheritdoc ILlamaGuardOracle
     function isValidUpdateType(string calldata updateType) external view returns (bool) {
         return _validUpdateTypes[keccak256(bytes(updateType))];
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function getExpectedAdditionalDataLength(string calldata updateType) external view returns (uint256) {
+        return _updateTypeExpectedLength[keccak256(bytes(updateType))];
     }
 
     /// @inheritdoc ILlamaGuardOracle
@@ -327,6 +441,8 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
         view
         returns (RiskParameterUpdate memory)
     {
+        require(_authorizedMarkets[market], UnauthorizedMarket(market));
+
         uint256 updateId = _latestUpdateIdByType[updateTypeHash];
 
         // Strict validation: revert if no update exists

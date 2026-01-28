@@ -454,11 +454,11 @@ contract DeployLlamaGuardOracleTest is Test {
         // Unauthorized user cannot add update type
         vm.prank(unauthorizedUser);
         vm.expectRevert();
-        oracle.addUpdateType("newType");
+        oracle.addUpdateType("newType", type(uint256).max);
 
         // Admin can add update type
         vm.prank(deployer);
-        oracle.addUpdateType("newType");
+        oracle.addUpdateType("newType", type(uint256).max);
 
         assertTrue(oracle.isValidUpdateType("newType"), "New type should be valid");
     }

@@ -39,7 +39,7 @@ abstract contract LlamaGuardOracleTestBase is Test {
         bytes additionalData
     );
 
-    event UpdateTypeAdded(string indexed updateType);
+    event UpdateTypeAdded(string indexed updateType, uint256 expectedAdditionalDataLength);
 
     // V2 AggregatorInterface events
     event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);

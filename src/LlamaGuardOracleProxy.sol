@@ -24,11 +24,24 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
     string public description;
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // EVENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Emitted when the LlamaGuard oracle address is updated
+    /// @param previousOracle The address of the previous oracle
+    /// @param newOracle The address of the new oracle
+    event LlamaGuardOracleUpdated(address indexed previousOracle, address indexed newOracle);
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // ERRORS
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Thrown when the provided LlamaGuard oracle address is invalid or lacks write access for this proxy
     error InvalidLlamaGuardOracle();
+
+    /// @notice Thrown when attempting to activate/deactivate a workflow that does not exist
+    /// @param workflowId The workflow ID that was not found
+    error WorkflowDoesNotExist(bytes32 workflowId);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
@@ -80,7 +93,10 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
     function setLlamaGuardOracle(address newLlamaGuardOracle) external onlyOwner {
         ILlamaGuardOracle newLlamaguardOracle = ILlamaGuardOracle(newLlamaGuardOracle);
         require(newLlamaguardOracle.hasWriteAccess(address(this)), InvalidLlamaGuardOracle());
+
+        address previousOracle = address(llamaguardOracle);
         llamaguardOracle = newLlamaguardOracle;
+        emit LlamaGuardOracleUpdated(previousOracle, newLlamaGuardOracle);
     }
 
     /// @notice Set or update workflow configuration
@@ -110,10 +126,19 @@ contract LlamaGuardOracleProxy is Ownable2Step, AbstractCreReceiver {
     }
 
     /// @notice Activate or deactivate a workflow
+    /// @dev Reverts if the workflow does not exist (all config fields are default/zero)
     /// @param workflowId The workflow ID to update
     /// @param isActive Whether the workflow should be active
     function setWorkflowActive(bytes32 workflowId, bool isActive) external onlyOwner {
         WorkflowConfig storage config = workflowConfigs[workflowId];
+
+        // Check that workflow exists (at least one config field must be non-default)
+        require(
+            config.expectedForwarder != address(0) || config.expectedAuthor != address(0)
+                || config.expectedWorkflowName != bytes10(0),
+            WorkflowDoesNotExist(workflowId)
+        );
+
         config.isActive = isActive;
 
         emit WorkflowConfigUpdated(

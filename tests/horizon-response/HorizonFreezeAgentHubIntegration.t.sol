@@ -59,7 +59,7 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
         pool.addReserve(market);
 
         // Add update type to oracle
-        oracle.addUpdateType(UPDATE_TYPE);
+        oracle.addUpdateType(UPDATE_TYPE, type(uint256).max);
 
         // Register agent
         agentId = _registerAgent();
