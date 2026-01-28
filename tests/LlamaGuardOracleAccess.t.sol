@@ -609,4 +609,154 @@ contract LlamaGuardOracleAccessTest is LlamaGuardOracleTestBase {
         (, int256 answer,,,) = oracle.latestRoundData();
         assertEq(answer, 1100);
     }
+
+    function test_PriceDeviationCheck_AllowsDecreaseWithinLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(1000); // 10%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 1000, PRICE_TYPE, 1000, 2));
+
+        // 5% decrease (within limit)
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 950, PRICE_TYPE, 1000, 2));
+
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, 950);
+    }
+
+    function test_PriceDeviationCheck_RevertsWhenDecreaseExceedsLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(500); // 5%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 1000, PRICE_TYPE, 1000, 2));
+
+        // 15% decrease (exceeds limit)
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILlamaGuardOracle.PriceDeviationExceeded.selector,
+                1000, // previousPrice
+                850, // newPrice
+                1500, // deviation (15% = 1500 bps)
+                500 // maxAllowed
+            )
+        );
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 850, PRICE_TYPE, 1000, 2));
+    }
+
+    function test_PriceDeviationCheck_CrossingZeroPositiveToNegative() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(500); // 5%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 100, PRICE_TYPE, 1000, 2));
+
+        // Crossing zero: 100 -> -50 is 150% deviation
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILlamaGuardOracle.PriceDeviationExceeded.selector,
+                100, // previousPrice
+                -50, // newPrice
+                15_000, // deviation (150% = 15000 bps)
+                500 // maxAllowed
+            )
+        );
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", -50, PRICE_TYPE, 1000, 2));
+    }
+
+    function test_PriceDeviationCheck_CrossingZeroNegativeToPositive() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(500); // 5%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", -100, PRICE_TYPE, 1000, 2));
+
+        // Crossing zero: -100 -> 50 is 150% deviation
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILlamaGuardOracle.PriceDeviationExceeded.selector,
+                -100, // previousPrice
+                50, // newPrice
+                15_000, // deviation (150% = 15000 bps)
+                500 // maxAllowed
+            )
+        );
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 50, PRICE_TYPE, 1000, 2));
+    }
+
+    function test_PriceDeviationCheck_AllowsNegativeToLessNegativeWithinLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(1000); // 10%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", -1000, PRICE_TYPE, 1000, 2));
+
+        // 5% move towards zero (within limit): -1000 -> -950
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", -950, PRICE_TYPE, 1000, 2));
+
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, -950);
+    }
+
+    function test_PriceDeviationCheck_RevertsWhenNegativeToLessNegativeExceedsLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(500); // 5%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", -1000, PRICE_TYPE, 1000, 2));
+
+        // 20% move towards zero (exceeds limit): -1000 -> -800
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILlamaGuardOracle.PriceDeviationExceeded.selector,
+                -1000, // previousPrice
+                -800, // newPrice
+                2000, // deviation (20% = 2000 bps)
+                500 // maxAllowed
+            )
+        );
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", -800, PRICE_TYPE, 1000, 2));
+    }
+
+    function test_PriceDeviationCheck_AllowsNegativeToMoreNegativeWithinLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(1000); // 10%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", -100, PRICE_TYPE, 1000, 2));
+
+        // 5% move away from zero (within limit): -100 -> -105
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", -105, PRICE_TYPE, 1000, 2));
+
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, -105);
+    }
+
+    function test_PriceDeviationCheck_RevertsWhenNegativeToMoreNegativeExceedsLimit() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+        oracle.setMaxPriceDeviation(500); // 5%
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", -100, PRICE_TYPE, 1000, 2));
+
+        // 100% move away from zero (exceeds limit): -100 -> -200
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILlamaGuardOracle.PriceDeviationExceeded.selector,
+                -100, // previousPrice
+                -200, // newPrice
+                10_000, // deviation (100% = 10000 bps)
+                500 // maxAllowed
+            )
+        );
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", -200, PRICE_TYPE, 1000, 2));
+    }
 }

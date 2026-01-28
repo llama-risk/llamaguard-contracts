@@ -196,9 +196,13 @@ contract LlamaGuardOracleQueryTest is LlamaGuardOracleTestBase {
         // Bound updateTypeIndex to valid range (0-2 for our 3 default types)
         updateTypeIndex = uint8(bound(updateTypeIndex, 0, 2));
 
-        // Ensure queryMarket is valid (non-zero) and authorize it
+        // Ensure queryMarket is valid (non-zero) and authorize it if not already
         vm.assume(queryMarket != address(0));
-        oracle.addAuthorizedMarket(queryMarket);
+        // fuzzing sometimes tries to add the same market twice, to prevent this we check if the market is already
+        // authorized
+        if (!oracle.isAuthorizedMarket(queryMarket)) {
+            oracle.addAuthorizedMarket(queryMarket);
+        }
 
         string memory updateType;
         if (updateTypeIndex == 0) {
