@@ -280,6 +280,9 @@ contract LlamaGuardOracle is AggregatorV2V3Interface, ILlamaGuardOracle, Abstrac
 
     /// @inheritdoc ILlamaGuardOracle
     function updateLatestRiskRoundData(UpdateInput calldata input) external onlyRole(WRITER_ROLE) {
+        // Validate deadline
+        require(block.timestamp <= input.deadline, DeadlineExpired(input.deadline, block.timestamp));
+
         // Compute hash for internal lookups
         bytes32 updateTypeHash = keccak256(bytes(input.updateType));
 

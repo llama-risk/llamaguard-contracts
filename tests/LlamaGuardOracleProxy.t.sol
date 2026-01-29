@@ -65,6 +65,29 @@ contract LlamaGuardOracleProxyTest is Test {
         string memory updateType
     )
         internal
+        view
+        returns (bytes memory)
+    {
+        ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: block.timestamp + 1 hours
+        });
+        return abi.encode(input);
+    }
+
+    /// @dev Encode report for proxy with explicit deadline
+    function _encodeProxyReportWithDeadline(
+        string memory referenceId,
+        uint256 supply_,
+        int256 price_,
+        uint256 state_,
+        string memory updateType,
+        uint256 deadline_
+    )
+        internal
         pure
         returns (bytes memory)
     {
@@ -72,7 +95,8 @@ contract LlamaGuardOracleProxyTest is Test {
             referenceId: referenceId,
             newValue: abi.encode(price_),
             updateType: updateType,
-            additionalData: abi.encode(supply_, price_, state_)
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: deadline_
         });
         return abi.encode(input);
     }
@@ -400,6 +424,37 @@ contract LlamaGuardOracleProxyTest is Test {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, owner));
         proxy.setWorkflowActive(expectedWorkflowId, false);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEADLINE VALIDATION TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_OnReport_RevertsWhenDeadlineExpired() public {
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
+
+        // Create report with deadline in the past
+        uint256 pastDeadline = block.timestamp - 1;
+        bytes memory report = _encodeProxyReportWithDeadline("ref-expired", 1000, 500, 1, PRICE_TYPE, pastDeadline);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILlamaGuardOracle.DeadlineExpired.selector, pastDeadline, block.timestamp)
+        );
+        proxy.onReport(metadata, report);
+    }
+
+    function test_OnReport_SucceedsWithValidDeadline() public {
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
+
+        // Create report with deadline in the future
+        uint256 futureDeadline = block.timestamp + 1 hours;
+        bytes memory report = _encodeProxyReportWithDeadline("ref-valid", 1000, 500, 1, PRICE_TYPE, futureDeadline);
+
+        proxy.onReport(metadata, report);
+
+        // Verify update was processed
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, 500);
     }
 
     function _buildMetadata(

@@ -480,7 +480,8 @@ contract LlamaGuardOracleAccessTest is LlamaGuardOracleTestBase {
             referenceId: "ref-1",
             newValue: abi.encode(int256(500)),
             updateType: "validated_type",
-            additionalData: abi.encode(uint256(1000)) // only 32 bytes
+            additionalData: abi.encode(uint256(1000)), // only 32 bytes
+            deadline: block.timestamp + 1 hours
         });
 
         vm.prank(writer);
@@ -498,7 +499,8 @@ contract LlamaGuardOracleAccessTest is LlamaGuardOracleTestBase {
             referenceId: "ref-1",
             newValue: abi.encode(int256(500)),
             updateType: "validated_type",
-            additionalData: abi.encode(uint256(1), uint256(2), uint256(3), uint256(4)) // 128 bytes
+            additionalData: abi.encode(uint256(1), uint256(2), uint256(3), uint256(4)), // 128 bytes
+            deadline: block.timestamp + 1 hours
         });
 
         vm.prank(writer);
@@ -528,7 +530,8 @@ contract LlamaGuardOracleAccessTest is LlamaGuardOracleTestBase {
             referenceId: "ref-1",
             newValue: abi.encode(int256(500)),
             updateType: "empty_data_type",
-            additionalData: "" // empty
+            additionalData: "", // empty
+            deadline: block.timestamp + 1 hours
         });
 
         vm.prank(writer);

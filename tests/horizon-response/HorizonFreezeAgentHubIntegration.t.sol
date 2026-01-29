@@ -115,7 +115,11 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
 
         oracle.updateLatestRiskRoundData(
             ILlamaGuardOracle.UpdateInput({
-                referenceId: "test-ref", newValue: newValue, updateType: UPDATE_TYPE, additionalData: additionalData
+                referenceId: "test-ref",
+                newValue: newValue,
+                updateType: UPDATE_TYPE,
+                additionalData: additionalData,
+                deadline: block.timestamp + 1 hours
             })
         );
     }
@@ -352,7 +356,11 @@ contract HorizonFreezeAgentHubIntegrationTest is Test {
         bytes memory newValue = abi.encode(int256(100));
         oracle.updateLatestRiskRoundData(
             ILlamaGuardOracle.UpdateInput({
-                referenceId: "test-ref", newValue: newValue, updateType: UPDATE_TYPE, additionalData: additionalData
+                referenceId: "test-ref",
+                newValue: newValue,
+                updateType: UPDATE_TYPE,
+                additionalData: additionalData,
+                deadline: block.timestamp + 1 hours
             })
         );
 

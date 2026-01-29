@@ -34,6 +34,7 @@ interface ILlamaGuardOracle {
         bytes newValue; // ABI-encoded price (int256) - used as the Chainlink round answer
         string updateType; // Classification of the update for validation purposes (must be authorized)
         bytes additionalData; // ABI-encoded tuple (uint256 supply, int256 price, uint256 state)
+        uint256 deadline; // Unix timestamp after which this update is rejected
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -121,6 +122,11 @@ interface ILlamaGuardOracle {
     /// @param actual The actual length of additionalData
     /// @param expected The expected length for this update type
     error InvalidAdditionalDataLength(uint256 actual, uint256 expected);
+
+    /// @notice Thrown when the update deadline has passed
+    /// @param deadline The deadline timestamp specified in the update
+    /// @param currentTimestamp The current block.timestamp
+    error DeadlineExpired(uint256 deadline, uint256 currentTimestamp);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // EVENTS - Market Authorization
