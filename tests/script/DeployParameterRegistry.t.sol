@@ -4,19 +4,17 @@ pragma solidity >=0.8.26 <0.9.0;
 import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
 import { DeployParameterRegistry } from "../../script/parameter-registry/DeployParameterRegistry.s.sol";
-import { DeployMainnet } from "../../script/parameter-registry/DeployMainnet.s.sol";
-import { DeployConfig } from "../../script/parameter-registry/DeployConfig.sol";
-import { AssetConfigs } from "../../script/parameter-registry/AssetConfigs.sol";
-import { stdStorage, StdStorage } from "forge-std/StdStorage.sol";
+import { DeployStructs } from "../../script/config/DeployStructs.sol";
+import { MainnetConfig } from "../../script/config/MainnetConfig.sol";
+import { AnvilConfig } from "../../script/config/AnvilConfig.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title ParameterRegistryDeploymentTest
-/// @notice Comprehensive test suite for ParameterRegistry deployment scenarios
+/// @notice Test suite for ParameterRegistry deployment
 contract ParameterRegistryDeploymentTest is Test {
-    using stdStorage for StdStorage;
-
     DeployParameterRegistry internal deployScript;
-    DeployMainnet internal deployMainnet;
-    DeployConfig internal deployConfig;
+    MainnetConfig internal mainnetConfig;
+    AnvilConfig internal anvilConfig;
 
     address internal deployer;
     address internal pendingOwner;
@@ -24,7 +22,6 @@ contract ParameterRegistryDeploymentTest is Test {
     address internal unauthorizedUser;
 
     function setUp() public {
-        // Set up deployer address using ETH_FROM like in DeployMainnet.t.sol
         vm.setEnv("ETH_FROM", "0x0000000000000000000000000000000000000aBc");
         deployer = address(0x0000000000000000000000000000000000000aBc);
 
@@ -32,197 +29,123 @@ contract ParameterRegistryDeploymentTest is Test {
         pendingUpdater = makeAddr("pendingUpdater");
         unauthorizedUser = makeAddr("unauthorizedUser");
 
-        // Deploy scripts
         deployScript = new DeployParameterRegistry();
-        deployMainnet = new DeployMainnet();
-        deployConfig = new DeployConfig();
+        mainnetConfig = new MainnetConfig();
+        anvilConfig = new AnvilConfig();
 
-        // Setup scripts
-        deployScript.setUp();
-        deployMainnet.setUp();
-        deployMainnet.setDeployConfig(deployConfig);
-
-        // Fund deployer
         vm.deal(deployer, 10 ether);
     }
 
-    function test_DeploymentWithAssets_Mainnet() public {
-        vm.chainId(1);
-
-        // Mock config
-        vm.mockCall(
-            address(deployConfig),
-            abi.encodeWithSelector(DeployConfig.getMainnetConfig.selector),
-            abi.encode(
-                DeployConfig.Config({
-                    owner: deployer,
-                    updater: deployer,
-                    pendingOwner: pendingOwner,
-                    pendingUpdater: pendingUpdater,
-                    networkName: "mainnet"
-                })
-            )
-        );
-
-        ParameterRegistry registry = deployMainnet.run();
-
-        // Verify deployment
-        assertNotEq(address(registry), address(0), "Registry should be deployed");
-        assertEq(registry.owner(), deployer, "Owner should be deployer initially");
-        assertEq(registry.updater(), pendingUpdater, "Updater should be transferred");
-        assertEq(registry.pendingOwner(), pendingOwner, "Pending owner should be set");
-
-        // Verify assets are configured
-        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getMainnetAssets();
-        for (uint256 i = 0; i < a_.length; i++) {
-            if (a_[i].oracle != address(0)) {
-                assertTrue(registry.assetExists(a_[i].assetAddress), "Asset should exist");
-                assertEq(registry.getAssetName(a_[i].assetAddress), a_[i].assetName, "Asset name should match");
-            }
-        }
-    }
-
-    function test_DeploymentWithAssets_Sepolia() public {
-        vm.chainId(11_155_111);
-
-        ParameterRegistry registry = deployScript.run();
-
-        assertNotEq(address(registry), address(0), "Registry should be deployed");
-
-        // Sepolia config has role transfers configured, so check the actual config
-        DeployConfig.Config memory sepoliaConfig = deployConfig.getSepoliaConfig();
-        if (sepoliaConfig.pendingUpdater != address(0) && sepoliaConfig.pendingUpdater != deployer) {
-            assertEq(registry.updater(), sepoliaConfig.pendingUpdater, "Updater should be transferred");
-        } else {
-            assertEq(registry.updater(), deployer, "Updater should be deployer");
-        }
-
-        if (sepoliaConfig.pendingOwner != address(0) && sepoliaConfig.pendingOwner != deployer) {
-            assertEq(registry.pendingOwner(), sepoliaConfig.pendingOwner, "Pending owner should be set");
-            assertEq(registry.owner(), deployer, "Owner should still be deployer until accepted");
-        } else {
-            assertEq(registry.owner(), deployer, "Owner should be deployer");
-        }
-
-        // Verify Sepolia assets
-        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getSepoliaAssets();
-        assertTrue(a_.length > 0, "Should have Sepolia assets");
-
-        for (uint256 i = 0; i < a_.length; i++) {
-            if (a_[i].oracle != address(0)) {
-                assertTrue(registry.assetExists(a_[i].assetAddress), "Asset should exist");
-            }
-        }
-    }
-
-    function test_DeploymentWithAssets_Anvil() public {
+    function test_Deploy_Success() public {
         vm.chainId(31_337);
 
         ParameterRegistry registry = deployScript.run();
 
         assertNotEq(address(registry), address(0), "Registry should be deployed");
+        assertEq(registry.owner(), deployer, "Owner should be deployer");
+        assertEq(registry.updater(), deployer, "Updater should be deployer");
+    }
 
-        // Verify Anvil mock assets
-        AssetConfigs.AssetConfig[] memory a_ = deployConfig.getAnvilAssets();
-        assertEq(a_.length, 3, "Anvil should have 3 mock assets");
+    function test_Deploy_ConfigureMainnetAssets() public {
+        vm.chainId(1);
 
-        for (uint256 i = 0; i < a_.length; i++) {
-            assertTrue(registry.assetExists(a_[i].assetAddress), "Mock asset should exist");
-            assertEq(registry.getAssetName(a_[i].assetAddress), a_[i].assetName, "Mock asset name should match");
+        ParameterRegistry registry = deployScript.run();
+        DeployStructs.AssetConfig[] memory assets = mainnetConfig.getAllAssetConfigs();
+
+        // Configure assets manually
+        vm.startPrank(deployer);
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (assets[i].oracle == address(0)) continue;
+
+            registry.setParametersForAsset(
+                assets[i].assetAddress,
+                assets[i].assetName,
+                assets[i].oracle,
+                assets[i].maxExpectedApy,
+                assets[i].upperBoundTolerance,
+                assets[i].lowerBoundTolerance,
+                assets[i].maxDiscount,
+                assets[i].lookbackWindowSize,
+                assets[i].isUpperBoundEnabled,
+                assets[i].isLowerBoundEnabled,
+                assets[i].isActionTakingEnabled
+            );
+        }
+        vm.stopPrank();
+
+        // Verify assets
+        for (uint256 i = 0; i < assets.length; i++) {
+            if (assets[i].oracle != address(0)) {
+                assertTrue(registry.assetExists(assets[i].assetAddress), "Asset should exist");
+                assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName);
+            }
         }
     }
 
-    function test_RoleTransfer_UpdaterOnly() public {
-        vm.chainId(1);
+    function test_Deploy_ConfigureAnvilAssets() public {
+        vm.chainId(31_337);
 
-        // Mock config with only updater transfer
-        vm.mockCall(
-            address(deployConfig),
-            abi.encodeWithSelector(DeployConfig.getMainnetConfig.selector),
-            abi.encode(
-                DeployConfig.Config({
-                    owner: deployer,
-                    updater: deployer,
-                    pendingOwner: pendingOwner, // Both must be set to avoid validation errors
-                    pendingUpdater: pendingUpdater,
-                    networkName: "mainnet"
-                })
-            )
-        );
+        ParameterRegistry registry = deployScript.run();
+        DeployStructs.AssetConfig[] memory assets = anvilConfig.getAllAssetConfigs();
 
-        ParameterRegistry registry = deployMainnet.deployOnly();
-        deployMainnet.transferRolesOnly(address(registry));
+        assertEq(assets.length, 3, "Anvil should have 3 mock assets");
 
-        assertEq(registry.updater(), pendingUpdater, "Updater should be transferred");
-        assertEq(registry.owner(), deployer, "Owner should remain deployer");
-        assertEq(registry.pendingOwner(), pendingOwner, "Pending owner should be set");
-    }
+        vm.startPrank(deployer);
+        for (uint256 i = 0; i < assets.length; i++) {
+            registry.setParametersForAsset(
+                assets[i].assetAddress,
+                assets[i].assetName,
+                assets[i].oracle,
+                assets[i].maxExpectedApy,
+                assets[i].upperBoundTolerance,
+                assets[i].lowerBoundTolerance,
+                assets[i].maxDiscount,
+                assets[i].lookbackWindowSize,
+                assets[i].isUpperBoundEnabled,
+                assets[i].isLowerBoundEnabled,
+                assets[i].isActionTakingEnabled
+            );
+        }
+        vm.stopPrank();
 
-    function test_RoleTransfer_OwnerOnly() public {
-        vm.chainId(1);
-
-        // Mock config with only owner transfer
-        vm.mockCall(
-            address(deployConfig),
-            abi.encodeWithSelector(DeployConfig.getMainnetConfig.selector),
-            abi.encode(
-                DeployConfig.Config({
-                    owner: deployer,
-                    updater: deployer,
-                    pendingOwner: pendingOwner,
-                    pendingUpdater: pendingUpdater, // Both must be set to avoid validation errors
-                    networkName: "mainnet"
-                })
-            )
-        );
-
-        ParameterRegistry registry = deployMainnet.deployOnly();
-        deployMainnet.transferRolesOnly(address(registry));
-
-        assertEq(registry.updater(), pendingUpdater, "Updater should be transferred");
-        assertEq(registry.owner(), deployer, "Owner should still be deployer");
-        assertEq(registry.pendingOwner(), pendingOwner, "Pending owner should be set");
+        for (uint256 i = 0; i < assets.length; i++) {
+            assertTrue(registry.assetExists(assets[i].assetAddress), "Mock asset should exist");
+            assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName);
+        }
     }
 
     function test_OwnershipAcceptance_Flow() public {
         vm.chainId(1);
 
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        ParameterRegistry registry = deployScript.run();
 
-        // Initiate transfer
         vm.startPrank(deployer);
         registry.transferOwnership(pendingOwner);
         vm.stopPrank();
 
-        assertEq(registry.pendingOwner(), pendingOwner, "Pending owner should be set");
-        assertEq(registry.owner(), deployer, "Owner should still be deployer");
+        assertEq(registry.pendingOwner(), pendingOwner);
+        assertEq(registry.owner(), deployer);
 
-        // Accept ownership
         vm.startPrank(pendingOwner);
         registry.acceptOwnership();
         vm.stopPrank();
 
-        assertEq(registry.owner(), pendingOwner, "Ownership should be transferred");
-        assertEq(registry.pendingOwner(), address(0), "Pending owner should be cleared");
+        assertEq(registry.owner(), pendingOwner);
+        assertEq(registry.pendingOwner(), address(0));
     }
 
     function test_OwnershipTransfer_CanBeCancelled() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
         vm.startPrank(deployer);
-
-        // Initiate transfer
         registry.transferOwnership(pendingOwner);
         assertEq(registry.pendingOwner(), pendingOwner);
 
-        // Cancel by transferring to zero address
         registry.transferOwnership(address(0));
         assertEq(registry.pendingOwner(), address(0));
-
         vm.stopPrank();
 
-        // Original pending owner can no longer accept
         vm.startPrank(pendingOwner);
         vm.expectRevert();
         registry.acceptOwnership();
@@ -230,15 +153,13 @@ contract ParameterRegistryDeploymentTest is Test {
     }
 
     function test_AssetConfiguration_RequiresUpdaterRole() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
-        // Transfer updater role
         vm.startPrank(deployer);
         registry.setUpdater(pendingUpdater);
         vm.stopPrank();
 
-        // Try to configure as non-updater
         vm.startPrank(deployer);
         vm.expectRevert(ParameterRegistry.OnlyUpdater.selector);
         registry.setParametersForAsset(
@@ -246,7 +167,6 @@ contract ParameterRegistryDeploymentTest is Test {
         );
         vm.stopPrank();
 
-        // Configure as updater should work
         vm.startPrank(pendingUpdater);
         registry.setParametersForAsset(
             makeAddr("asset"), "Test Asset", makeAddr("oracle"), 1000, 100, 100, 200, 10, true, true, false
@@ -255,129 +175,72 @@ contract ParameterRegistryDeploymentTest is Test {
         vm.stopPrank();
     }
 
-    function test_InvalidChainId_Reverts() public {
-        vm.chainId(999_999);
-
-        vm.expectRevert("DeployConfig: Unsupported chain ID");
-        deployScript.run();
-    }
-
     function test_ZeroAddressValidation() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
-        // Test zero address for updater
         vm.startPrank(deployer);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
         registry.setUpdater(address(0));
-        vm.stopPrank();
 
-        // Test zero address for oracle
-        vm.startPrank(deployer);
         vm.expectRevert(ParameterRegistry.ZeroAddress.selector);
         registry.setParametersForAsset(
-            makeAddr("asset"),
-            "Test Asset",
-            address(0), // zero oracle
-            1000,
-            100,
-            100,
-            200,
-            10,
-            true,
-            true,
-            false
+            makeAddr("asset"), "Test Asset", address(0), 1000, 100, 100, 200, 10, true, true, false
         );
         vm.stopPrank();
     }
 
     function test_ParameterLimitsValidation() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
         vm.startPrank(deployer);
 
-        // Test upper bound tolerance limit
         vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.UpperBoundToleranceTooHigh.selector, 251));
         registry.setParametersForAsset(
-            makeAddr("asset1"),
-            "Asset 1",
-            makeAddr("oracle1"),
-            1000,
-            251, // Exceeds limit
-            100,
-            100,
-            10,
-            true,
-            true,
-            false
+            makeAddr("asset1"), "Asset 1", makeAddr("oracle1"), 1000, 251, 100, 100, 10, true, true, false
         );
 
-        // Test lower bound tolerance limit
         vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.LowerBoundToleranceTooHigh.selector, 251));
         registry.setParametersForAsset(
-            makeAddr("asset2"),
-            "Asset 2",
-            makeAddr("oracle2"),
-            1000,
-            100,
-            251, // Exceeds limit
-            100,
-            10,
-            true,
-            true,
-            false
+            makeAddr("asset2"), "Asset 2", makeAddr("oracle2"), 1000, 100, 251, 100, 10, true, true, false
         );
 
-        // Test max discount limit
         vm.expectRevert(abi.encodeWithSelector(ParameterRegistry.MaxDiscountTooHigh.selector, 251));
         registry.setParametersForAsset(
-            makeAddr("asset3"),
-            "Asset 3",
-            makeAddr("oracle3"),
-            1000,
-            100,
-            100,
-            251, // Exceeds limit
-            10,
-            true,
-            true,
-            false
+            makeAddr("asset3"), "Asset 3", makeAddr("oracle3"), 1000, 100, 100, 251, 10, true, true, false
         );
 
         vm.stopPrank();
     }
 
     function test_AssetDeletion_OnlyUpdater() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
         address testAsset = makeAddr("testAsset");
 
-        // Add asset
         vm.startPrank(deployer);
         registry.setParametersForAsset(
             testAsset, "Test Asset", makeAddr("oracle"), 1000, 100, 100, 200, 10, true, true, false
         );
-        assertTrue(registry.assetExists(testAsset), "Asset should exist");
+        assertTrue(registry.assetExists(testAsset));
         vm.stopPrank();
 
-        // Try to delete as non-updater
         vm.startPrank(unauthorizedUser);
         vm.expectRevert(ParameterRegistry.OnlyUpdater.selector);
         registry.deleteAsset(testAsset);
         vm.stopPrank();
 
-        // Delete as updater
         vm.startPrank(deployer);
         registry.deleteAsset(testAsset);
-        assertFalse(registry.assetExists(testAsset), "Asset should be deleted");
+        assertFalse(registry.assetExists(testAsset));
         vm.stopPrank();
     }
 
     function test_MultipleAssetsConfiguration() public {
-        vm.chainId(1); // Set chain ID for mainnet deployment
-        ParameterRegistry registry = deployMainnet.deployOnly();
+        vm.chainId(1);
+        ParameterRegistry registry = deployScript.run();
 
         address[] memory a_ = new address[](5);
         for (uint256 i = 0; i < 5; i++) {
@@ -385,8 +248,6 @@ contract ParameterRegistryDeploymentTest is Test {
         }
 
         vm.startPrank(deployer);
-
-        // Configure multiple assets
         for (uint256 i = 0; i < a_.length; i++) {
             registry.setParametersForAsset(
                 a_[i],
@@ -403,12 +264,10 @@ contract ParameterRegistryDeploymentTest is Test {
             );
         }
 
-        // Verify all assets exist
         for (uint256 i = 0; i < a_.length; i++) {
-            assertTrue(registry.assetExists(a_[i]), "Asset should exist");
-            assertEq(registry.getAssetName(a_[i]), string(abi.encodePacked("Asset ", i)), "Asset name should match");
+            assertTrue(registry.assetExists(a_[i]));
+            assertEq(registry.getAssetName(a_[i]), string(abi.encodePacked("Asset ", i)));
         }
-
         vm.stopPrank();
     }
 }

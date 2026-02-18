@@ -3,8 +3,7 @@ pragma solidity >=0.8.26 <0.9.0;
 
 import { DeploymentTestBase } from "./DeploymentTestBase.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
-import { AssetConfigs } from "../../script/parameter-registry/AssetConfigs.sol";
-import { DeployConfig } from "../../script/parameter-registry/DeployConfig.sol";
+import { DeployStructs } from "../../script/config/DeployStructs.sol";
 
 /// @title DeploymentLogicTest
 /// @notice Tests the deployment logic without broadcast functionality
@@ -22,11 +21,10 @@ contract DeploymentLogicTest is DeploymentTestBase {
         vm.chainId(1);
 
         ParameterRegistry registry = deployRegistry(deployer, deployer);
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getMainnetAssets();
+        DeployStructs.AssetConfig[] memory assets = mainnetConfig.getAllAssetConfigs();
 
         configureAssets(registry, assets);
 
-        // Verify configuration
         for (uint256 i = 0; i < assets.length; i++) {
             if (assets[i].oracle != address(0)) {
                 assertTrue(registry.assetExists(assets[i].assetAddress));
@@ -40,30 +38,23 @@ contract DeploymentLogicTest is DeploymentTestBase {
         vm.chainId(11_155_111);
 
         ParameterRegistry registry = deployRegistry(deployer, deployer);
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getSepoliaAssets();
+        DeployStructs.AssetConfig[] memory assets = sepoliaConfig.getAllAssetConfigs();
 
-        configureAssets(registry, assets);
-
-        // Verify configuration
-        for (uint256 i = 0; i < assets.length; i++) {
-            if (assets[i].oracle != address(0)) {
-                assertTrue(registry.assetExists(assets[i].assetAddress));
-                assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName);
-            }
-        }
+        // Sepolia assets have oracle = address(0) by default (set after deployment)
+        // So just verify the config loads without errors
+        assertEq(assets.length, 2, "Sepolia should have 2 assets");
     }
 
     function test_ConfigureAnvilAssets() public {
         vm.chainId(31_337);
 
         ParameterRegistry registry = deployRegistry(deployer, deployer);
-        AssetConfigs.AssetConfig[] memory assets = deployConfig.getAnvilAssets();
+        DeployStructs.AssetConfig[] memory assets = anvilConfig.getAllAssetConfigs();
 
         assertEq(assets.length, 3, "Anvil should have 3 mock assets");
 
         configureAssets(registry, assets);
 
-        // Verify all Anvil assets are configured
         for (uint256 i = 0; i < assets.length; i++) {
             assertTrue(registry.assetExists(assets[i].assetAddress));
             assertEq(registry.getAssetName(assets[i].assetAddress), assets[i].assetName);
@@ -83,11 +74,9 @@ contract DeploymentLogicTest is DeploymentTestBase {
     function test_AcceptOwnership_Success() public {
         ParameterRegistry registry = deployRegistry(deployer, deployer);
 
-        // Transfer ownership
         vm.prank(deployer);
         registry.transferOwnership(pendingOwner);
 
-        // Accept ownership
         vm.prank(pendingOwner);
         registry.acceptOwnership();
 
@@ -100,7 +89,6 @@ contract DeploymentLogicTest is DeploymentTestBase {
 
         vm.startPrank(pendingOwner); // Not the owner
 
-        // Should revert
         vm.expectRevert();
         registry.setUpdater(pendingUpdater);
 
@@ -113,11 +101,9 @@ contract DeploymentLogicTest is DeploymentTestBase {
     function test_AssetConfiguration_RequiresUpdater() public {
         ParameterRegistry registry = deployRegistry(deployer, deployer);
 
-        // Change updater
         vm.prank(deployer);
         registry.setUpdater(pendingUpdater);
 
-        // Try to configure as non-updater
         vm.startPrank(deployer); // No longer updater
 
         vm.expectRevert();
@@ -133,7 +119,6 @@ contract DeploymentLogicTest is DeploymentTestBase {
 
         address assetAddress = makeAddr("testAsset");
 
-        // Add asset
         vm.startPrank(deployer);
         registry.setParametersForAsset(
             assetAddress, "Test Asset", makeAddr("oracle"), 500, 100, 100, 200, 24, true, true, false
@@ -141,7 +126,6 @@ contract DeploymentLogicTest is DeploymentTestBase {
 
         assertTrue(registry.assetExists(assetAddress));
 
-        // Delete asset
         registry.deleteAsset(assetAddress);
 
         assertFalse(registry.assetExists(assetAddress));
@@ -149,44 +133,14 @@ contract DeploymentLogicTest is DeploymentTestBase {
         vm.stopPrank();
     }
 
-    function test_ChainIdValidation() public {
-        // Test that different configs are loaded for different chains
-        vm.chainId(1);
-        DeployConfig.Config memory mainnetConfig = deployConfig.getConfigByChainId(1);
-        assertEq(mainnetConfig.networkName, "mainnet");
-
-        vm.chainId(11_155_111);
-        DeployConfig.Config memory sepoliaConfig = deployConfig.getConfigByChainId(11_155_111);
-        assertEq(sepoliaConfig.networkName, "sepolia");
-
-        vm.chainId(31_337);
-        DeployConfig.Config memory anvilConfig = deployConfig.getConfigByChainId(31_337);
-        assertEq(anvilConfig.networkName, "anvil");
-
-        // Unsupported chain
-        vm.chainId(999_999);
-        vm.expectRevert("DeployConfig: Unsupported chain ID");
-        deployConfig.getConfigByChainId(999_999);
-    }
-
     function test_ParameterLimits() public {
         ParameterRegistry registry = deployRegistry(deployer, deployer);
 
         vm.startPrank(deployer);
 
-        // Test maximum allowed values (within contract limits)
+        // Test maximum allowed values
         registry.setParametersForAsset(
-            makeAddr("maxAsset"),
-            "Max Asset",
-            makeAddr("oracle"),
-            10_000, // 100% APY in BPS
-            250, // Max upper bound tolerance (2.5%)
-            250, // Max lower bound tolerance (2.5%)
-            250, // Max discount (2.5%)
-            1000, // Reasonable lookback
-            true,
-            true,
-            true
+            makeAddr("maxAsset"), "Max Asset", makeAddr("oracle"), 10_000, 250, 250, 250, 1000, true, true, true
         );
 
         // Test exceeding upper bound tolerance limit

@@ -3,28 +3,31 @@ pragma solidity >=0.8.26 <0.9.0;
 
 import { Test } from "forge-std/Test.sol";
 import { ParameterRegistry } from "../../src/ParameterRegistry.sol";
-import { DeployConfig } from "../../script/parameter-registry/DeployConfig.sol";
-import { AssetConfigs } from "../../script/parameter-registry/AssetConfigs.sol";
+import { DeployStructs } from "../../script/config/DeployStructs.sol";
+import { MainnetConfig } from "../../script/config/MainnetConfig.sol";
+import { SepoliaConfig } from "../../script/config/SepoliaConfig.sol";
+import { AnvilConfig } from "../../script/config/AnvilConfig.sol";
 
 /// @title DeploymentTestBase
 /// @notice Base contract for testing deployment scripts
 /// @dev Provides common test utilities and setup
 contract DeploymentTestBase is Test {
-    DeployConfig internal deployConfig;
+    MainnetConfig internal mainnetConfig;
+    SepoliaConfig internal sepoliaConfig;
+    AnvilConfig internal anvilConfig;
     address internal deployer;
     address internal pendingOwner;
     address internal pendingUpdater;
 
     function setUp() public virtual {
-        // Setup test addresses
         deployer = makeAddr("deployer");
         pendingOwner = makeAddr("pendingOwner");
         pendingUpdater = makeAddr("pendingUpdater");
 
-        // Deploy config
-        deployConfig = new DeployConfig();
+        mainnetConfig = new MainnetConfig();
+        sepoliaConfig = new SepoliaConfig();
+        anvilConfig = new AnvilConfig();
 
-        // Fund deployer
         vm.deal(deployer, 10 ether);
     }
 
@@ -35,27 +38,24 @@ contract DeploymentTestBase is Test {
     }
 
     /// @notice Helper to configure assets
-    function configureAssets(ParameterRegistry registry, AssetConfigs.AssetConfig[] memory assets) internal {
+    function configureAssets(ParameterRegistry registry, DeployStructs.AssetConfig[] memory assets) internal {
         vm.startPrank(registry.updater());
 
         for (uint256 i = 0; i < assets.length; i++) {
-            AssetConfigs.AssetConfig memory asset = assets[i];
-
-            // Skip assets without oracle
-            if (asset.oracle == address(0)) continue;
+            if (assets[i].oracle == address(0)) continue;
 
             registry.setParametersForAsset(
-                asset.assetAddress,
-                asset.assetName,
-                asset.oracle,
-                asset.maxExpectedApy,
-                asset.upperBoundTolerance,
-                asset.lowerBoundTolerance,
-                asset.maxDiscount,
-                asset.lookbackWindowSize,
-                asset.isUpperBoundEnabled,
-                asset.isLowerBoundEnabled,
-                asset.isActionTakingEnabled
+                assets[i].assetAddress,
+                assets[i].assetName,
+                assets[i].oracle,
+                assets[i].maxExpectedApy,
+                assets[i].upperBoundTolerance,
+                assets[i].lowerBoundTolerance,
+                assets[i].maxDiscount,
+                assets[i].lookbackWindowSize,
+                assets[i].isUpperBoundEnabled,
+                assets[i].isLowerBoundEnabled,
+                assets[i].isActionTakingEnabled
             );
         }
 
