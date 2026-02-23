@@ -126,7 +126,7 @@ contract DeploySepoliaUstb is BaseScript {
         console2.log("[OK] EACAggregatorProxy:", deployed.eacProxy);
 
         // 7. Deploy RawNAVOracle — writable NAV source for CRE
-        RawNAVOracle rawNav = new RawNAVOracle(8, "USTB Raw NAV (Sepolia)", 1, seedPrice);
+        RawNAVOracle rawNav = new RawNAVOracle(6, "USTB Raw NAV (Sepolia)", 1, seedPrice);
         deployed.rawNAVOracle = address(rawNav);
         console2.log("[OK] RawNAVOracle:", deployed.rawNAVOracle);
 

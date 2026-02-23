@@ -392,7 +392,7 @@ ILlamaGuardOracle.UpdateInput memory badInput = ILlamaGuardOracle.UpdateInput({
 | Freeze update        | [ ] Pass |       |
 | Validation rejection | [ ] Pass |       |
 
-**Internal sign-off (LlamaRisk):** ********\_******** Date: **\_\_\_**
+**Internal sign-off (LlamaRisk):** **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
 
 ---
 
@@ -631,9 +631,9 @@ HorizonFreezeAgent.
 
 **Sign-off Required:**
 
-- [ ] LlamaRisk: ********\_******** Date: **\_\_\_**
-- [ ] Horizon: ********\_******** Date: **\_\_\_**
-- [ ] Chainlink: ********\_******** Date: **\_\_\_**
+- [ ] LlamaRisk: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] Horizon: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] Chainlink: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
 
 **Decision:**
 
@@ -746,9 +746,9 @@ HorizonAgentHub.registerAgent(
 
 **Sign-off Required Before Expanding:**
 
-- [ ] LlamaRisk: ********\_******** Date: **\_\_\_**
-- [ ] Horizon: ********\_******** Date: **\_\_\_**
-- [ ] Chainlink: ********\_******** Date: **\_\_\_**
+- [ ] LlamaRisk: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] Horizon: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] Chainlink: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
 
 **Decision:**
 
