@@ -59,6 +59,13 @@ library Addresses {
     address internal constant SEPOLIA_CRE_FORWARDER = 0xDB9DE209C276E14bd36aAc18A1f551e09586e8Ba;
     address internal constant SEPOLIA_CRE_AUTHOR = 0x4EDEaFc9b862F08464423EFe9423153B22B28f17;
 
+    // --- Sepolia deployed LlamaGuard infrastructure ---
+    address internal constant SEPOLIA_USTB_LLAMAGUARD_ORACLE = 0x54F2879D0a903B864782A40D67776aE53871B166;
+    address internal constant SEPOLIA_USTB_FREEZE_AGENT = 0xC363afB380cd6C972Fd8219d9f51F3f6b05CD60c;
+    address internal constant SEPOLIA_HORIZON_AGENT_HUB = 0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68;
+    address internal constant SEPOLIA_USTB_LLAMAGUARD_ORACLE_PROXY = 0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2;
+    address internal constant SEPOLIA_HOT_WALLET = 0x9118964074e2AA11393ce0797264759dB2F2ef69;
+
     // --- Sepolia Aave Horizon ---
     address internal constant SEPOLIA_AAVE_HORIZON_POOL = 0x553aA902Df9C6770c43Ef047cDD13431Ecdf09fF;
     address internal constant SEPOLIA_AAVE_HORIZON_POOL_CONFIGURATOR = 0x5d5215F0901e58b442Fbb443d2dAD2645A553B18;

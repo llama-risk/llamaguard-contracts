@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
+import { AggregatorV2V3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV2V3Interface.sol";
+import { AggregatorInterface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorInterface.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title RawNAVOracle
-/// @notice Writable AggregatorV3-compatible oracle for Sepolia integration testing
-/// @dev The deployer (owner) pushes raw NAV values. CRE listens to the emitted events.
+/// @notice Writable AggregatorV2V3-compatible oracle for Sepolia integration testing
+/// @dev The deployer (owner) pushes raw NAV values. CRE listens to AnswerUpdated events.
 ///      Used by a cron job (real prices) and manually (bad values for fire drills).
-contract RawNAVOracle is Ownable, AggregatorV3Interface {
+contract RawNAVOracle is Ownable, AggregatorV2V3Interface {
     uint8 private immutable _decimals;
     string private _description;
     uint256 private immutable _version;
@@ -18,10 +20,7 @@ contract RawNAVOracle is Ownable, AggregatorV3Interface {
     uint256 private _latestStartedAt;
     uint256 private _latestUpdatedAt;
 
-    /// @notice Emitted when new round data is pushed — CRE listens to this
-    event RoundDataUpdated(uint80 indexed roundId, int256 answer, uint256 startedAt, uint256 updatedAt);
-
-    /// @param decimals_ Number of decimals for the oracle (e.g., 8)
+    /// @param decimals_ Number of decimals for the oracle (e.g., 6)
     /// @param description_ Human-readable description (e.g., "USTB Raw NAV (Sepolia)")
     /// @param version_ Oracle version number
     /// @param initialAnswer Initial price to seed latestRoundData with valid data immediately
@@ -42,19 +41,23 @@ contract RawNAVOracle is Ownable, AggregatorV3Interface {
         _latestStartedAt = block.timestamp;
         _latestUpdatedAt = block.timestamp;
 
-        emit RoundDataUpdated(1, initialAnswer, block.timestamp, block.timestamp);
+        emit AnswerUpdated(initialAnswer, 1, block.timestamp);
     }
 
     /// @notice Push a new price value — only callable by owner (deployer / cron job)
-    /// @param answer The new NAV price (8 decimals)
+    /// @param answer The new NAV price
     function updateLatestRoundData(int256 answer) external onlyOwner {
         _latestRoundId++;
         _latestAnswer = answer;
         _latestStartedAt = block.timestamp;
         _latestUpdatedAt = block.timestamp;
 
-        emit RoundDataUpdated(_latestRoundId, answer, block.timestamp, block.timestamp);
+        emit AnswerUpdated(answer, _latestRoundId, block.timestamp);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AggregatorV3Interface
+    // ═══════════════════════════════════════════════════════════════════════════
 
     /// @inheritdoc AggregatorV3Interface
     function decimals() external view override returns (uint8) {
@@ -90,5 +93,34 @@ contract RawNAVOracle is Ownable, AggregatorV3Interface {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (_latestRoundId, _latestAnswer, _latestStartedAt, _latestUpdatedAt, _latestRoundId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AggregatorInterface (V2)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @inheritdoc AggregatorInterface
+    function latestAnswer() external view override returns (int256) {
+        return _latestAnswer;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function latestTimestamp() external view override returns (uint256) {
+        return _latestUpdatedAt;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function latestRound() external view override returns (uint256) {
+        return _latestRoundId;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function getAnswer(uint256) external view override returns (int256) {
+        return _latestAnswer;
+    }
+
+    /// @inheritdoc AggregatorInterface
+    function getTimestamp(uint256) external view override returns (uint256) {
+        return _latestUpdatedAt;
     }
 }

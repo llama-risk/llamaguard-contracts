@@ -14,8 +14,8 @@ the `EACAggregatorProxy` for USTB.
 | Contract                         | Address                                      | Decimals | Etherscan                                                                               |
 | -------------------------------- | -------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
 | LlamaGuardOracle (USTB)          | `0x54F2879D0a903B864782A40D67776aE53871B166` | 6        | [View](https://sepolia.etherscan.io/address/0x54F2879D0a903B864782A40D67776aE53871B166) |
-| LlamaGuardOracleProxy (USTB)     | `0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2` | —        | [View](https://sepolia.etherscan.io/address/0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2) |
-| EACAggregatorProxy               | `0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79` | —        | [View](https://sepolia.etherscan.io/address/0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79) |
+| LlamaGuardOracleProxy v2 (USTB)  | `0x860EeAEA09ff6A26F3F4C8681e79B200D9412382` | —        | [View](https://sepolia.etherscan.io/address/0x860EeAEA09ff6A26F3F4C8681e79B200D9412382) |
+| EACAggregatorProxy (V2V3)        | `0xa3180C43c5B52887008538942b9C6E1993535def` | —        | [View](https://sepolia.etherscan.io/address/0xa3180C43c5B52887008538942b9C6E1993535def) |
 | RawNAVOracle                     | `0xba88Da783C44DC01dBC828a2Cf7F9eB4C5E2A620` | 6        | [View](https://sepolia.etherscan.io/address/0xba88Da783C44DC01dBC828a2Cf7F9eB4C5E2A620) |
 | HorizonAgentHub (proxy)          | `0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68` | —        | [View](https://sepolia.etherscan.io/address/0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68) |
 | HorizonAgentHub (implementation) | `0xe3654B4277767BEf520625FB4D7D82cd14C7E26B` | —        | [View](https://sepolia.etherscan.io/address/0xe3654B4277767BEf520625FB4D7D82cd14C7E26B) |
@@ -24,15 +24,18 @@ the `EACAggregatorProxy` for USTB.
 
 ### Deprecated (replaced)
 
-| Contract                   | Address                                      | Notes                                        |
-| -------------------------- | -------------------------------------------- | -------------------------------------------- |
-| LlamaGuardOracle (USTB) v1 | `0x08bFEb45bA1437708bB6FBDBa94E04Df0a9F8045` | 8 decimals — replaced with 6 decimal version |
-| RawNAVOracle v1            | `0xdCb47643002c3259912e1bA65b53b92F81e93703` | 8 decimals — replaced with 6 decimal version |
+| Contract                     | Address                                      | Notes                                                           |
+| ---------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| EACAggregatorProxy (V3 only) | `0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79` | Replaced with V2V3 version for Horizon `latestAnswer()` support |
+| LlamaGuardOracleProxy v1     | `0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2` | Replaced with v2 (zero-forwarder); WRITER_ROLE revoked          |
+| LlamaGuardOracle (USTB) v1   | `0x08bFEb45bA1437708bB6FBDBa94E04Df0a9F8045` | 8 decimals — replaced with 6 decimal version                    |
+| RawNAVOracle v1              | `0xdCb47643002c3259912e1bA65b53b92F81e93703` | 8 decimals — replaced with 6 decimal version                    |
 
 ## Configuration Applied
 
-- `WRITER_ROLE` granted to `LlamaGuardOracleProxy` (`0x2B07...8bD2`) on `LlamaGuardOracle`
-- `WRITER_ROLE` granted to deployer (`0x9118...ef69`) on `LlamaGuardOracle` (for direct seeding before CRE is active)
+- `WRITER_ROLE` granted to `LlamaGuardOracleProxy v2` (`0x860E...2382`) on `LlamaGuardOracle`
+- `WRITER_ROLE` revoked from old `LlamaGuardOracleProxy v1` (`0x2B07...8bD2`)
+- `WRITER_ROLE` revoked from deployer (`0x9118...ef69`)
 - SEPOLIA_USTB token (`0x39727692cF58137Bd8c401eFE87Cc8A190D62ead`) added as authorized market on oracle
 - Oracle seeded with price `10994190` (10.994190 USD, 6 decimals)
 - `RawNAVOracle` (6 decimals) initialized with same seed price
@@ -46,7 +49,7 @@ the `EACAggregatorProxy` for USTB.
 | Parameter     | Value                                                                |
 | ------------- | -------------------------------------------------------------------- |
 | Workflow ID   | `0x00a9cf308e875f62fb6df1f6e1a55dd7db46384876e4059c35abd54125a9c1af` |
-| Forwarder     | `0xDB9DE209C276E14bd36aAc18A1f551e09586e8Ba`                         |
+| Forwarder     | `address(0)` (forwarder check skipped in v2 proxy)                   |
 | Author        | `0x4EDEaFc9b862F08464423EFe9423153B22B28f17`                         |
 | Workflow Name | `llamaguard_nav_ustb_dev` (bytes10: `0x32336262336637396562`)        |
 
@@ -55,7 +58,7 @@ the `EACAggregatorProxy` for USTB.
 | Contract                   | Role                 | Holder                     |
 | -------------------------- | -------------------- | -------------------------- |
 | LlamaGuardOracle           | `DEFAULT_ADMIN_ROLE` | Deployer (`0x9118...ef69`) |
-| LlamaGuardOracleProxy      | Owner                | Deployer (`0x9118...ef69`) |
+| LlamaGuardOracleProxy v2   | Owner                | Deployer (`0x9118...ef69`) |
 | EACAggregatorProxy         | Owner                | Deployer (`0x9118...ef69`) |
 | RawNAVOracle               | Owner                | Deployer (`0x9118...ef69`) |
 | HorizonAgentHub            | Owner                | Deployer (`0x9118...ef69`) |
@@ -68,14 +71,15 @@ Cron Job ──writes──► RawNAVOracle (0xba88) ──event──► CRE Wo
                                                         │
 Deployer ──bad write─► RawNAVOracle (0xba88) ──event──► │
                                                         ▼
-                                              LlamaGuardOracleProxy (0x2B07)
+                                              LlamaGuardOracleProxy v2 (0x860E)
+                                              (zero-forwarder, skips check)
                                                         │
                                                         ▼
                                               LlamaGuardOracle (0x54F2, 6 dec)
                                                   │           │
                                                   ▼           ▼
                                            EACAggregatorProxy  AgentHub (0x1DcD)
-                                           (0x3046)               │
+                                           (0xa318)               │
                                            Horizon lists          ▼
                                                           FreezeAgent (0xC363)
                                                                 │
@@ -96,17 +100,20 @@ cast call 0x54F2879D0a903B864782A40D67776aE53871B166 "latestAnswer()(int256)" --
 # Deployer has write access
 cast call 0x54F2879D0a903B864782A40D67776aE53871B166 "hasWriteAccess(address)(bool)" 0x9118964074e2AA11393ce0797264759dB2F2ef69 --rpc-url sepolia
 
-# Proxy has write access
+# New proxy v2 has write access
+cast call 0x54F2879D0a903B864782A40D67776aE53871B166 "hasWriteAccess(address)(bool)" 0x860EeAEA09ff6A26F3F4C8681e79B200D9412382 --rpc-url sepolia
+
+# Old proxy v1 write access revoked
 cast call 0x54F2879D0a903B864782A40D67776aE53871B166 "hasWriteAccess(address)(bool)" 0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2 --rpc-url sepolia
 
 # USTB market authorized
 cast call 0x54F2879D0a903B864782A40D67776aE53871B166 "isAuthorizedMarket(address)(bool)" 0x39727692cF58137Bd8c401eFE87Cc8A190D62ead --rpc-url sepolia
 
 # EAC returns seeded price (6 decimals)
-cast call 0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79 "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url sepolia
+cast call 0xa3180C43c5B52887008538942b9C6E1993535def "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url sepolia
 
-# EAC points to new oracle
-cast call 0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79 "aggregator()(address)" --rpc-url sepolia
+# EAC points to oracle
+cast call 0xa3180C43c5B52887008538942b9C6E1993535def "aggregator()(address)" --rpc-url sepolia
 
 # Proxy points to new oracle
 cast call 0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2 "llamaguardOracle()(address)" --rpc-url sepolia
@@ -129,7 +136,7 @@ cast call 0xC363afB380cd6C972Fd8219d9f51F3f6b05CD60c "POOL()(address)" --rpc-url
 
 ## Next Steps
 
-1. **Share with Horizon** — Give `EACAggregatorProxy` (`0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79`) to Horizon so they
+1. **Share with Horizon** — Give `EACAggregatorProxy` (`0xa3180C43c5B52887008538942b9C6E1993535def`) to Horizon so they
    list USTB with this oracle
 2. **Share with Chainlink** — Give `RawNAVOracle` (`0xba88Da783C44DC01dBC828a2Cf7F9eB4C5E2A620`) to Chainlink so they
    configure CRE to listen to `RoundDataUpdated` events
@@ -181,3 +188,12 @@ Expected flow: CRE detects bad value -> pushes freeze state=1 to LlamaGuardOracl
 | Seed oracle (6 decimals)            | `0x01550b2fb83717a924f1ff35979cfaaac8ddf42ca8b9b7b8ac0af62027aa6d07` |
 | Proxy setLlamaGuardOracle           | `0x73657e10131b37b4a53d2e3e6466cd47481aaf236f82a54a8ce3001b48de4fbc` |
 | EAC proposeAggregator               | `0x1e1105d4f927f7c542f2cff6ef3b0f3f45fd43734e0919f9b08e1f6699fea14c` |
+
+### Proxy Redeployment — Zero-Forwarder (Block 10328486)
+
+| Transaction                     | Hash                                                                 |
+| ------------------------------- | -------------------------------------------------------------------- |
+| Deploy LlamaGuardOracleProxy v2 | `0x4fef401ad32a3453bfaf536f681f7594f3c71d7e65733a39f9d0ddae71e2a403` |
+| Grant WRITER_ROLE (new proxy)   | `0x690dfd5e4ed67eb5a2af23e4d2fb57b7b93f7940424fc211a12ded218ab7e953` |
+| Revoke WRITER_ROLE (old proxy)  | `0x4ebdb6378494db5ba5e245d7c310b4a6e66c98924fed26bb09db18af04bba00d` |
+| Revoke WRITER_ROLE (deployer)   | `0x3e86b71b94ed60204c08b78f09def9b3b08bbb4abb46f5236917cc519ec2ad80` |
