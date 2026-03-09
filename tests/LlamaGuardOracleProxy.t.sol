@@ -65,6 +65,29 @@ contract LlamaGuardOracleProxyTest is Test {
         string memory updateType
     )
         internal
+        view
+        returns (bytes memory)
+    {
+        ILlamaGuardOracle.UpdateInput memory input = ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: block.timestamp + 1 hours
+        });
+        return abi.encode(input);
+    }
+
+    /// @dev Encode report for proxy with explicit deadline
+    function _encodeProxyReportWithDeadline(
+        string memory referenceId,
+        uint256 supply_,
+        int256 price_,
+        uint256 state_,
+        string memory updateType,
+        uint256 deadline_
+    )
+        internal
         pure
         returns (bytes memory)
     {
@@ -72,7 +95,8 @@ contract LlamaGuardOracleProxyTest is Test {
             referenceId: referenceId,
             newValue: abi.encode(price_),
             updateType: updateType,
-            additionalData: abi.encode(supply_, price_, state_)
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: deadline_
         });
         return abi.encode(input);
     }
@@ -402,6 +426,37 @@ contract LlamaGuardOracleProxyTest is Test {
         proxy.setWorkflowActive(expectedWorkflowId, false);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEADLINE VALIDATION TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_OnReport_RevertsWhenDeadlineExpired() public {
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
+
+        // Create report with deadline in the past
+        uint256 pastDeadline = block.timestamp - 1;
+        bytes memory report = _encodeProxyReportWithDeadline("ref-expired", 1000, 500, 1, PRICE_TYPE, pastDeadline);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILlamaGuardOracle.DeadlineExpired.selector, pastDeadline, block.timestamp)
+        );
+        proxy.onReport(metadata, report);
+    }
+
+    function test_OnReport_SucceedsWithValidDeadline() public {
+        bytes memory metadata = _buildMetadata(expectedWorkflowId, expectedAuthor, expectedWorkflowName);
+
+        // Create report with deadline in the future
+        uint256 futureDeadline = block.timestamp + 1 hours;
+        bytes memory report = _encodeProxyReportWithDeadline("ref-valid", 1000, 500, 1, PRICE_TYPE, futureDeadline);
+
+        proxy.onReport(metadata, report);
+
+        // Verify update was processed
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, 500);
+    }
+
     function _buildMetadata(
         bytes32 workflowId,
         address workflowOwner,
@@ -414,5 +469,107 @@ contract LlamaGuardOracleProxyTest is Test {
         bytes memory workflowCid = abi.encode(workflowId);
         bytes memory reportName = new bytes(2);
         return abi.encodePacked(workflowCid, workflowName, bytes20(workflowOwner), reportName);
+    }
+
+    function test_SetWorkflowActive_RevertsForNonExistentWorkflow() public {
+        bytes32 nonExistentWorkflowId = bytes32("NONEXISTENT_WORKFLOW___________");
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(LlamaGuardOracleProxy.WorkflowDoesNotExist.selector, nonExistentWorkflowId)
+        );
+        proxy.setWorkflowActive(nonExistentWorkflowId, true);
+    }
+
+    function test_SetWorkflowActive_SucceedsForExistingWorkflow() public {
+        // expectedWorkflowId was configured in constructor, so it exists
+        vm.prank(owner);
+        proxy.setWorkflowActive(expectedWorkflowId, false);
+        assertFalse(proxy.isWorkflowActive(expectedWorkflowId));
+
+        vm.prank(owner);
+        proxy.setWorkflowActive(expectedWorkflowId, true);
+        assertTrue(proxy.isWorkflowActive(expectedWorkflowId));
+    }
+
+    function test_SetWorkflowActive_SucceedsAfterSetWorkflowConfig() public {
+        // Create a new workflow via setWorkflowConfig
+        bytes32 newWorkflowId = bytes32("NEW_WORKFLOW_ID________________");
+        address newForwarder = address(0x1111);
+        address newAuthor = address(0x2222);
+        bytes10 newName = bytes10("NEWWORKFLO");
+
+        vm.prank(owner);
+        proxy.setWorkflowConfig(newWorkflowId, newForwarder, newAuthor, newName, true);
+
+        // Now setWorkflowActive should work
+        vm.prank(owner);
+        proxy.setWorkflowActive(newWorkflowId, false);
+        assertFalse(proxy.isWorkflowActive(newWorkflowId));
+    }
+
+    function test_SetWorkflowActive_WorksWithPartialConfig() public {
+        // Test that workflow exists if only one field is set
+        bytes32 partialWorkflowId = bytes32("PARTIAL_WORKFLOW_______________");
+
+        // Set config with only forwarder (author and name are zero)
+        vm.prank(owner);
+        proxy.setWorkflowConfig(partialWorkflowId, address(0x1111), address(0), bytes10(0), true);
+
+        // Should succeed since forwarder is non-zero
+        vm.prank(owner);
+        proxy.setWorkflowActive(partialWorkflowId, false);
+        assertFalse(proxy.isWorkflowActive(partialWorkflowId));
+    }
+
+    function test_SetLlamaGuardOracle_EmitsEvent() public {
+        // Create a new oracle that will accept writes from the proxy
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1, defaultUpdateTypes, noMarkets);
+        newOracle.grantRole(newOracle.WRITER_ROLE(), address(proxy));
+
+        address previousOracle = address(oracle);
+        address newOracleAddress = address(newOracle);
+
+        // Expect the event
+        vm.expectEmit(true, true, false, true);
+        emit LlamaGuardOracleProxy.LlamaGuardOracleUpdated(previousOracle, newOracleAddress);
+
+        vm.prank(owner);
+        proxy.setLlamaGuardOracle(newOracleAddress);
+    }
+
+    function test_SetLlamaGuardOracle_UpdatesState() public {
+        // Create a new oracle that will accept writes from the proxy
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Feed", 1, defaultUpdateTypes, noMarkets);
+        newOracle.grantRole(newOracle.WRITER_ROLE(), address(proxy));
+
+        vm.prank(owner);
+        proxy.setLlamaGuardOracle(address(newOracle));
+
+        assertEq(address(proxy.llamaguardOracle()), address(newOracle));
+    }
+
+    function test_SetLlamaGuardOracle_EventContainsCorrectAddresses() public {
+        // Create first new oracle
+        address[] memory noMarkets = new address[](0);
+        LlamaGuardOracle firstNewOracle = new LlamaGuardOracle(8, "First New Feed", 1, defaultUpdateTypes, noMarkets);
+        firstNewOracle.grantRole(firstNewOracle.WRITER_ROLE(), address(proxy));
+
+        // Set to first new oracle
+        vm.prank(owner);
+        proxy.setLlamaGuardOracle(address(firstNewOracle));
+
+        // Create second new oracle
+        LlamaGuardOracle secondNewOracle = new LlamaGuardOracle(8, "Second New Feed", 1, defaultUpdateTypes, noMarkets);
+        secondNewOracle.grantRole(secondNewOracle.WRITER_ROLE(), address(proxy));
+
+        // Expect event with first oracle as previous and second as new
+        vm.expectEmit(true, true, false, true);
+        emit LlamaGuardOracleProxy.LlamaGuardOracleUpdated(address(firstNewOracle), address(secondNewOracle));
+
+        vm.prank(owner);
+        proxy.setLlamaGuardOracle(address(secondNewOracle));
     }
 }

@@ -39,7 +39,7 @@ abstract contract LlamaGuardOracleTestBase is Test {
         bytes additionalData
     );
 
-    event UpdateTypeAdded(string indexed updateType);
+    event UpdateTypeAdded(string indexed updateType, uint256 expectedAdditionalDataLength);
 
     // V2 AggregatorInterface events
     event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt);
@@ -88,6 +88,28 @@ abstract contract LlamaGuardOracleTestBase is Test {
         uint256 state_
     )
         internal
+        view
+        returns (ILlamaGuardOracle.UpdateInput memory)
+    {
+        return ILlamaGuardOracle.UpdateInput({
+            referenceId: referenceId,
+            newValue: abi.encode(price_),
+            updateType: updateType,
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: block.timestamp + 1 hours
+        });
+    }
+
+    /// @dev Create UpdateInput struct with explicit deadline for testing deadline validation
+    function _createUpdateInputWithDeadline(
+        string memory referenceId,
+        int256 price_,
+        string memory updateType,
+        uint256 supply_,
+        uint256 state_,
+        uint256 deadline_
+    )
+        internal
         pure
         returns (ILlamaGuardOracle.UpdateInput memory)
     {
@@ -95,7 +117,8 @@ abstract contract LlamaGuardOracleTestBase is Test {
             referenceId: referenceId,
             newValue: abi.encode(price_),
             updateType: updateType,
-            additionalData: abi.encode(supply_, price_, state_)
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: deadline_
         });
     }
 }

@@ -209,4 +209,86 @@ contract LlamaGuardOracleTest is LlamaGuardOracleTestBase {
         vm.expectRevert(abi.encodeWithSelector(ILlamaGuardOracle.InvalidUpdateId.selector, 999));
         oracle.getUpdateById(999);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEADLINE VALIDATION TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_RevertWhen_DeadlineExpired() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // Create input with deadline in the past
+        uint256 pastDeadline = block.timestamp - 1;
+        ILlamaGuardOracle.UpdateInput memory input =
+            _createUpdateInputWithDeadline("ref-1", 500, PRICE_TYPE, 1000, 2, pastDeadline);
+
+        vm.prank(writer);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILlamaGuardOracle.DeadlineExpired.selector, pastDeadline, block.timestamp)
+        );
+        oracle.updateLatestRiskRoundData(input);
+    }
+
+    function test_UpdateSucceeds_WhenDeadlineExactlyNow() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // Create input with deadline exactly at current timestamp
+        uint256 exactDeadline = block.timestamp;
+        ILlamaGuardOracle.UpdateInput memory input =
+            _createUpdateInputWithDeadline("ref-1", 500, PRICE_TYPE, 1000, 2, exactDeadline);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(input);
+
+        // Verify update succeeded
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, 500);
+    }
+
+    function test_UpdateSucceeds_WhenDeadlineInFuture() public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // Create input with deadline in the future
+        uint256 futureDeadline = block.timestamp + 1 hours;
+        ILlamaGuardOracle.UpdateInput memory input =
+            _createUpdateInputWithDeadline("ref-1", 500, PRICE_TYPE, 1000, 2, futureDeadline);
+
+        vm.prank(writer);
+        oracle.updateLatestRiskRoundData(input);
+
+        // Verify update succeeded
+        (, int256 answer,,,) = oracle.latestRoundData();
+        assertEq(answer, 500);
+    }
+
+    function testFuzz_DeadlineValidation(uint256 timeDelta, bool isExpired) public {
+        oracle.grantRole(oracle.WRITER_ROLE(), writer);
+
+        // Bound timeDelta to reasonable values (0 to 30 days)
+        timeDelta = bound(timeDelta, 1, 30 days);
+
+        uint256 deadline;
+        if (isExpired) {
+            // Deadline in the past
+            deadline = block.timestamp - timeDelta;
+        } else {
+            // Deadline in the future
+            deadline = block.timestamp + timeDelta;
+        }
+
+        ILlamaGuardOracle.UpdateInput memory input =
+            _createUpdateInputWithDeadline("ref-fuzz", 500, PRICE_TYPE, 1000, 2, deadline);
+
+        vm.prank(writer);
+        if (isExpired) {
+            vm.expectRevert(
+                abi.encodeWithSelector(ILlamaGuardOracle.DeadlineExpired.selector, deadline, block.timestamp)
+            );
+            oracle.updateLatestRiskRoundData(input);
+        } else {
+            oracle.updateLatestRiskRoundData(input);
+            (, int256 answer,,,) = oracle.latestRoundData();
+            assertEq(answer, 500);
+        }
+    }
 }

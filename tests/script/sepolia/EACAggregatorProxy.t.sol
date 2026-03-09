@@ -49,14 +49,15 @@ contract EACAggregatorProxyTest is Test {
         uint256 state_
     )
         internal
-        pure
+        view
         returns (ILlamaGuardOracle.UpdateInput memory)
     {
         return ILlamaGuardOracle.UpdateInput({
             referenceId: referenceId,
             newValue: abi.encode(price_),
             updateType: updateType,
-            additionalData: abi.encode(supply_, price_, state_)
+            additionalData: abi.encode(supply_, price_, state_),
+            deadline: block.timestamp + 1 hours
         });
     }
 

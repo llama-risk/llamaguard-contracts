@@ -67,7 +67,7 @@ contract MockLlamaGuardOracle is ILlamaGuardOracle {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @inheritdoc ILlamaGuardOracle
-    function addUpdateType(string calldata newUpdateType) external override {
+    function addUpdateType(string calldata newUpdateType, uint256 expectedAdditionalDataLength) external override {
         bytes memory typeBytes = bytes(newUpdateType);
         require(typeBytes.length > 0 && typeBytes.length <= 64, InvalidUpdateTypeString(newUpdateType));
 
@@ -76,12 +76,42 @@ contract MockLlamaGuardOracle is ILlamaGuardOracle {
 
         _isAuthorizedType[typeHash] = true;
         _updateTypes.push(newUpdateType);
-        emit UpdateTypeAdded(newUpdateType);
+        emit UpdateTypeAdded(newUpdateType, expectedAdditionalDataLength);
     }
 
     /// @inheritdoc ILlamaGuardOracle
     function isValidUpdateType(string calldata updateType) external view override returns (bool) {
         return _isAuthorizedType[keccak256(bytes(updateType))];
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function getExpectedAdditionalDataLength(string calldata) external pure override returns (uint256) {
+        return type(uint256).max; // Mock: no validation
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function setExpectedAdditionalDataLength(string calldata, uint256) external override {
+        // Mock: no-op
+    }
+
+    /// @inheritdoc ILlamaGuardOracle
+    function removeUpdateType(string calldata updateType) external override {
+        bytes32 typeHash = keccak256(bytes(updateType));
+        require(_isAuthorizedType[typeHash], UpdateTypeNotFound(updateType));
+
+        _isAuthorizedType[typeHash] = false;
+
+        // Remove from array by swap-and-pop
+        uint256 length = _updateTypes.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (keccak256(bytes(_updateTypes[i])) == typeHash) {
+                _updateTypes[i] = _updateTypes[length - 1];
+                _updateTypes.pop();
+                break;
+            }
+        }
+
+        emit UpdateTypeRemoved(updateType);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
