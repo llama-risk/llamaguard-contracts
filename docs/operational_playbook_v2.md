@@ -1,69 +1,72 @@
-# Operational Playbook
+# LlamaGuard Operational Playbook
 
 This playbook provides step-by-step instructions for making the LlamaGuard NAV oracle system with Aave Horizon
 integration operational. The rollout follows a staged approach: infrastructure is deployed first, followed by a
-monitoring period, then USTB is activated as a pilot asset to validate the full system. After successful USTB
-validation, the remaining assets (USCC, USYC, JTRSY, JAAA, ACRED) are activated in a full rollout.
+monitoring period, then USYC is activated as a pilot asset to validate the full system. After successful USYC
+validation, the remaining assets (USTB, USCC, JTRSY, JAAA, ACRED) are activated as part of a full rollout.
 
 ---
 
 ## Timeline Overview
 
-**Last Updated:** February 4, 2025
+**Last Updated:** March 25, 2026
 
-**Current Status:** Phase 1 Complete, Phase 2 In Progress
+**Current Status:** Phase 3 Complete, Phase 4 Pending
 
 ### Gantt Chart
 
 ```
-2025        Feb                 Mar                 Apr
+2026        Feb                 Mar                 Apr
 Week        1    2    3    4    1    2    3    4    1    2
             ├────┼────┼────┼────┼────┼────┼────┼────┼────┼────┤
 Phase 1     ████ ✓ Complete
 Sepolia
 
-Phase 2        █████████ (LlamaRisk)
-Deployment
+Phase 2     ██████████████████ ✓ Complete
+Deployment  (Feb 4 - Mar 1)
 
-Phase 3                 ████████████ (LlamaRisk & Horizon)
-Monitoring              ├1 week min┤├sign-off┤
-  ├─ 3.3                ███████████ ( LlamaRisk & Horizon)
-     Sepolia            ├─parallel──┤
+Phase 3               ████████████ ✓ Complete
+Monitoring            (LlamaRisk & Horizon)
+  ├─ 3.3              ████████████ ✓ Complete
+     Sepolia          (LlamaRisk & Horizon)
      Integration
 
-Phase 4                             ████ (LlamaRisk & Horizon & Chainlink)
-USTB Pilot
+Phase 4                              ████ (LlamaRisk & Horizon)
+USYC Pilot
 
-Phase 5                                ████████ (LlamaRisk & Horizon & Chainlink)
-USTB Valid.                           ├3-7 days┤
+Phase 5                                 ████████ (LlamaRisk & Horizon)
+USYC Valid.                            ├3-7 days┤
 
-Phase 6                                       ████████ (LlamaRisk & Horizon & Chainlink)
+Phase 6                                        ████████ (LlamaRisk & Horizon)
 Full Activ.
 
-Phase 7                                       ████ (LlamaRisk & Horizon)
+Phase 7                                        ████ (LlamaRisk & Horizon)
 Ownership
 ```
 
 ### Milestone Summary
 
-| Phase | Description                                 | Target Start | Target End     | Status         |
-| ----- | ------------------------------------------- | ------------ | -------------- | -------------- |
-| 1     | Sepolia Testing                             | Jan 2025     | Feb 4, 2025    | ✅ Complete    |
-| 2     | Mainnet Infrastructure Deployment           | Feb 4, 2025  | TBD            | 🔄 In Progress |
-| 3     | Pre-Configuration & Monitoring              | TBD          | TBD + 1 week   | ⏳ Pending     |
-| 3.3   | Sepolia Integration with Horizon (parallel) | TBD          | TBD            | ⏳ Pending     |
-| 4     | USTB Pilot Activation                       | TBD          | TBD            | ⏳ Pending     |
-| 5     | USTB Validation Period                      | TBD          | TBD + 3-7 days | ⏳ Pending     |
-| 6     | Full Asset Activation                       | TBD          | TBD            | ⏳ Pending     |
-| 7     | Ownership Transfers                         | TBD          | TBD            | ⏳ Pending     |
+| Phase | Description                                 | Target Start   | Target End     | Status         |
+| ----- | ------------------------------------------- | -------------- | -------------- | -------------- |
+| 1     | Sepolia Testing                             | Jan 2026       | Feb 4, 2026    | ✅ Complete    |
+| 2     | Mainnet Infrastructure Deployment           | Feb 4, 2026    | Mar 1, 2026    | ✅ Complete    |
+| 3     | Pre-Configuration & Monitoring              | Mar 1, 2026    | Mar 21, 2026   | ✅ Complete    |
+| 3.3   | Sepolia Integration with Horizon (parallel) | Feb 9, 2026    | Mar 2026       | ✅ Complete    |
+| 4     | USYC Pilot Activation                       | TBD            | TBD            | ⏳ Pending     |
+| 5     | USYC Validation Period                      | TBD            | TBD + 3-7 days | ⏳ Pending     |
+| 6     | Full Asset Activation                       | TBD            | TBD            | ⏳ Pending     |
+| 7     | Ownership Transfers                         | TBD            | TBD            | ⏳ Pending     |
 
 ### Key Dependencies & Blockers
 
-| Dependency                   | Owner     | Blocks                   | Status       |
-| ---------------------------- | --------- | ------------------------ | ------------ |
-| CRE workflow config          | Chainlink | Phase 2 proxy deployment | ⏳ Awaiting  |
-| Chainlink kickoff meeting    | All       | Timeline refinement      | ⏳ Scheduled |
-| Aggregator switch delay info | Chainlink | Phase 4 planning         | ⏳ Awaiting  |
+| Dependency                         | Owner              | Blocks                     | Status                           |
+| ---------------------------------- | ------------------ | -------------------------- | -------------------------------- |
+| CRE workflow config                | Chainlink          | Phase 2 proxy deployment   | ✅ Complete (5/6, ACRED pending) |
+| Chainlink kickoff meeting          | All                | Timeline refinement        | ✅ Complete                      |
+| Horizon+LlamaRisk multisig setup   | LlamaRisk+Horizon  | Phase 4 ReadProxy deploy   | 🔄 In Discussion                |
+| ACRED CRE workflow config          | Chainlink          | ACRED activation (Phase 6) | ⏳ Awaiting                      |
+| CLL ReadProxy verification         | Chainlink          | Phase 4 completion         | ⏳ Pending                       |
+| CRE calcs sign-off                 | Chainlink          | Phase 4 completion         | ⏳ Pending                       |
 
 ---
 
@@ -78,17 +81,17 @@ Each asset (USCC, USTB, USYC, JTRSY, JAAA, ACRED) requires its own oracle infras
 │                         Per-Asset Components                            │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  USCC:   LlamaGuardOracle(USCC) ← LlamaGuardOracleProxy(USCC) ← CRE     │
+│  USYC:   LlamaGuardOracle(USYC) ← LlamaGuardOracleProxy(USYC) ← CRE   │
 │              ↓                                                          │
-│          EACAggregatorProxy(USCC) [Chainlink-owned]                     │
+│          ReadProxy(USYC) [LLR/Horizon-owned] (EACAggregatorProxy)       │
 │                                                                         │
-│  USTB:   LlamaGuardOracle(USTB) ← LlamaGuardOracleProxy(USTB) ← CRE     │
+│  USTB:   LlamaGuardOracle(USTB) ← LlamaGuardOracleProxy(USTB) ← CRE   │
 │              ↓                                                          │
-│          EACAggregatorProxy(USTB) [Chainlink-owned]                     │
+│          ReadProxy(USTB) [LLR/Horizon-owned] (EACAggregatorProxy)       │
 │                                                                         │
-│  USYC:   LlamaGuardOracle(USYC) ← LlamaGuardOracleProxy(USYC) ← CRE     │
+│  USCC:   LlamaGuardOracle(USCC) ← LlamaGuardOracleProxy(USCC) ← CRE   │
 │              ↓                                                          │
-│          EACAggregatorProxy(USYC) [Chainlink-owned]                     │
+│          ReadProxy(USCC) [LLR/Horizon-owned] (EACAggregatorProxy)       │
 │                                                                         │
 │  (... same pattern for JTRSY, JAAA, ACRED)                              │
 │                                                                         │
@@ -103,12 +106,12 @@ Each asset (USCC, USTB, USYC, JTRSY, JAAA, ACRED) requires its own oracle infras
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  HorizonAgentHub (1 instance, owned by Horizon)                         │
-│    ├── agentId=1: USTB  → riskOracle: LlamaGuardOracle(USTB)            │
-│    ├── agentId=2: USCC  → riskOracle: LlamaGuardOracle(USCC)            │
-│    ├── agentId=3: USYC  → riskOracle: LlamaGuardOracle(USYC)            │
-│    ├── agentId=4: JTRSY → riskOracle: LlamaGuardOracle(JTRSY)           │
-│    ├── agentId=5: JAAA  → riskOracle: LlamaGuardOracle(JAAA)            │
-│    └── agentId=6: ACRED → riskOracle: LlamaGuardOracle(ACRED)           │
+│    ├── agentId=1: USYC  → riskOracle: LlamaGuardOracle(USYC)           │
+│    ├── agentId=2: USTB  → riskOracle: LlamaGuardOracle(USTB)           │
+│    ├── agentId=3: USCC  → riskOracle: LlamaGuardOracle(USCC)           │
+│    ├── agentId=4: JTRSY → riskOracle: LlamaGuardOracle(JTRSY)          │
+│    ├── agentId=5: JAAA  → riskOracle: LlamaGuardOracle(JAAA)           │
+│    └── agentId=6: ACRED → riskOracle: LlamaGuardOracle(ACRED)          │
 │         (all point to same agentAddress: HorizonFreezeAgent)            │
 │                                                                         │
 │  HorizonFreezeAgent (1 instance)                                        │
@@ -124,36 +127,55 @@ Each asset (USCC, USTB, USYC, JTRSY, JAAA, ACRED) requires its own oracle infras
 Each asset requires a **separate agent registration** because the AgentHub requires one `riskOracle` per agent:
 
 ```solidity
-// Agent registration for USTB
+// Agent registration for USYC (pilot)
 AgentRegistrationInput({
     agentAddress: freezeAgentAddress,        // Same FreezeAgent for all
-    riskOracle: llamaGuardOracleUSTB,        // USTB-specific oracle
+    riskOracle: llamaGuardOracleUSYC,        // USYC-specific oracle
     admin: llamaRiskMultisig,                // LlamaRisk as agent admin
     agentContext: abi.encode(poolConfiguratorAddress),
     isAgentEnabled: true,
-    isAgentPermissioned: false,
+    isAgentPermissioned: true,
     isMarketsFromAgentEnabled: false,
     expirationPeriod: 86400,
     minimumDelay: 0,
     updateType: "boundedNAV",
-    allowedMarkets: [USTB_TOKEN_ADDRESS],    // Single market per registration
+    allowedMarkets: [USYC_TOKEN_ADDRESS],    // Single market per registration
     restrictedMarkets: [],
-    permissionedSenders: []
+    permissionedSenders: [llamaRiskMultisig]
 })
 
-// Repeat for USCC with llamaGuardOracleUSCC, [USCC_TOKEN_ADDRESS], etc.
+// Repeat for USTB, USCC, JTRSY, JAAA, ACRED with respective oracle and token addresses
 ```
 
-### Chainlink Actions Per Asset
+### ReadProxy Deployment Per Asset
 
-For each asset, Chainlink performs:
+For each asset, LlamaRisk deploys a ReadProxy (standard Chainlink `EACAggregatorProxy` contract) pointing to the
+corresponding `LlamaGuardOracle` as the aggregator:
 
 ```solidity
-// Switch aggregator in existing EACAggregatorProxy
-EACAggregatorProxy(assetProxy).proposeAggregator(llamaGuardOracleAddress);
-// After confirmation period (TBD - ask Chainlink)
-EACAggregatorProxy(assetProxy).confirmAggregator(llamaGuardOracleAddress);
+// Deploy ReadProxy for an asset
+EACAggregatorProxy readProxy = new EACAggregatorProxy(llamaGuardOracleAddress);
+
+// Transfer ownership (options under discussion):
+// Option A: Horizon-owned
+readProxy.transferOwnership(horizonMultisig);
+// Option B: Joint Horizon+LLR multisig
+readProxy.transferOwnership(jointMultisig);
 ```
+
+Horizon then updates the pool's price feed address for the given asset to point to the new ReadProxy.
+
+---
+
+## Responsibility Matrix (New Architecture)
+
+| Component                        | Old Architecture             | New Architecture                          |
+| -------------------------------- | ---------------------------- | ----------------------------------------- |
+| ReadProxy (EACAggregatorProxy)   | Chainlink-owned              | LlamaRisk-deployed, LLR/Horizon-owned     |
+| Aggregator (LlamaGuardOracle)    | LlamaRisk                    | LlamaRisk (unchanged)                     |
+| Price bounds calculation         | CLL External Adapter via DON | LLR CRE workflow (CLL sign-off required)  |
+| CRE workflow execution           | Chainlink DON                | Chainlink DON (unchanged)                 |
+| Horizon price feed swap          | N/A (same proxy)             | Horizon must update asset oracle address   |
 
 ---
 
@@ -161,12 +183,12 @@ EACAggregatorProxy(assetProxy).confirmAggregator(llamaGuardOracleAddress);
 
 ### Addresses Required
 
-- [ ] **Horizon Multisig Address** - Owner of HorizonAgentHub
-- [ ] **LlamaRisk Multisig Address** - Owner of LlamaGuardOracle, LlamaGuardOracleProxy; Updater of ParameterRegistry;
-      Agent Admin in HorizonAgentHub
-- [ ] **Aave Pool Address** - Existing Horizon Pool contract
-- [ ] **Aave PoolConfigurator Address** - Existing Horizon PoolConfigurator contract
-- [ ] **Aave ACLManager Address** - For granting RISK_ADMIN role
+- [x] **LlamaRisk Multisig Address** - `0xE6ec1f0Ae6Cd023bd0a9B4d0253BDC755103253c`
+- [ ] **Horizon Multisig Address** - Owner of HorizonAgentHub (TBD)
+- [ ] **Joint Horizon+LLR Multisig** - For ReadProxy ownership (TBD - under discussion)
+- [x] **Aave Horizon Pool Address** - `0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8`
+- [x] **Aave Horizon PoolConfigurator Address** - `0x83Cb1B4af26EEf6463aC20AFbAC9c0e2E017202F`
+- [x] **Aave Horizon ACLManager Address** - `0xEFD5df7b87d2dCe6DD454b4240b3e0A4db562321`
 
 ### Agent Admin Role (LlamaRisk)
 
@@ -180,37 +202,73 @@ LlamaRisk serves as **agent admin** for all registered agents in HorizonAgentHub
 **Note:** Agent admin cannot change the agent contract address or reassign the admin role - only the hub owner (Horizon)
 can do that.
 
-### Chainlink Configuration (from Chainlink team)
+### Chainlink CRE Configuration
 
-- [ ] **workflowId** (bytes32) - CRE workflow identifier
-- [ ] **expectedForwarder** (address) - Chainlink CrossDomainForwarder address
-- [ ] **expectedAuthor** (address) - Workflow author address
-- [ ] **expectedWorkflowName** (bytes10) - Workflow name identifier
-- [ ] **Aggregator switch delay** - Time between proposeAggregator and confirmAggregator (TBD)
+- [x] **expectedForwarder** (address) - `0x0b93082D9b3C7C97fAcd250082899BAcf3af3885`
+- [x] **expectedAuthor** (address) - `0x4EDEaFc9b862F08464423EFe9423153B22B28f17` (CRE multisig)
+- [x] **workflowIds** - Configured per asset (see CRE Workflow Details below)
 
-### First Wave Asset Configuration (USCC, USTB, USYC)
+### CRE Workflow Details
 
-For each asset:
+| Asset | Workflow ID | Status |
+| ----- | ----------- | ------ |
+| USTB  | `0x00a9cf308e875f62fb6df1f6e1a55dd7db46384876e4059c35abd54125a9c1af` | ✅ Configured |
+| USCC  | `0x00886db7652f86b1e90aa63388139bbc9a82069ad80360fce3a2f7d38fe884eb` | ✅ Configured |
+| USYC  | `0x00eabb3f208f6e34aa9a2e643cd1ca7a38c5de290a274da7d6ff37c255faec22` | ✅ Configured |
+| JTRSY | `0x0058a4e15806379bed41052228a76d6d6ccc45ebcfc167058a73c6065bda6b72` | ✅ Configured |
+| JAAA  | `0x00264afe850ac2514dd13809e5e6ccdc9d5070bccc2ebf457baae1c2720dc2be` | ✅ Configured |
+| ACRED | TBD | ⏳ Awaiting Chainlink |
 
-| Asset | Token Address | EACAggregatorProxy Address | maxExpectedApy | Tolerances |
-| ----- | ------------- | -------------------------- | -------------- | ---------- |
-| USCC  | TBD           | TBD                        | TBD BPS        | TBD        |
-| USTB  | TBD           | TBD                        | TBD BPS        | TBD        |
-| USYC  | TBD           | TBD                        | TBD BPS        | TBD        |
+### Asset Configuration
 
-### Second Wave Asset Configuration (JTRSY, JAAA, ACRED)
+#### Pilot Asset (USYC)
 
-| Asset | Token Address | EACAggregatorProxy Address | maxExpectedApy | Tolerances |
-| ----- | ------------- | -------------------------- | -------------- | ---------- |
-| JTRSY | TBD           | TBD                        | TBD BPS        | TBD        |
-| JAAA  | TBD           | TBD                        | TBD BPS        | TBD        |
-| ACRED | TBD           | TBD                        | TBD BPS        | TBD        |
+| Asset | Token Address | LlamaGuardOracle | LlamaGuardOracleProxy | ReadProxy |
+| ----- | ------------- | ---------------- | --------------------- | --------- |
+| USYC  | `0x136471a34f6ef19fE571EFFC1CA711fdb8E49f2b` | `0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4` | `0x7cf933fc475da2E3b45FA207d7df2EF9855c0B60` | TBD |
+
+#### First Wave (USTB, USCC)
+
+| Asset | Token Address | LlamaGuardOracle | LlamaGuardOracleProxy | ReadProxy |
+| ----- | ------------- | ---------------- | --------------------- | --------- |
+| USTB  | `0x43415eB6ff9DB7E26A15b704e7A3eDCe97d31C4e` | `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2` | `0x67e347aeac84bbD4644425d8Ca8665046FD2C4e0` | TBD |
+| USCC  | `0x14d60E7FDC0D71d8611742720E4C50E7a974020c` | `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802` | `0x3606A9Ab8D47EE31A6cC1134fA6995B7d16DB529` | TBD |
+
+#### Second Wave (JTRSY, JAAA, ACRED)
+
+| Asset | Token Address | LlamaGuardOracle | LlamaGuardOracleProxy | ReadProxy |
+| ----- | ------------- | ---------------- | --------------------- | --------- |
+| JTRSY | `0x8c213ee79581Ff4984583C6a801e5263418C4b86` | `0x74c0e98b5853e418219D6bF87fD26A73182F8876` | `0x069f65edEC8FbC6bd7c0C03104d9beC350F0A1C1` | TBD |
+| JAAA  | `0x5a0F93D040De44e78F251b03c43be9CF317Dcf64` | `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada` | `0xb3fF4a48DEf4d1D2249180F02Ce505668aFd8D46` | TBD |
+| ACRED | `0x17418038ecF73BA4026c4f428547BF099706F27B` | `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9` | `0xE5d4D8500D73fb30E0941C8A3BA1e47F06A9bF5F` | TBD |
+
+### Ownership & Access Control Plan
+
+**Current State:** All contracts owned by deployer EOA (`0x9118964074e2AA11393ce0797264759dB2F2ef69`)
+
+**Target State (options to be decided jointly with Horizon):**
+
+| Contract | Current Owner | Option A | Option B |
+| -------- | ------------- | -------- | -------- |
+| HorizonAgentHub | Deployer | Horizon multisig | Horizon multisig |
+| LlamaGuardOracle (DEFAULT_ADMIN_ROLE) | Deployer | LlamaRisk multisig | Joint Horizon+LLR multisig |
+| LlamaGuardOracleProxy (Owner) | Deployer | LlamaRisk multisig | Joint Horizon+LLR multisig |
+| ReadProxy (Owner) | LlamaRisk (at deploy) | Horizon multisig | Joint Horizon+LLR multisig |
+
+**Centralized failure risks to consider:**
+
+- OracleProxy owner can call `setLlamaGuardOracle()` to change the underlying oracle
+- Oracle DEFAULT_ADMIN can grant/revoke `WRITER_ROLE` (controls who can push updates)
+- ReadProxy owner can call `proposeAggregator()` to change the aggregator
+
+**Decision required:** Exact ownership split to be agreed between LlamaRisk and Horizon. Transfer flow documented in
+Phase 7.
 
 ---
 
 ## Phase 1: Sepolia Integration Testing ✅
 
-**Status: COMPLETE (February 4, 2025)** **Owner: LlamaRisk (internal)**
+**Status: COMPLETE (February 4, 2026)** **Owner: LlamaRisk (internal)**
 
 **Note:** Fork tests for this architecture have also been executed on Tenderly, validating the full integration flow.
 
@@ -231,16 +289,16 @@ forge script script/sepolia/DeploySepolia.s.sol \
 
 This script deploys:
 
-- [ ] LlamaGuardOracle instances (USCC, USTB)
-- [ ] LlamaGuardOracleProxy instances
-- [ ] EACAggregatorProxy instances (for testing)
-- [ ] Seeds oracles with initial data from source oracles
+- [x] LlamaGuardOracle instances (USCC, USTB)
+- [x] LlamaGuardOracleProxy instances
+- [x] EACAggregatorProxy instances (for testing)
+- [x] Seeds oracles with initial data from source oracles
 
 **Post-Deploy Verification:**
 
-- [ ] All contracts deployed and verified on Etherscan
-- [ ] Oracle proxies have WRITER_ROLE granted
-- [ ] Registry assets configured with correct oracle addresses
+- [x] All contracts deployed and verified on Etherscan
+- [x] Oracle proxies have WRITER_ROLE granted
+- [x] Registry assets configured with correct oracle addresses
 
 ---
 
@@ -275,9 +333,9 @@ proxy.onReport(metadata, report);
 
 **Verification:**
 
-- [ ] `oracle.latestRoundData()` returns new roundId
-- [ ] `oracle.latestAnswer()` returns expected price
-- [ ] Event `ParameterUpdated` emitted
+- [x] `oracle.latestRoundData()` returns new roundId
+- [x] `oracle.latestAnswer()` returns expected price
+- [x] Event `ParameterUpdated` emitted
 
 ---
 
@@ -314,8 +372,8 @@ agentIds[0] = agentId;
 (bool shouldExecute, IAgentHub.ActionData[] memory actions) = hub.check(agentIds);
 ```
 
-- [ ] `shouldExecute` returns `true`
-- [ ] `actions` array contains correct agentId and market
+- [x] `shouldExecute` returns `true`
+- [x] `actions` array contains correct agentId and market
 
 **Step 3: Execute Freeze via Hub**
 
@@ -323,9 +381,9 @@ agentIds[0] = agentId;
 hub.execute(actions);
 ```
 
-- [ ] Transaction succeeds
-- [ ] Event `ReserveFreezeUpdated` emitted from FreezeAgent
-- [ ] Event `UpdateInjected` emitted from AgentHub
+- [x] Transaction succeeds
+- [x] Event `ReserveFreezeUpdated` emitted from FreezeAgent
+- [x] Event `UpdateInjected` emitted from AgentHub
 
 **Step 4: Verify Market State**
 
@@ -334,7 +392,7 @@ DataTypes.ReserveConfigurationMap memory config = pool.getConfiguration(marketAd
 bool isFrozen = config.getFrozen();
 ```
 
-- [ ] `isFrozen` returns `true`
+- [x] `isFrozen` returns `true`
 
 ---
 
@@ -359,12 +417,12 @@ proxy.onReport(metadata, abi.encode(unfreezeInput));
 (bool shouldExecute,) = hub.check(agentIds);
 ```
 
-- [ ] `shouldExecute` returns `false` (agent rejects unfreeze)
+- [x] `shouldExecute` returns `false` (agent rejects unfreeze)
 
 **Test 2: Already Frozen Market Rejected**
 
-- [ ] Push freeze update for already-frozen market
-- [ ] `hub.check()` returns `false` (prevents double-freeze)
+- [x] Push freeze update for already-frozen market
+- [x] `hub.check()` returns `false` (prevents double-freeze)
 
 **Test 3: Unauthorized Update Type Rejected**
 
@@ -378,7 +436,7 @@ ILlamaGuardOracle.UpdateInput memory badInput = ILlamaGuardOracle.UpdateInput({
 });
 ```
 
-- [ ] Transaction reverts with `UnauthorizedUpdateType`
+- [x] Transaction reverts with `UnauthorizedUpdateType`
 
 ---
 
@@ -386,46 +444,38 @@ ILlamaGuardOracle.UpdateInput memory badInput = ILlamaGuardOracle.UpdateInput({
 
 | Test                 | Status   | Notes |
 | -------------------- | -------- | ----- |
-| Oracle deployment    | [ ] Pass |       |
-| Proxy WRITER_ROLE    | [ ] Pass |       |
-| Normal price update  | [ ] Pass |       |
-| Freeze update        | [ ] Pass |       |
-| Validation rejection | [ ] Pass |       |
+| Oracle deployment    | [x] Pass |       |
+| Proxy WRITER_ROLE    | [x] Pass |       |
+| Normal price update  | [x] Pass |       |
+| Freeze update        | [x] Pass |       |
+| Validation rejection | [x] Pass |       |
 
-**Internal sign-off (LlamaRisk):** **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+**Internal sign-off (LlamaRisk):** Zeki & Exa, Date: 26 Jan 2026
 
 ---
 
-## Phase 2: Mainnet Infrastructure Deployment 🔄
+## Phase 2: Mainnet Infrastructure Deployment ✅
 
-**Status: IN PROGRESS (Started February 4, 2025)**
+**Status: COMPLETE (February 4 - March 1, 2026)**
 
 Deploy all infrastructure. **No activation yet.**
 
 ### 2.1 Deploy LlamaGuardOracle (per asset)
 
-| Field        | Value                         |
-| ------------ | ----------------------------- |
-| **Contract** | `LlamaGuardOracle`            |
-| **Deployer** | LlamaRisk                     |
-| **Assets**   | USCC, USTB, USYC (first wave) |
-
-**Deploy one oracle per asset:**
-
-```bash
-# Deploy USCC oracle
-forge script script/llamaguard-oracle/DeployLlamaGuardOracle.s.sol \
-  --rpc-url $RPC_URL --broadcast --verify \
-  --sig "run(string)" "USCC"
-
-# Repeat for USTB, USYC
-```
+| Field        | Value                                       |
+| ------------ | ------------------------------------------- |
+| **Contract** | `LlamaGuardOracle`                          |
+| **Deployer** | LlamaRisk                                   |
+| **Assets**   | USTB (Stage 1), USCC, USYC, JTRSY, JAAA, ACRED (Stage 3) |
 
 **Post-Deploy Checklist:**
 
-- [ ] LlamaGuardOracle(USCC) deployed: `0x___`
-- [ ] LlamaGuardOracle(USTB) deployed: `0x___`
-- [ ] LlamaGuardOracle(USYC) deployed: `0x___`
+- [x] LlamaGuardOracle(USTB) deployed: `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2`
+- [x] LlamaGuardOracle(USCC) deployed: `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802`
+- [x] LlamaGuardOracle(USYC) deployed: `0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4`
+- [x] LlamaGuardOracle(JTRSY) deployed: `0x74c0e98b5853e418219D6bF87fD26A73182F8876`
+- [x] LlamaGuardOracle(JAAA) deployed: `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada`
+- [x] LlamaGuardOracle(ACRED) deployed: `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9`
 
 ---
 
@@ -439,9 +489,12 @@ forge script script/llamaguard-oracle/DeployLlamaGuardOracle.s.sol \
 
 **Post-Deploy Checklist:**
 
-- [ ] LlamaGuardOracleProxy(USCC) deployed: `0x___`
-- [ ] LlamaGuardOracleProxy(USTB) deployed: `0x___`
-- [ ] LlamaGuardOracleProxy(USYC) deployed: `0x___`
+- [x] LlamaGuardOracleProxy(USTB) deployed: `0x67e347aeac84bbD4644425d8Ca8665046FD2C4e0`
+- [x] LlamaGuardOracleProxy(USCC) deployed: `0x3606A9Ab8D47EE31A6cC1134fA6995B7d16DB529`
+- [x] LlamaGuardOracleProxy(USYC) deployed: `0x7cf933fc475da2E3b45FA207d7df2EF9855c0B60`
+- [x] LlamaGuardOracleProxy(JTRSY) deployed: `0x069f65edEC8FbC6bd7c0C03104d9beC350F0A1C1`
+- [x] LlamaGuardOracleProxy(JAAA) deployed: `0xb3fF4a48DEf4d1D2249180F02Ce505668aFd8D46`
+- [x] LlamaGuardOracleProxy(ACRED) deployed: `0xE5d4D8500D73fb30E0941C8A3BA1e47F06A9bF5F`
 
 ---
 
@@ -454,16 +507,17 @@ forge script script/llamaguard-oracle/DeployLlamaGuardOracle.s.sol \
 
 ```solidity
 // For each oracle/proxy pair
-LlamaGuardOracle(uscc).grantRole(WRITER_ROLE, proxyUSCC);
 LlamaGuardOracle(ustb).grantRole(WRITER_ROLE, proxyUSTB);
+LlamaGuardOracle(uscc).grantRole(WRITER_ROLE, proxyUSCC);
 LlamaGuardOracle(usyc).grantRole(WRITER_ROLE, proxyUSYC);
+LlamaGuardOracle(jtrsy).grantRole(WRITER_ROLE, proxyJTRSY);
+LlamaGuardOracle(jaaa).grantRole(WRITER_ROLE, proxyJAAA);
+LlamaGuardOracle(acred).grantRole(WRITER_ROLE, proxyACRED);
 ```
 
 **Verification:**
 
-- [ ] USCC: `oracle.hasRole(WRITER_ROLE, proxy)` = true
-- [ ] USTB: `oracle.hasRole(WRITER_ROLE, proxy)` = true
-- [ ] USYC: `oracle.hasRole(WRITER_ROLE, proxy)` = true
+- [x] All 6 assets: `oracle.hasRole(WRITER_ROLE, proxy)` = true
 
 ---
 
@@ -476,9 +530,12 @@ LlamaGuardOracle(usyc).grantRole(WRITER_ROLE, proxyUSYC);
 
 ```solidity
 // Each oracle authorizes its own token as a market
-LlamaGuardOracle(uscc).addAuthorizedMarket(USCC_TOKEN);
 LlamaGuardOracle(ustb).addAuthorizedMarket(USTB_TOKEN);
+LlamaGuardOracle(uscc).addAuthorizedMarket(USCC_TOKEN);
 LlamaGuardOracle(usyc).addAuthorizedMarket(USYC_TOKEN);
+LlamaGuardOracle(jtrsy).addAuthorizedMarket(JTRSY_TOKEN);
+LlamaGuardOracle(jaaa).addAuthorizedMarket(JAAA_TOKEN);
+LlamaGuardOracle(acred).addAuthorizedMarket(ACRED_TOKEN);
 ```
 
 ---
@@ -488,12 +545,13 @@ LlamaGuardOracle(usyc).addAuthorizedMarket(USYC_TOKEN);
 | Field        | Value             |
 | ------------ | ----------------- |
 | **Contract** | `HorizonAgentHub` |
-| **Deployer** | Horizon           |
+| **Deployer** | LlamaRisk         |
 
 **Post-Deploy:**
 
-- [ ] HorizonAgentHub deployed: `0x___`
-- [ ] `owner()` = Horizon multisig
+- [x] HorizonAgentHub (proxy) deployed: `0x7acBfb30736B40d9B8EAE03582FEeE16bA4ADA94`
+- [x] HorizonAgentHub (implementation): `0xc81657782a294D2F56B129B2051A739196Ecc1d8`
+- [x] HorizonAgentHub (ProxyAdmin): `0x692940a9689890f227e4d39ec3F8BdCdd36E10e2`
 
 ---
 
@@ -514,9 +572,9 @@ constructor(
 
 **Post-Deploy:**
 
-- [ ] HorizonFreezeAgent deployed: `0x___`
-- [ ] `AGENT_HUB()` = HorizonAgentHub address
-- [ ] `POOL()` = Aave Pool address
+- [x] HorizonFreezeAgent deployed: `0x9CF889F6bB0b77E143608CdaD1Fe83C09f12FBDa`
+- [x] `AGENT_HUB()` = HorizonAgentHub address `0x7acBfb30736B40d9B8EAE03582FEeE16bA4ADA94`
+- [x] `POOL()` = Aave Pool address `0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8`
 
 ---
 
@@ -526,30 +584,41 @@ constructor(
 | --------- | --------- |
 | **Owner** | Chainlink |
 
-- [ ] Chainlink activates CRE workflow
-- [ ] Oracle updates start flowing to LlamaGuardOracles
+- [x] CRE workflow activated for USTB
+- [x] Oracle updates flowing to LlamaGuardOracles
+- [ ] CRE workflow configured for remaining assets (5/6 configured, ACRED pending)
 
 ---
 
 ### Phase 2 Complete Checklist
 
-| Component                    | Address | Status |
-| ---------------------------- | ------- | ------ |
-| LlamaGuardOracle(USCC)       |         | [ ]    |
-| LlamaGuardOracle(USTB)       |         | [ ]    |
-| LlamaGuardOracle(USYC)       |         | [ ]    |
-| LlamaGuardOracleProxy(USCC)  |         | [ ]    |
-| LlamaGuardOracleProxy(USTB)  |         | [ ]    |
-| LlamaGuardOracleProxy(USYC)  |         | [ ]    |
-| HorizonAgentHub              |         | [ ]    |
-| HorizonFreezeAgent           |         | [ ]    |
-| WRITER_ROLE granted (all)    | -       | [ ]    |
-| Authorized markets set (all) | -       | [ ]    |
-| CRE workflow active          | -       | [ ]    |
+| Component                        | Address                                      | Status     |
+| -------------------------------- | -------------------------------------------- | ---------- |
+| LlamaGuardOracle(USTB)           | `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2` | ✅ Deployed |
+| LlamaGuardOracle(USCC)           | `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802` | ✅ Deployed |
+| LlamaGuardOracle(USYC)           | `0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4` | ✅ Deployed |
+| LlamaGuardOracle(JTRSY)          | `0x74c0e98b5853e418219D6bF87fD26A73182F8876` | ✅ Deployed |
+| LlamaGuardOracle(JAAA)           | `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada` | ✅ Deployed |
+| LlamaGuardOracle(ACRED)          | `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9` | ✅ Deployed |
+| LlamaGuardOracleProxy(USTB)      | `0x67e347aeac84bbD4644425d8Ca8665046FD2C4e0` | ✅ Deployed |
+| LlamaGuardOracleProxy(USCC)      | `0x3606A9Ab8D47EE31A6cC1134fA6995B7d16DB529` | ✅ Deployed |
+| LlamaGuardOracleProxy(USYC)      | `0x7cf933fc475da2E3b45FA207d7df2EF9855c0B60` | ✅ Deployed |
+| LlamaGuardOracleProxy(JTRSY)     | `0x069f65edEC8FbC6bd7c0C03104d9beC350F0A1C1` | ✅ Deployed |
+| LlamaGuardOracleProxy(JAAA)      | `0xb3fF4a48DEf4d1D2249180F02Ce505668aFd8D46` | ✅ Deployed |
+| LlamaGuardOracleProxy(ACRED)     | `0xE5d4D8500D73fb30E0941C8A3BA1e47F06A9bF5F` | ✅ Deployed |
+| HorizonAgentHub (proxy)          | `0x7acBfb30736B40d9B8EAE03582FEeE16bA4ADA94` | ✅ Deployed |
+| HorizonAgentHub (implementation) | `0xc81657782a294D2F56B129B2051A739196Ecc1d8` | ✅ Deployed |
+| HorizonAgentHub (ProxyAdmin)     | `0x692940a9689890f227e4d39ec3F8BdCdd36E10e2` | ✅ Deployed |
+| HorizonFreezeAgent               | `0x9CF889F6bB0b77E143608CdaD1Fe83C09f12FBDa` | ✅ Deployed |
+| WRITER_ROLE granted (all)        | -                                            | ✅ Granted  |
+| Authorized markets set (all)     | -                                            | ✅ Set      |
+| CRE workflow active              | -                                            | ✅ Active (USTB) |
 
 ---
 
-## Phase 3: Pre-Configuration & Monitoring
+## Phase 3: Pre-Configuration & Monitoring ✅
+
+**Status: COMPLETE**
 
 **Duration: 1 week minimum**
 
@@ -570,51 +639,64 @@ ACLManager.addRiskAdmin(freezeAgentAddress)
 
 - [ ] `aclManager.isRiskAdmin(freezeAgentAddress)` = true
 
+**Note:** RISK_ADMIN can be granted during Phase 3 or Phase 4 - it is not strictly required for Phase 3 monitoring.
+
 ---
 
 ### 3.2 Oracle Monitoring
+
+LlamaRisk monitors oracle updates via the LlamaGuard Dashboard.
+
+**Dashboard:** https://llamaguard-nav.staging.llamarisk.com/
 
 **Daily Checks:**
 
 | Day | Date | Updates Received | State=1 Count | Issues |
 | --- | ---- | ---------------- | ------------- | ------ |
-| 1   |      |                  |               |        |
-| 2   |      |                  |               |        |
-| 3   |      |                  |               |        |
-| 4   |      |                  |               |        |
-| 5   |      |                  |               |        |
-| 6   |      |                  |               |        |
-| 7   |      |                  |               |        |
+| 1   |      | ✅               | 0             | None   |
+| 2   |      | ✅               | 0             | None   |
+| 3   |      | ✅               | 0             | None   |
+| 4   |      | ✅               | 0             | None   |
+| 5   |      | ✅               | 0             | None   |
+| 6   |      | ✅               | 0             | None   |
+| 7   |      | ✅               | 0             | None   |
 
 ---
 
-### 3.3 Sepolia Integration Testing with Horizon (Parallel Track)
+### 3.3 Sepolia Integration Testing with Horizon ✅
 
-**Runs in parallel with mainnet monitoring.** **Owner: LlamaRisk + Horizon**
+**Status: COMPLETE**
 
-While mainnet oracles are being monitored, conduct full end-to-end integration testing on Sepolia with
-HorizonFreezeAgent.
+**Owner: LlamaRisk + Horizon**
 
-**Prerequisites:**
+Full end-to-end integration testing on Sepolia with HorizonFreezeAgent completed.
 
-- [ ] HorizonAgentHub deployed on Sepolia
-- [ ] HorizonFreezeAgent deployed on Sepolia
-- [ ] Sepolia Horizon Pool available (or mock contracts)
+**Deployed Sepolia Contracts:**
+
+| Contract                        | Address                                      |
+| ------------------------------- | -------------------------------------------- |
+| LlamaGuardOracle (USTB)         | `0x54F2879D0a903B864782A40D67776aE53871B166` |
+| LlamaGuardOracleProxy (v2)      | `0x860EeAEA09ff6A26F3F4C8681e79B200D9412382` |
+| EACAggregatorProxy (V2V3)       | `0xa3180C43c5B52887008538942b9C6E1993535def` |
+| HorizonAgentHub (proxy)         | `0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68` |
+| HorizonFreezeAgent (v2)         | `0xe16504396EdDb8822197540d3AF5E560b27E4e1e` |
+
+See: `docs/testing/sepolia_integration_freeze_test.md` and `docs/testing/sepolia_tenderly_freeze_test.md`
 
 **Test Scenarios:**
 
-- [ ] Register agent in Sepolia hub
-- [ ] Push out of bounds update to raw NAV
-- [ ] Verify CRE picks up and update freeze state
-- [ ] Verify `hub.check()` returns actionable data
-- [ ] Execute freeze via `hub.execute()`
-- [ ] Confirm market is frozen on Sepolia pool
-- [ ] Test validation rejection (unfreeze, double-freeze)
+- [x] Register agent in Sepolia hub
+- [x] Push out of bounds update to raw NAV
+- [x] Verify CRE picks up and updates freeze state
+- [x] Verify `hub.check()` returns actionable data
+- [x] Execute freeze via `hub.execute()`
+- [x] Confirm market is frozen on Sepolia pool
+- [x] Test validation rejection (unfreeze, double-freeze)
 
 **Completion Criteria:**
 
-- [ ] Full freeze flow validated on Sepolia
-- [ ] No issues with agent registration or execution
+- [x] Full freeze flow validated on Sepolia
+- [x] No issues with agent registration or execution
 
 ---
 
@@ -622,53 +704,86 @@ HorizonFreezeAgent.
 
 **Prerequisites for proceeding to Phase 4:**
 
-- [ ] No false positive freeze signals during monitoring period
-- [ ] Price data consistently matches expected NAV values
-- [ ] Bound calculations verified as accurate
-- [ ] No unexpected errors or reverts
-- [ ] RISK_ADMIN granted to FreezeAgent
-- [ ] Sepolia integration testing with Horizon complete (Section 3.3)
+- [x] No false positive freeze signals during monitoring period
+- [x] Price data consistently matches expected NAV values
+- [x] Bound calculations verified as accurate
+- [x] No unexpected errors or reverts
+- [x] Sepolia integration testing with Horizon complete (Section 3.3)
 
 **Sign-off Required:**
 
-- [ ] LlamaRisk: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
-- [ ] Horizon: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
-- [ ] Chainlink: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] LlamaRisk: _________________ Date: _______
+- [ ] Horizon: _________________ Date: _______
+- [ ] Chainlink (optional): _________________ Date: _______
 
 **Decision:**
 
-- [ ] **GO** - Proceed to Phase 4: USTB Pilot
+- [ ] **GO** - Proceed to Phase 4: USYC Pilot
 - [ ] **NO-GO** - Extend monitoring / investigate issues
 
 ---
 
-## Phase 4: USTB Pilot Activation
+## Phase 4: USYC Pilot Activation
 
-**Activate USTB only to validate the full system before expanding.**
+**Activate USYC only to validate the full system before expanding.**
 
-### 4.1 Switch Chainlink Proxy (USTB)
+### 4.1 Deploy ReadProxy for USYC
 
-| Field        | Value                      |
-| ------------ | -------------------------- |
-| **Contract** | `EACAggregatorProxy(USTB)` |
-| **Caller**   | Chainlink                  |
+| Field        | Value                                               |
+| ------------ | --------------------------------------------------- |
+| **Contract** | `EACAggregatorProxy` (deployed as ReadProxy)         |
+| **Deployer** | LlamaRisk                                            |
+| **Owner**    | TBD (Horizon or joint Horizon+LLR multisig)          |
 
 ```solidity
-// Step 1: Propose new aggregator
-EACAggregatorProxy(ustbProxy).proposeAggregator(llamaGuardOracleUSTB);
+// Deploy ReadProxy pointing to USYC LlamaGuardOracle
+EACAggregatorProxy readProxy = new EACAggregatorProxy(
+    0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4  // LlamaGuardOracle(USYC)
+);
 
-// Step 2: After delay (TBD), confirm
-EACAggregatorProxy(ustbProxy).confirmAggregator(llamaGuardOracleUSTB);
+// Transfer ownership
+readProxy.transferOwnership(multisigAddress);
 ```
 
 **Verification:**
 
-- [ ] `EACAggregatorProxy(ustbProxy).aggregator()` = LlamaGuardOracle(USTB)
-- [ ] `EACAggregatorProxy(ustbProxy).latestAnswer()` returns expected price
+- [ ] ReadProxy deployed and verified on Etherscan
+- [ ] `ReadProxy.aggregator()` = LlamaGuardOracle(USYC)
+- [ ] `ReadProxy.latestAnswer()` returns expected USYC price
+- [ ] `ReadProxy.decimals()` = 8
+- [ ] `ReadProxy.owner()` = target multisig
 
 ---
 
-### 4.2 Register USTB Agent in Hub
+### 4.2 Chainlink Verification of ReadProxy
+
+| Field     | Value     |
+| --------- | --------- |
+| **Owner** | Chainlink |
+
+After deployment, Chainlink team verifies the open source proxy is working as expected.
+
+- [ ] CLL confirms ReadProxy correctly reads from LlamaGuardOracle
+- [ ] CLL confirms data format and interface compatibility
+- [ ] CLL sign-off on ReadProxy deployment
+
+---
+
+### 4.3 CRE Workflow Calculation Sign-off
+
+| Field     | Value     |
+| --------- | --------- |
+| **Owner** | Chainlink |
+
+With this architecture, Horizon no longer relies on CLL External Adapter via DON for price bounds calculation.
+Instead, LLR's CRE workflow handles bounded prices.
+
+- [ ] CLL team confirms LLR CRE bounded price calcs match CLL's calcs
+- [ ] CLL sign-off on CRE workflow calculation accuracy
+
+---
+
+### 4.4 Register USYC Agent in Hub
 
 | Field        | Value             |
 | ------------ | ----------------- |
@@ -679,47 +794,74 @@ EACAggregatorProxy(ustbProxy).confirmAggregator(llamaGuardOracleUSTB);
 HorizonAgentHub.registerAgent(
     IAgentConfigurator.AgentRegistrationInput({
         agentAddress: freezeAgentAddress,
-        riskOracle: llamaGuardOracleUSTB,
-        admin: llamaRiskMultisig,            // LlamaRisk as agent admin
+        riskOracle: 0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4,  // LlamaGuardOracle(USYC)
+        admin: llamaRiskMultisig,
         agentContext: abi.encode(poolConfiguratorAddress),
         isAgentEnabled: true,
-        isAgentPermissioned: false,
+        isAgentPermissioned: true,
         isMarketsFromAgentEnabled: false,
         expirationPeriod: 86400,
         minimumDelay: 0,
         updateType: "boundedNAV",
-        allowedMarkets: [USTB_TOKEN_ADDRESS],
+        allowedMarkets: [0x136471a34f6ef19fE571EFFC1CA711fdb8E49f2b],  // USYC token
         restrictedMarkets: [],
-        permissionedSenders: []
+        permissionedSenders: [llamaRiskMultisig]
     })
 )
 ```
 
-**Returns:** `agentId` for USTB (record this)
+**Returns:** `agentId` for USYC (record this)
 
 **Verification:**
 
 - [ ] `hub.getAgentAddress(agentId)` = FreezeAgent
 - [ ] `hub.isAgentEnabled(agentId)` = true
-- [ ] `hub.getRiskOracle(agentId)` = LlamaGuardOracle(USTB)
+- [ ] `hub.getRiskOracle(agentId)` = LlamaGuardOracle(USYC)
+
+**Note:** Agent is permissioned for pilot purposes to eliminate false positives. After pilot, all agents will be
+permissionless.
 
 ---
 
-### Phase 4 Complete - USTB Now Operational
+### 4.5 Horizon Swaps Price Feed Address
 
-| Component                          | Status |
-| ---------------------------------- | ------ |
-| Chainlink proxy switched to USTB   | [ ]    |
-| USTB agent registered in hub       | [ ]    |
-| USTB freeze capability operational | [ ]    |
+| Field        | Value             |
+| ------------ | ----------------- |
+| **Contract** | Horizon Pool      |
+| **Caller**   | Horizon           |
+
+Horizon updates the USYC asset's oracle source in the pool to point to the new ReadProxy address.
+
+- [ ] Horizon pool configured with new USYC ReadProxy as price feed
+- [ ] Horizon frontend updated to reflect new oracle source
 
 ---
 
-## Phase 5: USTB Validation Period
+### 4.6 Grant RISK_ADMIN (if not done in Phase 3)
+
+- [ ] `aclManager.isRiskAdmin(freezeAgentAddress)` = true
+
+---
+
+### Phase 4 Complete - USYC Now Operational
+
+| Component                               | Status |
+| --------------------------------------- | ------ |
+| ReadProxy deployed for USYC             | [ ]    |
+| CLL verification of ReadProxy           | [ ]    |
+| CRE calcs sign-off from CLL             | [ ]    |
+| USYC agent registered in hub            | [ ]    |
+| Horizon price feed swapped to ReadProxy  | [ ]    |
+| RISK_ADMIN granted to FreezeAgent        | [ ]    |
+| USYC freeze capability operational      | [ ]    |
+
+---
+
+## Phase 5: USYC Validation Period
 
 **Duration: TBD (recommend 3-7 days minimum)**
 
-### 5.1 USTB Monitoring
+### 5.1 USYC Monitoring
 
 **Daily Checks:**
 
@@ -729,26 +871,26 @@ HorizonAgentHub.registerAgent(
 | 2   |      | [ ]            | [ ]            |        |
 | 3   |      | [ ]            | [ ]            |        |
 
-### 5.2 Success Criteria for USTB Pilot
+### 5.2 Success Criteria for USYC Pilot
 
 **Technical Validation:**
 
-- [ ] Chainlink proxy consistently returns correct price from LlamaGuardOracle
-- [ ] `hub.check([ustbAgentId])` returns expected results
+- [ ] ReadProxy consistently returns correct price from LlamaGuardOracle
+- [ ] `hub.check([usycAgentId])` returns expected results
 - [ ] No false positive freeze signals
 - [ ] Price feed latency acceptable
 
 **Operational Validation:**
 
-- [ ] Aave frontend displays correct USTB prices
-- [ ] No user-reported issues with USTB market
+- [ ] Aave frontend displays correct USYC prices
+- [ ] No user-reported issues with USYC market
 - [ ] Liquidation calculations remain accurate
 
 **Sign-off Required Before Expanding:**
 
-- [ ] LlamaRisk: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
-- [ ] Horizon: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
-- [ ] Chainlink: **\*\*\*\***\_**\*\*\*\*** Date: **\_\_\_**
+- [ ] LlamaRisk: _________________ Date: _______
+- [ ] Horizon: _________________ Date: _______
+- [ ] Chainlink (optional): _________________ Date: _______
 
 **Decision:**
 
@@ -759,108 +901,141 @@ HorizonAgentHub.registerAgent(
 
 ## Phase 6: Full Asset Activation
 
-**Activate remaining assets: USCC, USYC, JTRSY, JAAA, ACRED**
+**Activate remaining assets: USTB, USCC, JTRSY, JAAA, ACRED**
 
-### 6.1 Switch Chainlink Proxies (Remaining Assets)
+### 6.1 Deploy ReadProxies (Remaining Assets)
 
-| Asset | EACAggregatorProxy | LlamaGuardOracle | Switch Status |
-| ----- | ------------------ | ---------------- | ------------- |
-| USCC  | 0x\_\_\_           | 0x\_\_\_         | [ ]           |
-| USYC  | 0x\_\_\_           | 0x\_\_\_         | [ ]           |
-| JTRSY | 0x\_\_\_           | 0x\_\_\_         | [ ]           |
-| JAAA  | 0x\_\_\_           | 0x\_\_\_         | [ ]           |
-| ACRED | 0x\_\_\_           | 0x\_\_\_         | [ ]           |
+For each remaining asset, deploy a ReadProxy (EACAggregatorProxy) pointing to the corresponding LlamaGuardOracle.
+
+| Asset | LlamaGuardOracle                             | ReadProxy Address | Deploy Status |
+| ----- | -------------------------------------------- | ----------------- | ------------- |
+| USTB  | `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2` | TBD               | [ ]           |
+| USCC  | `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802` | TBD               | [ ]           |
+| JTRSY | `0x74c0e98b5853e418219D6bF87fD26A73182F8876` | TBD               | [ ]           |
+| JAAA  | `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada` | TBD               | [ ]           |
+| ACRED | `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9` | TBD               | [ ]           |
 
 ---
 
 ### 6.2 Register Remaining Agents in Hub
 
 ```solidity
-// USCC
+// USTB
 hub.registerAgent({
-    riskOracle: llamaGuardOracleUSCC,
-    allowedMarkets: [USCC_TOKEN_ADDRESS],
-    // ... same config as USTB
+    riskOracle: llamaGuardOracleUSTB,
+    allowedMarkets: [USTB_TOKEN_ADDRESS],
+    // ... same config as USYC pilot
 });
 
-// USYC
-hub.registerAgent({
-    riskOracle: llamaGuardOracleUSYC,
-    allowedMarkets: [USYC_TOKEN_ADDRESS],
-    // ... same config as USTB
-});
-
-// JTRSY, JAAA, ACRED similarly
+// USCC, JTRSY, JAAA, ACRED similarly
 ```
 
 **Agent ID Registry:**
 
-| Asset | agentId | Oracle Address | Status |
-| ----- | ------- | -------------- | ------ |
-| USTB  |         | 0x\_\_\_       | [ ]    |
-| USCC  |         | 0x\_\_\_       | [ ]    |
-| USYC  |         | 0x\_\_\_       | [ ]    |
-| JTRSY |         | 0x\_\_\_       | [ ]    |
-| JAAA  |         | 0x\_\_\_       | [ ]    |
-| ACRED |         | 0x\_\_\_       | [ ]    |
+| Asset | agentId | Oracle Address                               | Status |
+| ----- | ------- | -------------------------------------------- | ------ |
+| USYC  |         | `0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4` | [ ]    |
+| USTB  |         | `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2` | [ ]    |
+| USCC  |         | `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802` | [ ]    |
+| JTRSY |         | `0x74c0e98b5853e418219D6bF87fD26A73182F8876` | [ ]    |
+| JAAA  |         | `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada` | [ ]    |
+| ACRED |         | `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9` | [ ]    |
+
+### 6.3 Horizon Swaps Price Feeds (Remaining Assets)
+
+Horizon updates each remaining asset's oracle source in the pool to point to the corresponding ReadProxy.
 
 ---
 
 ### Phase 6 Complete - All Assets Operational
 
-| Component                          | Status |
-| ---------------------------------- | ------ |
-| All Chainlink proxies switched     | [ ]    |
-| All agents registered in hub       | [ ]    |
-| Full freeze capability operational | [ ]    |
+| Component                            | Status |
+| ------------------------------------ | ------ |
+| All ReadProxies deployed             | [ ]    |
+| All agents registered in hub         | [ ]    |
+| All price feeds swapped in Horizon   | [ ]    |
+| Full freeze capability operational   | [ ]    |
 
 ---
 
 ## Phase 7: Ownership Transfers
 
-### 7.1 Transfer LlamaGuardOracle Admin (if needed)
+### 7.1 Transfer HorizonAgentHub Ownership
 
 ```solidity
-// For each oracle
+// Transfer to Horizon multisig
+agentHub.transferOwnership(horizonMultisig);
+```
+
+### 7.2 Transfer LlamaGuardOracle Admin
+
+```solidity
+// For each oracle - transfer to agreed owner (LLR multisig or joint multisig)
 oracle.grantRole(DEFAULT_ADMIN_ROLE, newAdminAddress);
 oracle.revokeRole(DEFAULT_ADMIN_ROLE, oldAdminAddress);
 ```
 
-### 7.2 Transfer LlamaGuardOracleProxy Ownership (if needed)
+### 7.3 Transfer LlamaGuardOracleProxy Ownership
 
 ```solidity
-// Two-step transfer (Ownable2Step)
+// Two-step transfer (Ownable2Step) - transfer to agreed owner
 proxy.transferOwnership(newOwnerAddress);
 // New owner accepts
 proxy.acceptOwnership();
 ```
 
+### 7.4 Verify ReadProxy Ownership
+
+ReadProxy ownership is set at deploy time (Phase 4/6). Verify all ReadProxies are owned by the agreed party.
+
+```solidity
+// For each ReadProxy
+readProxy.owner() == expectedOwner;
+```
+
+### Access Control Transfer Summary
+
+| Contract | Current Owner | Target Owner | Transfer Method | Status |
+| -------- | ------------- | ------------ | --------------- | ------ |
+| HorizonAgentHub | Deployer | Horizon multisig | `transferOwnership` | [ ] |
+| HorizonAgentHub ProxyAdmin | Deployer | Horizon multisig | `transferOwnership` | [ ] |
+| LlamaGuardOracle (x6) | Deployer | TBD (LLR or joint) | `grantRole` + `revokeRole` | [ ] |
+| LlamaGuardOracleProxy (x6) | Deployer | TBD (LLR or joint) | `transferOwnership` + `acceptOwnership` | [ ] |
+| ReadProxy (x6) | LlamaRisk | TBD (Horizon or joint) | Set at deploy time | [ ] |
+
 ---
 
 ## Cross-Org Coordination Summary
 
-| Step                                             | Owner                           | Depends On      | Blocker For |
-| ------------------------------------------------ | ------------------------------- | --------------- | ----------- |
-| Provide CRE config                               | Chainlink                       | None            | Phase 1     |
-| **Phase 1**: Sepolia testing                     | LlamaRisk                       | CRE config      | Phase 2     |
-| **Phase 2**: Deploy oracles, proxies, hub, agent | LlamaRisk + Horizon             | Phase 1         | Phase 3     |
-| Activate CRE workflow                            | Chainlink                       | Phase 2 oracles | Phase 3     |
-| **Phase 3**: Grant RISK_ADMIN, monitor           | Horizon + LlamaRisk             | CRE active      | Phase 4     |
-| Go/No-Go sign-off                                | LlamaRisk + Horizon + Chainlink | Monitoring      | Phase 4     |
-| **Phase 4**: Switch USTB proxy, register agent   | Chainlink + Horizon             | Sign-off        | Phase 5     |
-| **Phase 5**: USTB validation                     | All                             | USTB active     | Phase 6     |
-| USTB validation sign-off                         | LlamaRisk + Horizon + Chainlink | USTB validation | Phase 6     |
-| **Phase 6**: Activate remaining assets           | Chainlink + Horizon             | USTB sign-off   | Phase 7     |
-| **Phase 7**: Ownership transfers                 | All                             | Phase 6         | System live |
+| Step                                                     | Owner              | Depends On          | Blocker For |
+| -------------------------------------------------------- | ------------------ | ------------------- | ----------- |
+| Provide CRE config                                       | Chainlink          | None                | Phase 1     |
+| **Phase 1**: Sepolia testing                             | LlamaRisk          | CRE config          | Phase 2     |
+| **Phase 2**: Deploy oracles, proxies, hub, agent         | LlamaRisk + Horizon | Phase 1             | Phase 3     |
+| Activate CRE workflow                                    | Chainlink          | Phase 2 oracles     | Phase 3     |
+| **Phase 3**: Monitor oracles, Sepolia integration        | LlamaRisk + Horizon | CRE active          | Phase 4     |
+| Go/No-Go sign-off                                        | LlamaRisk + Horizon | Monitoring          | Phase 4     |
+| Setup joint multisig (if applicable)                     | LlamaRisk + Horizon | Sign-off            | Phase 4     |
+| **Phase 4**: Deploy USYC ReadProxy, CLL verify, register agent | LlamaRisk + Horizon | Multisig ready | Phase 5     |
+| Horizon swaps USYC price feed                            | Horizon            | ReadProxy deployed  | Phase 5     |
+| CLL ReadProxy verification + CRE calcs sign-off          | Chainlink          | ReadProxy deployed  | Phase 4     |
+| **Phase 5**: USYC validation                            | All                | USYC active         | Phase 6     |
+| USYC validation sign-off                                 | LlamaRisk + Horizon | USYC validation    | Phase 6     |
+| **Phase 6**: Deploy remaining ReadProxies, register agents | LlamaRisk + Horizon | USYC sign-off    | Phase 7     |
+| Horizon swaps remaining price feeds                      | Horizon            | ReadProxies deployed | Phase 7    |
+| **Phase 7**: Ownership transfers                         | All                | Phase 6             | System live |
 
 ---
 
-## Open Questions for Chainlink Kickoff
+## Open Questions
 
-- [ ] What is the delay between `proposeAggregator` and `confirmAggregator`?
-- [ ] Will Chainlink deploy EACAggregatorProxy for Sepolia testing?
-- [ ] CRE workflow configuration parameters (workflowId, forwarder, author, name)
-- [ ] Coordination process for aggregator switch timing
+- [x] What is the delay between `proposeAggregator` and `confirmAggregator`? → N/A (LlamaRisk deploys own ReadProxy)
+- [x] Will Chainlink deploy EACAggregatorProxy for Sepolia testing? → N/A (LlamaRisk deployed own on Sepolia)
+- [x] CRE workflow configuration parameters → ✅ Configured for 5/6 assets (ACRED pending)
+- [ ] Joint multisig structure (Gnosis Safe? Threshold? Signers?)
+- [ ] Exact ownership split for Oracle, Proxy, and ReadProxy contracts
+- [ ] Access control transfer timeline
+- [ ] Coordination process for Horizon price feed swaps
 
 ---
 
@@ -892,34 +1067,43 @@ oracle.revokeRole(WRITER_ROLE, proxyAddress);
 // 1. Deploy new oracle
 // 2. Update proxy
 proxy.setLlamaGuardOracle(newOracleAddress);
-// 3. Chainlink switches aggregator
+// 3. Update ReadProxy aggregator (owner action via multisig)
+readProxy.proposeAggregator(newOracleAddress);
 // 4. Update agent registration if needed
 ```
 
 ---
 
-## Deployment Summary Template
+## Deployment Summary
 
-### Phase 2: Infrastructure
+### Phase 2: Infrastructure (Complete)
 
-| Contract                    | Address | Deployer  | Tx Hash | Date |
-| --------------------------- | ------- | --------- | ------- | ---- |
-| LlamaGuardOracle(USCC)      |         | LlamaRisk |         |      |
-| LlamaGuardOracle(USTB)      |         | LlamaRisk |         |      |
-| LlamaGuardOracle(USYC)      |         | LlamaRisk |         |      |
-| LlamaGuardOracleProxy(USCC) |         | LlamaRisk |         |      |
-| LlamaGuardOracleProxy(USTB) |         | LlamaRisk |         |      |
-| LlamaGuardOracleProxy(USYC) |         | LlamaRisk |         |      |
-| HorizonAgentHub             |         | Horizon   |         |      |
-| HorizonFreezeAgent          |         | Horizon   |         |      |
+| Contract                         | Address                                      | Deployer  |
+| -------------------------------- | -------------------------------------------- | --------- |
+| LlamaGuardOracle(USTB)           | `0xc11B9FbFF1739dba70D1418BC8E6828cE66f61A2` | LlamaRisk |
+| LlamaGuardOracle(USCC)           | `0x8f1dff6D95f4D6A9E10416B834D5918bE1Eb5802` | LlamaRisk |
+| LlamaGuardOracle(USYC)           | `0x228Cb3e49EAeb10dD1B56Eeae0A8cBffD0bdF2A4` | LlamaRisk |
+| LlamaGuardOracle(JTRSY)          | `0x74c0e98b5853e418219D6bF87fD26A73182F8876` | LlamaRisk |
+| LlamaGuardOracle(JAAA)           | `0x8fA713d4E79238E5f6eB7479bEF0B7CFA51a9Ada` | LlamaRisk |
+| LlamaGuardOracle(ACRED)          | `0xE952F28c9DB1424e120d8c78aA174B0dC98200B9` | LlamaRisk |
+| LlamaGuardOracleProxy(USTB)      | `0x67e347aeac84bbD4644425d8Ca8665046FD2C4e0` | LlamaRisk |
+| LlamaGuardOracleProxy(USCC)      | `0x3606A9Ab8D47EE31A6cC1134fA6995B7d16DB529` | LlamaRisk |
+| LlamaGuardOracleProxy(USYC)      | `0x7cf933fc475da2E3b45FA207d7df2EF9855c0B60` | LlamaRisk |
+| LlamaGuardOracleProxy(JTRSY)     | `0x069f65edEC8FbC6bd7c0C03104d9beC350F0A1C1` | LlamaRisk |
+| LlamaGuardOracleProxy(JAAA)      | `0xb3fF4a48DEf4d1D2249180F02Ce505668aFd8D46` | LlamaRisk |
+| LlamaGuardOracleProxy(ACRED)     | `0xE5d4D8500D73fb30E0941C8A3BA1e47F06A9bF5F` | LlamaRisk |
+| HorizonAgentHub (proxy)          | `0x7acBfb30736B40d9B8EAE03582FEeE16bA4ADA94` | LlamaRisk |
+| HorizonAgentHub (implementation) | `0xc81657782a294D2F56B129B2051A739196Ecc1d8` | LlamaRisk |
+| HorizonAgentHub (ProxyAdmin)     | `0x692940a9689890f227e4d39ec3F8BdCdd36E10e2` | LlamaRisk |
+| HorizonFreezeAgent               | `0x9CF889F6bB0b77E143608CdaD1Fe83C09f12FBDa` | Horizon   |
 
 ### Phase 4-6: Activation Timeline
 
-| Asset | Chainlink Switch Date | Agent Registration Date | agentId |
+| Asset | ReadProxy Deploy Date | Agent Registration Date | agentId |
 | ----- | --------------------- | ----------------------- | ------- |
+| USYC  |                       |                         |         |
 | USTB  |                       |                         |         |
 | USCC  |                       |                         |         |
-| USYC  |                       |                         |         |
 | JTRSY |                       |                         |         |
 | JAAA  |                       |                         |         |
 | ACRED |                       |                         |         |

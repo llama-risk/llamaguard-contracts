@@ -24,7 +24,7 @@ library Addresses {
     address internal constant USCC = 0x14d60E7FDC0D71d8611742720E4C50E7a974020c;
     address internal constant USYC = 0x136471a34f6ef19fE571EFFC1CA711fdb8E49f2b;
     address internal constant VBILL = 0x2255718832bC9fD3bE1CaF75084F4803DA14FF01;
-    address internal constant ACRED = address(0); // TODO: Set ACRED token address
+    address internal constant ACRED = 0x17418038ecF73BA4026c4f428547BF099706F27B;
 
     // --- Existing Chainlink oracle addresses (mainnet) ---
     address internal constant JAAA_ORACLE = 0x1E41Ef40AC148706c114534E8192Ca608f80fC48;
@@ -33,7 +33,7 @@ library Addresses {
     address internal constant USCC_ORACLE = 0x19e2d716288751c5A59deaB61af012D5DF895962;
     address internal constant USYC_ORACLE = 0xE8E65Fb9116875012F5990Ecaab290B3531DbeB9;
     address internal constant VBILL_ORACLE = 0x5ed77a9D9b7cc80E9d0D7711024AF38C2643C1c4;
-    address internal constant ACRED_ORACLE = address(0); // TODO: Set ACRED oracle address
+    address internal constant ACRED_ORACLE = 0x35DDfB90011E686CCf837a6819562705076207EB;
 
     // --- Aave Horizon mainnet ---
     address internal constant AAVE_HORIZON_POOL = 0xAe05Cd22df81871bc7cC2a04BeCfb516bFe332C8;
@@ -61,15 +61,15 @@ library Addresses {
 
     // --- Sepolia deployed LlamaGuard infrastructure ---
     address internal constant SEPOLIA_USTB_LLAMAGUARD_ORACLE = 0x54F2879D0a903B864782A40D67776aE53871B166;
-    address internal constant SEPOLIA_USTB_FREEZE_AGENT = 0xC363afB380cd6C972Fd8219d9f51F3f6b05CD60c;
+    address internal constant SEPOLIA_USTB_FREEZE_AGENT = 0xe16504396EdDb8822197540d3AF5E560b27E4e1e;
     address internal constant SEPOLIA_HORIZON_AGENT_HUB = 0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68;
     address internal constant SEPOLIA_USTB_LLAMAGUARD_ORACLE_PROXY = 0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2;
     address internal constant SEPOLIA_HOT_WALLET = 0x9118964074e2AA11393ce0797264759dB2F2ef69;
 
     // --- Sepolia Aave Horizon ---
-    address internal constant SEPOLIA_AAVE_HORIZON_POOL = 0x553aA902Df9C6770c43Ef047cDD13431Ecdf09fF;
-    address internal constant SEPOLIA_AAVE_HORIZON_POOL_CONFIGURATOR = 0x5d5215F0901e58b442Fbb443d2dAD2645A553B18;
-    address internal constant SEPOLIA_AAVE_HORIZON_ACL_MANAGER = 0xa98845b72768bD31287cE93eAE1F97DE90426e35;
+    address internal constant SEPOLIA_AAVE_HORIZON_POOL = 0xc16E5D2cA6c955213971B9641c1Eea7b104D561F;
+    address internal constant SEPOLIA_AAVE_HORIZON_POOL_CONFIGURATOR = 0x452708660c6e9e5E69704992C0303274B84b407A;
+    address internal constant SEPOLIA_AAVE_HORIZON_ACL_MANAGER = 0x03E4fbd3Ae230A913d668e0C3f765d8Bc6Be303E;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ANVIL LOCAL (Chain ID: 31337)

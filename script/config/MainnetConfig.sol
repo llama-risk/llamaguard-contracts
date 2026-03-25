@@ -310,7 +310,7 @@ contract MainnetConfig {
         return DeployStructs.OracleDeploymentConfig({
             oracle: DeployStructs.OracleConfig({
                 name: "ACRED",
-                decimals: 8, // TODO: Confirm ACRED decimals
+                decimals: 8,
                 description: "LlamaGuard ACRED Risk Oracle",
                 version: 1,
                 updateTypes: _makeUpdateTypes(),

@@ -51,41 +51,41 @@ contract CreConfig {
 
     function _usccCreConfig() internal pure returns (DeployStructs.CreWorkflowConfig memory) {
         return DeployStructs.CreWorkflowConfig({
-            proxyAddress: address(0), // TODO: Set after Stage 3 deployment
-            workflowId: bytes32(0), // TODO: Set Chainlink CRE workflow ID for USCC
-            expectedForwarder: address(0), // TODO: Set Chainlink CRE forwarder for USCC
-            expectedAuthor: address(0), // TODO: Set Chainlink CRE author for USCC
-            expectedWorkflowName: bytes10(0) // TODO: Set Chainlink CRE workflow name for USCC
+            proxyAddress: 0x3606A9Ab8D47EE31A6cC1134fA6995B7d16DB529,
+            workflowId: 0x00886db7652f86b1e90aa63388139bbc9a82069ad80360fce3a2f7d38fe884eb,
+            expectedForwarder: 0x0b93082D9b3C7C97fAcd250082899BAcf3af3885,
+            expectedAuthor: 0x4EDEaFc9b862F08464423EFe9423153B22B28f17, // CRE multisig
+            expectedWorkflowName: _creWorkflowName("llamaguard_nav_uscc_prod")
         });
     }
 
     function _usycCreConfig() internal pure returns (DeployStructs.CreWorkflowConfig memory) {
         return DeployStructs.CreWorkflowConfig({
-            proxyAddress: address(0), // TODO: Set after Stage 3 deployment
-            workflowId: bytes32(0), // TODO: Set Chainlink CRE workflow ID for USYC
-            expectedForwarder: address(0), // TODO: Set Chainlink CRE forwarder for USYC
-            expectedAuthor: address(0), // TODO: Set Chainlink CRE author for USYC
-            expectedWorkflowName: bytes10(0) // TODO: Set Chainlink CRE workflow name for USYC
+            proxyAddress: 0x7cf933fc475da2E3b45FA207d7df2EF9855c0B60,
+            workflowId: 0x00eabb3f208f6e34aa9a2e643cd1ca7a38c5de290a274da7d6ff37c255faec22,
+            expectedForwarder: 0x0b93082D9b3C7C97fAcd250082899BAcf3af3885,
+            expectedAuthor: 0x4EDEaFc9b862F08464423EFe9423153B22B28f17, // CRE multisig
+            expectedWorkflowName: _creWorkflowName("llamaguard_nav_usyc_prod")
         });
     }
 
     function _jtrsyCreConfig() internal pure returns (DeployStructs.CreWorkflowConfig memory) {
         return DeployStructs.CreWorkflowConfig({
-            proxyAddress: address(0), // TODO: Set after Stage 3 deployment
-            workflowId: bytes32(0), // TODO: Set Chainlink CRE workflow ID for JTRSY
-            expectedForwarder: address(0), // TODO: Set Chainlink CRE forwarder for JTRSY
-            expectedAuthor: address(0), // TODO: Set Chainlink CRE author for JTRSY
-            expectedWorkflowName: bytes10(0) // TODO: Set Chainlink CRE workflow name for JTRSY
+            proxyAddress: 0x069f65edEC8FbC6bd7c0C03104d9beC350F0A1C1,
+            workflowId: 0x0058a4e15806379bed41052228a76d6d6ccc45ebcfc167058a73c6065bda6b72,
+            expectedForwarder: 0x0b93082D9b3C7C97fAcd250082899BAcf3af3885,
+            expectedAuthor: 0x4EDEaFc9b862F08464423EFe9423153B22B28f17, // CRE multisig
+            expectedWorkflowName: _creWorkflowName("llamaguard_nav_jtrsy_prod")
         });
     }
 
     function _jaaaCreConfig() internal pure returns (DeployStructs.CreWorkflowConfig memory) {
         return DeployStructs.CreWorkflowConfig({
-            proxyAddress: address(0), // TODO: Set after Stage 3 deployment
-            workflowId: bytes32(0), // TODO: Set Chainlink CRE workflow ID for JAAA
-            expectedForwarder: address(0), // TODO: Set Chainlink CRE forwarder for JAAA
-            expectedAuthor: address(0), // TODO: Set Chainlink CRE author for JAAA
-            expectedWorkflowName: bytes10(0) // TODO: Set Chainlink CRE workflow name for JAAA
+            proxyAddress: 0xb3fF4a48DEf4d1D2249180F02Ce505668aFd8D46,
+            workflowId: 0x00264afe850ac2514dd13809e5e6ccdc9d5070bccc2ebf457baae1c2720dc2be,
+            expectedForwarder: 0x0b93082D9b3C7C97fAcd250082899BAcf3af3885,
+            expectedAuthor: 0x4EDEaFc9b862F08464423EFe9423153B22B28f17, // CRE multisig
+            expectedWorkflowName: _creWorkflowName("llamaguard_nav_jaaa_prod")
         });
     }
 
