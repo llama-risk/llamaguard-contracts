@@ -152,8 +152,7 @@ interface ILlamaGuardOracle {
      * @notice Update the oracle with new risk round data
      * @dev Only callable by addresses with WRITER_ROLE.
      *      input.newValue contains ABI-encoded price (int256) for Chainlink AggregatorV3 compatibility.
-     *      input.additionalData contains the full data bundle: abi.encode(uint256 lowerBound, uint256 upperBound,
-     * uint256 freezeState).
+     *      input.additionalData contains the full data bundle: abi.encode(uint256 supply, int256 price, uint256 state).
      * @param input UpdateInput struct containing referenceId, newValue, updateType, and additionalData
      */
     function updateLatestRiskRoundData(UpdateInput calldata input) external;
