@@ -1,8 +1,8 @@
 # Sepolia Tenderly Fork Test: AgentHub Freeze Flow
 
-End-to-end test of the HorizonAgentHub freeze pipeline on a Tenderly fork of Sepolia.
-Validates that registering the FreezeAgent, writing freeze state to the oracle, and calling
-`execute()` on the AgentHub successfully freezes the USTB reserve on the Horizon pool.
+End-to-end test of the HorizonAgentHub freeze pipeline on a Tenderly fork of Sepolia. Validates that registering the
+FreezeAgent, writing freeze state to the oracle, and calling `execute()` on the AgentHub successfully freezes the USTB
+reserve on the Horizon pool.
 
 ## Contract Addresses
 
@@ -19,21 +19,21 @@ Validates that registering the FreezeAgent, writing freeze state to the oracle, 
 
 ## Pre-Conditions (current Sepolia state)
 
-| Check                                        | Status |
-| -------------------------------------------- | ------ |
-| Deployer has `DEFAULT_ADMIN_ROLE` on oracle   | Yes    |
-| Deployer has `WRITER_ROLE` on oracle          | **No** (revoked) |
-| `boundedNav` is valid updateType on oracle     | **No** (not added yet) |
-| USTB is authorized market on oracle           | Yes    |
-| Deployer is owner of AgentHub                 | Yes    |
-| FreezeAgent has `RISK_ADMIN` on ACL Manager   | Yes    |
-| AgentHub has registered agents                | **No** (count = 0) |
-| USTB reserve is frozen on Pool                | No (active, not frozen) |
+| Check                                       | Status                  |
+| ------------------------------------------- | ----------------------- |
+| Deployer has `DEFAULT_ADMIN_ROLE` on oracle | Yes                     |
+| Deployer has `WRITER_ROLE` on oracle        | **No** (revoked)        |
+| `boundedNav` is valid updateType on oracle  | **No** (not added yet)  |
+| USTB is authorized market on oracle         | Yes                     |
+| Deployer is owner of AgentHub               | Yes                     |
+| FreezeAgent has `RISK_ADMIN` on ACL Manager | Yes                     |
+| AgentHub has registered agents              | **No** (count = 0)      |
+| USTB reserve is frozen on Pool              | No (active, not frozen) |
 
 ## Fork Setup
 
-Create a Tenderly fork of Sepolia at the latest block. All transactions below use
-`eth_sendTransaction` with Tenderly's state override / impersonation — no private key needed.
+Create a Tenderly fork of Sepolia at the latest block. All transactions below use `eth_sendTransaction` with Tenderly's
+state override / impersonation — no private key needed.
 
 ```
 Network:   Sepolia (chain ID 11155111)
@@ -44,8 +44,8 @@ Fork from: latest block
 
 ## Step 1 — Add `boundedNav` Update Type on Oracle
 
-The oracle only accepts writes for registered updateTypes. `boundedNav` hasn't been added yet.
-This is the same updateType that CRE uses in production to push NAV + bounds + freeze state.
+The oracle only accepts writes for registered updateTypes. `boundedNav` hasn't been added yet. This is the same
+updateType that CRE uses in production to push NAV + bounds + freeze state.
 
 **Impersonate:** Deployer (`0x9118...ef69`) — has `DEFAULT_ADMIN_ROLE`
 
@@ -74,8 +74,8 @@ cast call 0x54F2879D0a903B864782A40D67776aE53871B166 \
 
 ## Step 2 — Grant `WRITER_ROLE` to Deployer on Oracle
 
-The deployer's `WRITER_ROLE` was previously revoked. Re-grant it so we can write freeze data
-directly (simulating what the proxy/CRE would do in production).
+The deployer's `WRITER_ROLE` was previously revoked. Re-grant it so we can write freeze data directly (simulating what
+the proxy/CRE would do in production).
 
 **Impersonate:** Deployer (`0x9118...ef69`) — has `DEFAULT_ADMIN_ROLE`
 
@@ -130,21 +130,21 @@ struct AgentRegistrationInput {
 
 Values for this test:
 
-| Field                      | Value |
-| -------------------------- | ----- |
-| `admin`                    | `0x9118964074e2AA11393ce0797264759dB2F2ef69` (deployer) |
-| `riskOracle`               | `0x54F2879D0a903B864782A40D67776aE53871B166` (LlamaGuardOracle) |
-| `isAgentEnabled`           | `true` |
-| `isAgentPermissioned`      | `false` (anyone can call execute) |
-| `isMarketsFromAgentEnabled`| `false` (we specify markets explicitly) |
-| `agentAddress`             | `0xe16504396EdDb8822197540d3AF5E560b27E4e1e` (HorizonFreezeAgent) |
-| `expirationPeriod`         | `3600` (1 hour — generous for testing) |
-| `minimumDelay`             | `0` (no cooldown) |
-| `updateType`               | `"boundedNav"` |
-| `agentContext`             | `abi.encode(0x452708660c6e9e5E69704992C0303274B84b407A)` (Pool Configurator) |
-| `allowedMarkets`           | `[0x39727692cF58137Bd8c401eFE87Cc8A190D62ead]` (USTB) |
-| `restrictedMarkets`        | `[]` |
-| `permissionedSenders`      | `[]` |
+| Field                       | Value                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `admin`                     | `0x9118964074e2AA11393ce0797264759dB2F2ef69` (deployer)                      |
+| `riskOracle`                | `0x54F2879D0a903B864782A40D67776aE53871B166` (LlamaGuardOracle)              |
+| `isAgentEnabled`            | `true`                                                                       |
+| `isAgentPermissioned`       | `false` (anyone can call execute)                                            |
+| `isMarketsFromAgentEnabled` | `false` (we specify markets explicitly)                                      |
+| `agentAddress`              | `0xe16504396EdDb8822197540d3AF5E560b27E4e1e` (HorizonFreezeAgent)            |
+| `expirationPeriod`          | `3600` (1 hour — generous for testing)                                       |
+| `minimumDelay`              | `0` (no cooldown)                                                            |
+| `updateType`                | `"boundedNav"`                                                               |
+| `agentContext`              | `abi.encode(0x452708660c6e9e5E69704992C0303274B84b407A)` (Pool Configurator) |
+| `allowedMarkets`            | `[0x39727692cF58137Bd8c401eFE87Cc8A190D62ead]` (USTB)                        |
+| `restrictedMarkets`         | `[]`                                                                         |
+| `permissionedSenders`       | `[]`                                                                         |
 
 ```bash
 # Encode agentContext (Pool Configurator address)
@@ -241,6 +241,7 @@ cast call 0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68 \
 **Expected:** `(true, [(0, [0x39727692cF58137Bd8c401eFE87Cc8A190D62ead])])`
 
 If `false` — check:
+
 - Is the update expired? (`expirationPeriod` is 3600s from registration)
 - Is the reserve already frozen? (should not be)
 - Did `validate` pass? (freezeState must be `1` and reserve must be unfrozen)
@@ -261,6 +262,7 @@ cast send 0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68 \
 ```
 
 This triggers the chain:
+
 ```
 AgentHub.execute()
   -> validates update (expiry, cooldown, market)
@@ -294,8 +296,8 @@ print(f'USTB Reserve Frozen: {\"YES\" if frozen else \"NO\"}')
 
 ## Step 8 — Verify Idempotency (Optional)
 
-Calling `check()` again should return `false` — the reserve is already frozen, so the
-FreezeAgent's `validate()` rejects the action.
+Calling `check()` again should return `false` — the reserve is already frozen, so the FreezeAgent's `validate()` rejects
+the action.
 
 ```bash
 cast call 0x1DcDe45392E4fE8c1a9D60AaE5dd01057c234C68 \
@@ -311,14 +313,14 @@ Calling `execute()` again should revert with `NoActionCanBePerformed()`.
 
 ## Troubleshooting
 
-| Symptom | Likely Cause | Fix |
-| ------- | ------------ | --- |
-| `addUpdateType` reverts | Deployer lost `DEFAULT_ADMIN_ROLE` | Check `hasRole(0x00, deployer)` |
-| `updateLatestRiskRoundData` reverts | Missing `WRITER_ROLE` or wrong `additionalData` length | Verify Step 2; ensure `additionalData` is exactly 96 bytes |
-| `check()` returns `false` | Update expired, already injected, or reserve already frozen | Check `expirationPeriod`, `lastInjectedUpdate`, pool frozen state |
-| `execute()` reverts with `NoActionCanBePerformed` | Same as above — revalidation fails | Run `check()` first to diagnose |
-| `execute()` reverts inside `setReserveFreeze` | FreezeAgent missing `RISK_ADMIN` on ACL Manager | Grant via `addRiskAdmin()` on ACL Manager (need pool admin impersonation) |
-| Price deviation revert on `updateLatestRiskRoundData` | New price too far from last round | Use a price within `maxPriceDeviation` bps of the last answer, or set deviation to 0 |
+| Symptom                                               | Likely Cause                                                | Fix                                                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `addUpdateType` reverts                               | Deployer lost `DEFAULT_ADMIN_ROLE`                          | Check `hasRole(0x00, deployer)`                                                      |
+| `updateLatestRiskRoundData` reverts                   | Missing `WRITER_ROLE` or wrong `additionalData` length      | Verify Step 2; ensure `additionalData` is exactly 96 bytes                           |
+| `check()` returns `false`                             | Update expired, already injected, or reserve already frozen | Check `expirationPeriod`, `lastInjectedUpdate`, pool frozen state                    |
+| `execute()` reverts with `NoActionCanBePerformed`     | Same as above — revalidation fails                          | Run `check()` first to diagnose                                                      |
+| `execute()` reverts inside `setReserveFreeze`         | FreezeAgent missing `RISK_ADMIN` on ACL Manager             | Grant via `addRiskAdmin()` on ACL Manager (need pool admin impersonation)            |
+| Price deviation revert on `updateLatestRiskRoundData` | New price too far from last round                           | Use a price within `maxPriceDeviation` bps of the last answer, or set deviation to 0 |
 
 ## Summary
 

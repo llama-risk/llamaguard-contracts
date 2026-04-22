@@ -22,17 +22,16 @@ the `EACAggregatorProxy` for USTB.
 | HorizonAgentHub (ProxyAdmin)     | `0xC7a06948557a3998375ec8388786e024Bd2D2d45` | —        | [View](https://sepolia.etherscan.io/address/0xC7a06948557a3998375ec8388786e024Bd2D2d45) |
 | HorizonFreezeAgent               | `0xe16504396EdDb8822197540d3AF5E560b27E4e1e` | —        | [View](https://sepolia.etherscan.io/address/0xe16504396EdDb8822197540d3AF5E560b27E4e1e) |
 
-
 b377bfc50000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000016000264afe850ac2514dd13809e5e6ccdc9d5070bccc2ebf457baae1c2720dc2be000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000186c6c616d6167756172645f6e61765f6a6161615f70726f64000000000000000000000000000000000000000000000000000000000000000000000000000000186c6c616d6167756172645f6e61765f6a6161615f70726f64000000000000000000000000000000000000000000000000000000000000000000000000000000067a6f6e652d610000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007568747470733a2f2f73746f726167652e6372652e636861696e2e6c696e6b2f6172746966616374732f303032363461666538353061633235313464643133383039653565366363646339643530373062636363326562663435376261616531633237323064633262652f62696e6172792e7761736d0000000000000000000000000000000000000000000000000000000000000000000000000000000000007068747470733a2f2f73746f726167652e6372652e636861696e2e6c696e6b2f6172746966616374732f303032363461666538353061633235313464643133383039653565366363646339643530373062636363326562663435376261616531633237323064633262652f636f6e666967000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 ### Deprecated (replaced)
 
-| Contract                     | Address                                      | Notes                                                           |
-| ---------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
-| EACAggregatorProxy (V3 only) | `0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79` | Replaced with V2V3 version for Horizon `latestAnswer()` support |
-| LlamaGuardOracleProxy v1     | `0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2` | Replaced with v2 (zero-forwarder); WRITER_ROLE revoked          |
-| LlamaGuardOracle (USTB) v1   | `0x08bFEb45bA1437708bB6FBDBa94E04Df0a9F8045` | 8 decimals — replaced with 6 decimal version                    |
-| RawNAVOracle v1              | `0xdCb47643002c3259912e1bA65b53b92F81e93703` | 8 decimals — replaced with 6 decimal version                    |
+| Contract                     | Address                                      | Notes                                                                  |
+| ---------------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| EACAggregatorProxy (V3 only) | `0x3046553a69a4dBD2aB2AccB30Cbf7C8d8db84D79` | Replaced with V2V3 version for Horizon `latestAnswer()` support        |
+| LlamaGuardOracleProxy v1     | `0x2B079561590C6ACfb6af3C4aF5Bc3927acc98bD2` | Replaced with v2 (zero-forwarder); WRITER_ROLE revoked                 |
+| LlamaGuardOracle (USTB) v1   | `0x08bFEb45bA1437708bB6FBDBa94E04Df0a9F8045` | 8 decimals — replaced with 6 decimal version                           |
+| RawNAVOracle v1              | `0xdCb47643002c3259912e1bA65b53b92F81e93703` | 8 decimals — replaced with 6 decimal version                           |
 | HorizonFreezeAgent v1        | `0xC363afB380cd6C972Fd8219d9f51F3f6b05CD60c` | Points to old Horizon Pool (`0x553a`); replaced after Horizon redeploy |
 
 ## Configuration Applied
@@ -144,8 +143,8 @@ cast call 0xe16504396EdDb8822197540d3AF5E560b27E4e1e "POOL()(address)" --rpc-url
    list USTB with this oracle
 2. **Share with Chainlink** — Give `RawNAVOracle` (`0xba88Da783C44DC01dBC828a2Cf7F9eB4C5E2A620`) to Chainlink so they
    configure CRE to listen to `RoundDataUpdated` events
-3. **Horizon grants RISK_ADMIN** — Horizon grants `RISK_ADMIN` to new `HorizonFreezeAgent`
-   on Sepolia ACLManager (`0x03E4fbd3Ae230A913d668e0C3f765d8Bc6Be303E`)
+3. **Horizon grants RISK_ADMIN** — Horizon grants `RISK_ADMIN` to new `HorizonFreezeAgent` on Sepolia ACLManager
+   (`0x03E4fbd3Ae230A913d668e0C3f765d8Bc6Be303E`)
 4. **Register FreezeAgent in AgentHub** — Deployer registers the FreezeAgent in AgentHub for USTB market
 5. **Start cron job** — Begin writing USTB prices to RawNAVOracle:
    ```bash
