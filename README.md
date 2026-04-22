@@ -111,6 +111,12 @@ forge script script/DeployParameterRegistry.s.sol --rpc-url <RPC_URL> --broadcas
 forge fmt
 ```
 
+## Audits
+
+See [`audit/`](./audit) for security reviews and the onchain contracts specification. The Trail of Bits
+February 2026 review is also published at
+[trailofbits/publications](https://github.com/trailofbits/publications/blob/master/reviews/2026-02-chainlink-llamariskllamaguardnavcre-securityreview.pdf).
+
 ## License
 
 BUSL-1.1
