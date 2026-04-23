@@ -207,4 +207,113 @@ contract EACAggregatorProxyTest is Test {
         assertEq(roundId, 5); // 5 updates, starting at roundId 1
         assertEq(answer, 250); // 5 * 50
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V2 (AggregatorInterface) passthrough tests
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function testLatestAnswerPassthrough() public {
+        vm.prank(dataProxy);
+        _callUpdateData(1000, 500, 2);
+
+        assertEq(proxy.latestAnswer(), 500);
+        assertEq(proxy.latestAnswer(), oracle.latestAnswer());
+    }
+
+    function testLatestTimestampPassthrough() public {
+        vm.prank(dataProxy);
+        _callUpdateData(1000, 500, 2);
+
+        uint256 ts = proxy.latestTimestamp();
+        assertGt(ts, 0);
+        assertEq(ts, oracle.latestTimestamp());
+    }
+
+    function testLatestRoundPassthrough() public {
+        vm.prank(dataProxy);
+        _callUpdateData(1000, 500, 2);
+
+        assertEq(proxy.latestRound(), 1);
+        assertEq(proxy.latestRound(), oracle.latestRound());
+    }
+
+    function testGetAnswerPassthrough() public {
+        // Push two rounds
+        vm.prank(dataProxy);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 100, PRICE_TYPE, 500, 1));
+        vm.prank(dataProxy);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 200, PRICE_TYPE, 600, 1));
+
+        // Query historical round via V2
+        assertEq(proxy.getAnswer(1), 100);
+        assertEq(proxy.getAnswer(2), 200);
+        assertEq(proxy.getAnswer(1), oracle.getAnswer(1));
+        assertEq(proxy.getAnswer(2), oracle.getAnswer(2));
+    }
+
+    function testGetTimestampPassthrough() public {
+        vm.warp(1_000_000);
+        vm.prank(dataProxy);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-1", 100, PRICE_TYPE, 500, 1));
+
+        vm.warp(2_000_000);
+        vm.prank(dataProxy);
+        oracle.updateLatestRiskRoundData(_createUpdateInput("ref-2", 200, PRICE_TYPE, 600, 1));
+
+        assertEq(proxy.getTimestamp(1), oracle.getTimestamp(1));
+        assertEq(proxy.getTimestamp(2), oracle.getTimestamp(2));
+        assertGt(proxy.getTimestamp(2), proxy.getTimestamp(1));
+    }
+
+    function testLatestAnswerZeroBeforeAnyUpdate() public view {
+        // Before any update, latestAnswer should return 0
+        assertEq(proxy.latestAnswer(), 0);
+        assertEq(proxy.latestTimestamp(), 0);
+        assertEq(proxy.latestRound(), 0);
+    }
+
+    function testV2MethodsAfterAggregatorUpgrade() public {
+        // Seed original oracle
+        vm.prank(dataProxy);
+        _callUpdateData(1000, 500, 2);
+        assertEq(proxy.latestAnswer(), 500);
+
+        // Deploy new oracle with different data
+        address[] memory markets = new address[](1);
+        markets[0] = defaultMarket;
+        LlamaGuardOracle newOracle = new LlamaGuardOracle(8, "New Oracle", 2, defaultUpdateTypes, markets);
+        newOracle.grantRole(newOracle.WRITER_ROLE(), dataProxy);
+
+        vm.prank(dataProxy);
+        newOracle.updateLatestRiskRoundData(_createUpdateInput("ref-new", 999, PRICE_TYPE, 2000, 1));
+
+        // Upgrade aggregator
+        proxy.proposeAggregator(address(newOracle));
+
+        // V2 methods should now read from new oracle
+        assertEq(proxy.latestAnswer(), 999);
+        assertEq(proxy.latestRound(), 1);
+        assertGt(proxy.latestTimestamp(), 0);
+        assertEq(proxy.getAnswer(1), 999);
+    }
+
+    function testMultipleUpdatesV2Methods() public {
+        for (uint256 i = 1; i <= 3; i++) {
+            vm.prank(dataProxy);
+            oracle.updateLatestRiskRoundData(
+                _createUpdateInput(
+                    string(abi.encodePacked("ref-", vm.toString(i))), int256(i * 100), PRICE_TYPE, i * 500, i
+                )
+            );
+        }
+
+        // latestAnswer should return the last update
+        assertEq(proxy.latestAnswer(), 300);
+        assertEq(proxy.latestRound(), 3);
+
+        // Historical V2 queries
+        assertEq(proxy.getAnswer(1), 100);
+        assertEq(proxy.getAnswer(2), 200);
+        assertEq(proxy.getAnswer(3), 300);
+    }
 }

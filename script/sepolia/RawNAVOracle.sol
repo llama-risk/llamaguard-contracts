@@ -6,43 +6,53 @@ import { AggregatorInterface } from "@chainlink/contracts/src/v0.8/shared/interf
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-/**
- * @title EACAggregatorProxy
- * @notice Proxy contract for Chainlink-style aggregators (Ethereum Aggregator Contract Abstraction)
- * @dev This proxy allows upgrading the underlying aggregator implementation while maintaining the same address
- *
- * Based on Chainlink's EACAggregatorProxy pattern:
- * - Consumers always interact with the proxy address
- * - Owner can update the underlying aggregator
- * - Maintains backward compatibility with AggregatorV2V3Interface
- */
-contract EACAggregatorProxy is Ownable, AggregatorV2V3Interface {
-    /// @notice The current aggregator implementation
-    AggregatorV2V3Interface public aggregator;
+/// @title RawNAVOracle
+/// @notice Writable AggregatorV2V3-compatible oracle for Sepolia integration testing
+/// @dev The deployer (owner) pushes raw NAV values. CRE listens to AnswerUpdated events.
+///      Used by a cron job (real prices) and manually (bad values for fire drills).
+contract RawNAVOracle is Ownable, AggregatorV2V3Interface {
+    uint8 private immutable _decimals;
+    string private _description;
+    uint256 private immutable _version;
 
-    /// @notice Emitted when the aggregator is updated
-    event AggregatorUpdated(address indexed oldAggregator, address indexed newAggregator);
+    uint80 private _latestRoundId;
+    int256 private _latestAnswer;
+    uint256 private _latestStartedAt;
+    uint256 private _latestUpdatedAt;
 
-    error InvalidAggregator();
+    /// @param decimals_ Number of decimals for the oracle (e.g., 6)
+    /// @param description_ Human-readable description (e.g., "USTB Raw NAV (Sepolia)")
+    /// @param version_ Oracle version number
+    /// @param initialAnswer Initial price to seed latestRoundData with valid data immediately
+    constructor(
+        uint8 decimals_,
+        string memory description_,
+        uint256 version_,
+        int256 initialAnswer
+    )
+        Ownable(msg.sender)
+    {
+        _decimals = decimals_;
+        _description = description_;
+        _version = version_;
 
-    /**
-     * @notice Constructor
-     * @param _aggregator Address of the initial aggregator implementation
-     */
-    constructor(address _aggregator) Ownable(msg.sender) {
-        require(_aggregator != address(0), InvalidAggregator());
-        aggregator = AggregatorV2V3Interface(_aggregator);
+        _latestRoundId = 1;
+        _latestAnswer = initialAnswer;
+        _latestStartedAt = block.timestamp;
+        _latestUpdatedAt = block.timestamp;
+
+        emit AnswerUpdated(initialAnswer, 1, block.timestamp);
     }
 
-    /**
-     * @notice Update the aggregator implementation
-     * @param _aggregator Address of the new aggregator
-     */
-    function proposeAggregator(address _aggregator) external onlyOwner {
-        require(_aggregator != address(0), InvalidAggregator());
-        address oldAggregator = address(aggregator);
-        aggregator = AggregatorV2V3Interface(_aggregator);
-        emit AggregatorUpdated(oldAggregator, _aggregator);
+    /// @notice Push a new price value — only callable by owner (deployer / cron job)
+    /// @param answer The new NAV price
+    function updateLatestRoundData(int256 answer) external onlyOwner {
+        _latestRoundId++;
+        _latestAnswer = answer;
+        _latestStartedAt = block.timestamp;
+        _latestUpdatedAt = block.timestamp;
+
+        emit AnswerUpdated(answer, _latestRoundId, block.timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -51,27 +61,28 @@ contract EACAggregatorProxy is Ownable, AggregatorV2V3Interface {
 
     /// @inheritdoc AggregatorV3Interface
     function decimals() external view override returns (uint8) {
-        return aggregator.decimals();
+        return _decimals;
     }
 
     /// @inheritdoc AggregatorV3Interface
     function description() external view override returns (string memory) {
-        return aggregator.description();
+        return _description;
     }
 
     /// @inheritdoc AggregatorV3Interface
     function version() external view override returns (uint256) {
-        return aggregator.version();
+        return _version;
     }
 
     /// @inheritdoc AggregatorV3Interface
-    function getRoundData(uint80 _roundId)
+    function getRoundData(uint80)
         external
         view
         override
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
-        return aggregator.getRoundData(_roundId);
+        // Only latest round is stored; return it for any query
+        return (_latestRoundId, _latestAnswer, _latestStartedAt, _latestUpdatedAt, _latestRoundId);
     }
 
     /// @inheritdoc AggregatorV3Interface
@@ -81,7 +92,7 @@ contract EACAggregatorProxy is Ownable, AggregatorV2V3Interface {
         override
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
-        return aggregator.latestRoundData();
+        return (_latestRoundId, _latestAnswer, _latestStartedAt, _latestUpdatedAt, _latestRoundId);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -90,34 +101,26 @@ contract EACAggregatorProxy is Ownable, AggregatorV2V3Interface {
 
     /// @inheritdoc AggregatorInterface
     function latestAnswer() external view override returns (int256) {
-        return aggregator.latestAnswer();
+        return _latestAnswer;
     }
 
     /// @inheritdoc AggregatorInterface
     function latestTimestamp() external view override returns (uint256) {
-        return aggregator.latestTimestamp();
+        return _latestUpdatedAt;
     }
 
     /// @inheritdoc AggregatorInterface
     function latestRound() external view override returns (uint256) {
-        return aggregator.latestRound();
+        return _latestRoundId;
     }
 
     /// @inheritdoc AggregatorInterface
-    function getAnswer(uint256 roundId) external view override returns (int256) {
-        return aggregator.getAnswer(roundId);
+    function getAnswer(uint256) external view override returns (int256) {
+        return _latestAnswer;
     }
 
     /// @inheritdoc AggregatorInterface
-    function getTimestamp(uint256 roundId) external view override returns (uint256) {
-        return aggregator.getTimestamp(roundId);
-    }
-
-    /**
-     * @notice Get the address of the current aggregator
-     * @return The aggregator address
-     */
-    function phaseAggregators(uint16) external view returns (address) {
-        return address(aggregator);
+    function getTimestamp(uint256) external view override returns (uint256) {
+        return _latestUpdatedAt;
     }
 }
