@@ -15,4 +15,5 @@ Final comprehensive security review of the LlamaGuard NAV CRE contracts, includi
 
 Final comprehensive security review of the LlamaGuard NAV CRE contracts, including fix review.
 
-- Local Copy [`LlamaGuard NAV – CRE Workflow Onchain Contracts.pdf`](./LlamaGuard%20NAV%20%E2%80%93%20CRE%20Workflow%20Onchain%20Contracts.pdf)
+- Local Copy
+  [`LlamaGuard NAV – CRE Workflow Onchain Contracts.pdf`](./LlamaGuard%20NAV%20%E2%80%93%20CRE%20Workflow%20Onchain%20Contracts.pdf)
