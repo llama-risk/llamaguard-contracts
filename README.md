@@ -120,3 +120,16 @@ review is also published at
 ## License
 
 BUSL-1.1
+
+## Risk oracles
+
+The PT risk-oracle contracts that the CRE workflows in `llamaguard-risk-oracles` publish through live alongside the NAV
+contracts:
+
+|                                               |                                                                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `src/LlamaguardRiskOracleRouter.sol`          | routes CRE reports to the RiskOracle and the AgentHub                                                               |
+| `src/PTParameterRegistry.sol`                 | per-PT methodology parameters                                                                                       |
+| `src/abstracts/AbstractRoutedCreReceiver.sol` | the Router's receiver base: `AbstractCreReceiver` with the validated `workflowId` passed to `_processReport`        |
+| `script/risk-oracles/`                        | deployment and activation scripts, by chain                                                                         |
+| `tests/risk-oracles/`                         | unit, integration and fork tests (`forge test --match-path 'tests/risk-oracles/script/**'` needs `MAINNET_RPC_URL`) |
