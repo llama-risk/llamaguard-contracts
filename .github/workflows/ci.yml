@@ -143,3 +143,24 @@ jobs:
         run: |
           echo "## Tests result" >> $GITHUB_STEP_SUMMARY
           echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
+
+  fork-test:
+    runs-on: "ubuntu-latest"
+    env:
+      MAINNET_RPC_URL: "${{ secrets.MAINNET_RPC_URL || 'https://mainnet.gateway.tenderly.co' }}"
+      FOUNDRY_PROFILE: "fork"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v4"
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install Bun"
+        uses: "oven-sh/setup-bun@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "bun install"
+
+      - name: "Run the risk-oracle fork tests"
+        run: "forge test --match-path 'tests/risk-oracles/script/**' -vv"
