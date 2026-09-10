@@ -20,6 +20,10 @@ libs = ["node_modules", "lib"]
   fuzz = { runs = 10_000 }
   verbosity = 4
 
+[profile.fork]
+  evm_version = "prague"
+  out = "out/prague"
+
 [etherscan]
   mainnet = { key = "${API_KEY_ETHERSCAN}" }
   sepolia = { key = "${API_KEY_ETHERSCAN}", url = "https://api-sepolia.etherscan.io/api" }
@@ -45,6 +49,8 @@ libs = ["node_modules", "lib"]
   optimism = "https://optimism-rpc.publicnode.com"
   polygon = "https://polygon-bor-rpc.publicnode.com"
   sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
+  plasma = "https://rpc.plasma.to"
+  mantle = "https://rpc.mantle.xyz"
 
 [lint]
   ignore = ["tests/**/*.sol", "script/**/*.sol"]
