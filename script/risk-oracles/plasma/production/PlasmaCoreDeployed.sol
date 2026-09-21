@@ -14,8 +14,8 @@ library PlasmaCoreDeployed {
     address internal constant PT_PARAMETER_REGISTRY = 0xED34a5374FeaaD8Ead024023d2Fc3b844bb9Bb47;
     address internal constant ROUTER = 0xaC8690DE68dcB7068805c0C631004E9894FAFbe0;
 
-    // Phase 2.
-    address internal constant EMA_ORACLE_PT_SUSDE_22OCT2026 = address(0);
+    // Phase 2, broadcast 2026-09-21, roles read back onchain.
+    address internal constant EMA_ORACLE_PT_SUSDE_22OCT2026 = 0xfA3187E63d5eEc6189702E24dEAbC82b80853809;
 
     // The AIP's output, read back off Aave's hub after the payload executes.
     address internal constant DISCOUNT_RATE_AGENT = address(0);
