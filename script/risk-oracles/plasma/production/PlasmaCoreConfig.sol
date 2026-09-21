@@ -28,12 +28,14 @@ library PlasmaCoreConfig {
     ///         deploy a stack the intended deployer cannot hand over.
     address internal constant DEPLOYER = 0xE16a376AB81D57f15a4E30E353C901e8BA53F610;
 
-    /// @notice The LlamaRisk operations multisig ON PLASMA. Operational owner of the whole stack
-    ///         once the handovers complete.
-    /// @dev    TODO: does not exist yet. Deploy the safe on chain 9745, confirm threshold > 1 and
-    ///         signers, then fill this in. `validate()` reverts while it is zero, so no phase can
-    ///         run against an unset owner.
-    address internal constant LLAMARISK_SAFE = address(0);
+    /// @notice The LlamaRisk operations multisig, same address as Ethereum production: recreated
+    ///         on chain 9745 via the CREATE2 replay of its original creation (SafeToL2Setup, so it
+    ///         runs the L2 singleton here).
+    /// @dev    A replay reproduces the CREATION state, not Ethereum's current state: the Plasma
+    ///         safe starts at threshold 1 with the original owner set, two of whom were since
+    ///         swapped out on Ethereum. Before phase 1 runs, reconfigure it to match Ethereum
+    ///         (swapOwner x2, changeThreshold to 2) and read both back onchain.
+    address internal constant LLAMARISK_SAFE = 0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471;
 
     // ============================================================================================
     // RiskOracle (BGD stock) — Ownable, single step
