@@ -23,7 +23,7 @@ library PlasmaCoreDeployed {
     uint256 internal constant DISCOUNT_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
     uint256 internal constant EMODE_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
 
-    // `cre workflow hash` output at llamaguard-risk-oracles 7e1e34d, owner the Aave CRE org
+    // `cre workflow hash` output at llamaguard-risk-oracles fd3ce7a, owner the Aave CRE org
     // safe. Editing a config after this point mints a new id; the discount and risk-params ids
     // assume hub agent ids 2/3 and are re-hashed if the AIP lands different ones.
     bytes32 internal constant EMA_WORKFLOW_ID = 0x00bed9786bd46a9e9c406fbf42cd8c53c77a32545d5dd29878658165c7cb7ad6;
