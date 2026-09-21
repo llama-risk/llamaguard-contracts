@@ -17,9 +17,9 @@ library PlasmaCoreDeployed {
     // Phase 2, broadcast 2026-09-21, roles read back onchain.
     address internal constant EMA_ORACLE_PT_SUSDE_22OCT2026 = 0xfA3187E63d5eEc6189702E24dEAbC82b80853809;
 
-    // The AIP's output, read back off Aave's hub after the payload executes.
-    address internal constant DISCOUNT_RATE_AGENT = address(0);
-    address internal constant EMODE_AGENT = address(0);
+    // Predeployed 2026-09-21 (ownerless, immutables read back onchain); the AIP registers them.
+    address internal constant DISCOUNT_RATE_AGENT = 0x8feb86657dbBbB89B7D2D115263D6927Afeb8bd4;
+    address internal constant EMODE_AGENT = 0x3DdAAcFFaeBb466B026cBb38C21b1723129D9ae6;
     uint256 internal constant DISCOUNT_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
     uint256 internal constant EMODE_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
 
