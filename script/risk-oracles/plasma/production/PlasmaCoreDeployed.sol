@@ -8,10 +8,11 @@ import { PlasmaCoreConfig } from "./PlasmaCoreConfig.sol";
 ///         Unset means zero and the scripts revert on it. The agent ids use a sentinel because 0
 ///         is a legitimate hub id.
 library PlasmaCoreDeployed {
-    // Phase 1. RISK_ORACLE is also the AIP payload's LLAMARISK_RISK_ORACLE.
-    address internal constant RISK_ORACLE = address(0);
-    address internal constant PT_PARAMETER_REGISTRY = address(0);
-    address internal constant ROUTER = address(0);
+    // Phase 1, broadcast 2026-09-21, read back onchain. RISK_ORACLE is also the AIP payload's
+    // LLAMARISK_RISK_ORACLE.
+    address internal constant RISK_ORACLE = 0x4f240E3825e7FD6D834EEb861b1539dF0b43BfD0;
+    address internal constant PT_PARAMETER_REGISTRY = 0xED34a5374FeaaD8Ead024023d2Fc3b844bb9Bb47;
+    address internal constant ROUTER = 0xaC8690DE68dcB7068805c0C631004E9894FAFbe0;
 
     // Phase 2.
     address internal constant EMA_ORACLE_PT_SUSDE_22OCT2026 = address(0);
