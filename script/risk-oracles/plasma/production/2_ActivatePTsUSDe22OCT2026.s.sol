@@ -11,13 +11,10 @@ import { PTsUSDe22OCT2026 } from "./assets/PTsUSDe22OCT2026.sol";
 import { SafeTx } from "../../ethereum/production/SafeTx.sol";
 
 /// @title ActivatePTsUSDe22OCT2026
-/// @notice Phase 2 of the PT oracle activation on Aave V3 Plasma: deploys the EMA oracle for
-///         PT-sUSDe-22OCT2026, gives the Router write access to it, hands it to the operations
-///         safe, and prints the registry write the safe has to make.
-/// @dev    Structural mirror of `ActivatePTsrUSDe22OCT2026`; the per-asset-oracle reasoning, the
-///         role-call ordering and the deliberate absence of `maxPriceDeviation` are documented
-///         there and hold unchanged. Touches no Aave state and needs no governance, so it can run
-///         alongside the AIP rather than after it.
+/// @notice Phase 2: deploys the per-asset EMA oracle, grants the Router `WRITER_ROLE`, hands
+///         admin to the safe, and prints the registry write. Needs no governance. Mirror of
+///         `ActivatePTsrUSDe22OCT2026`, which documents the reasoning (including why
+///         `maxPriceDeviation` is not set here).
 contract ActivatePTsUSDe22OCT2026 is BaseScript {
     struct Deployment {
         address emaOracle;
@@ -44,8 +41,6 @@ contract ActivatePTsUSDe22OCT2026 is BaseScript {
         _printSafeBatch(registry, PlasmaCoreConfig.acl());
     }
 
-    /// @notice The whole of phase 2, parameterised by its principals so the handover can be
-    ///         asserted in tests against addresses other than the production safe.
     function deploy(
         address deployer,
         address router,
@@ -62,8 +57,6 @@ contract ActivatePTsUSDe22OCT2026 is BaseScript {
         _verify(emaOracle, router, deployer, acl);
     }
 
-    /// @dev The single update type and the single authorized market are both set at construction,
-    ///      so a correctly deployed oracle needs no follow-up admin call other than the handover.
     function _deployOracle() internal returns (LlamaGuardOracle) {
         string[] memory updateTypes = new string[](1);
         updateTypes[0] = PlasmaCoreConfig.TYPE_EMA;
@@ -77,8 +70,6 @@ contract ActivatePTsUSDe22OCT2026 is BaseScript {
         );
     }
 
-    /// @dev The Router is the only writer the EMA oracle needs. Granted before the handover, while
-    ///      the deployer still holds admin.
     function _wirePermissions(LlamaGuardOracle emaOracle, address router, PlasmaCoreConfig.Acl memory acl) internal {
         require(router != address(0), "ActivatePTsUSDe22OCT2026: router is zero");
         emaOracle.grantRole(emaOracle.WRITER_ROLE(), router);
@@ -87,8 +78,7 @@ contract ActivatePTsUSDe22OCT2026 is BaseScript {
         }
     }
 
-    /// @dev Grant then renounce, never the other way round. The grant is checked before the
-    ///      renounce runs, so a failed grant cannot strand the oracle without an admin.
+    /// @dev Grant then renounce, never the other way round.
     function _handOver(LlamaGuardOracle emaOracle, address deployer, PlasmaCoreConfig.Acl memory acl) internal {
         require(acl.emaOracleAdmin != address(0), "ActivatePTsUSDe22OCT2026: emaOracleAdmin is zero");
         if (acl.emaOracleAdmin == deployer) return;
@@ -126,10 +116,8 @@ contract ActivatePTsUSDe22OCT2026 is BaseScript {
         console2.log("OUTPUT:EMA_ORACLE_PT_SUSDE_22OCT2026=%s", deployed.emaOracle);
     }
 
-    /// @notice The registry write, which the deployer cannot make: `setPtMarketParams` is
-    ///         `onlyUpdater` and the updater is the safe from the registry's first block.
-    /// @dev    Until this lands, all three workflows read an unconfigured market and publish
-    ///         nothing. It is the gate on the CRE phase, not an afterthought.
+    /// @dev Until this registry write lands, all three workflows read an unconfigured market and
+    ///      publish nothing.
     function _printSafeBatch(address registry, PlasmaCoreConfig.Acl memory acl) internal pure {
         SafeTx.Call[] memory calls = new SafeTx.Call[](1);
         calls[0] = SafeTx.call(

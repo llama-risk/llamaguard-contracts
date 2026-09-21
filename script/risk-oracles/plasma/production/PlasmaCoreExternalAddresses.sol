@@ -5,74 +5,32 @@ import { AaveV3Plasma } from "aave-address-book/AaveV3Plasma.sol";
 import { MiscPlasma } from "aave-address-book/MiscPlasma.sol";
 
 /// @title PlasmaCoreExternalAddresses
-/// @notice Every address the PT oracle stack on Aave V3 Plasma depends on but does NOT deploy.
-///         Aave- and Chainlink-owned contracts live here; the ACL assignments that are LlamaRisk's
-///         to make live in `PlasmaCoreConfig`.
-/// @dev    Mirror of `EthereumCoreExternalAddresses`, same scoping rules: chain scoped, so a second
-///         PT asset on Plasma reuses this file unchanged, and every constant here is one a script
-///         in this directory actually reads.
-///
-///         Values come from `aave-address-book` wherever the pinned book carries them, so a book
-///         bump surfaces as a diff here rather than as a stale literal. The pinned book carries the
-///         whole Plasma governance surface, the AgentHub and the RangeValidationModule.
+/// @notice Every address the stack depends on but does NOT deploy. Book values wherever the
+///         pinned `aave-address-book` carries them.
 library PlasmaCoreExternalAddresses {
-    // ============================================================================================
-    // Chain
-    // ============================================================================================
-
     uint256 internal constant PLASMA_CHAIN_ID = 9745;
 
-    // ============================================================================================
-    // Aave V3 Plasma (governance owned)
-    // ============================================================================================
-
-    /// @notice Short executor of the Aave governance payloads controller on Plasma. Owns the
-    ///         AgentHub, holds `DEFAULT_ADMIN_ROLE` on the ACL manager, and is the owner this
-    ///         deployment hands the `PTParameterRegistry` to at construction.
-    /// @dev    Equal to `GovernanceV3Plasma.EXECUTOR_LVL_1`, which is the name the AIP payload uses
-    ///         for the same address.
+    /// @notice Equal to `GovernanceV3Plasma.EXECUTOR_LVL_1`, the name the AIP uses.
     address internal constant AAVE_EXECUTOR = AaveV3Plasma.ACL_ADMIN;
 
-    /// @notice The Aave protocol guardian on Plasma, and the Router's `guardian`.
-    /// @dev    The guardian can `pause` and nothing else; `unpause` is owner-only, so governance can
-    ///         stop this stack without a proposal and only the LlamaRisk safe can restart it.
+    /// @notice Router `guardian`: can `pause`, cannot `unpause`.
     address internal constant AAVE_PROTOCOL_GUARDIAN = MiscPlasma.PROTOCOL_GUARDIAN;
 
-    /// @dev Holds `RISK_ADMIN` for both agents once the AIP grants it. No script here can call it,
-    ///      because its `DEFAULT_ADMIN_ROLE` is the Executor's. Phase 3 reads it to confirm the
-    ///      payload actually made the grant before any route goes live.
+    /// @dev Phase 3 reads it to confirm the AIP's RISK_ADMIN grants.
     address internal constant AAVE_ACL_MANAGER = address(AaveV3Plasma.ACL_MANAGER);
 
-    // ============================================================================================
-    // Chaos Labs agent infrastructure (governance owned)
-    // ============================================================================================
-
-    /// @dev The shared production hub on Plasma. NOT the EOA-owned shadow hub
-    ///      `0x7d1C3F872022b13B931C4E50C60818fAaC7dE949`: both agents are deployed and registered
-    ///      by the AIP, so nothing in `script/` writes here; phase 3 only reads it to confirm what
-    ///      the payload did.
+    /// @dev Aave's production hub, NOT the EOA-owned shadow hub `0x7d1C…E949`. Read-only here:
+    ///      the agents are the AIP's to register.
     address internal constant AGENT_HUB = MiscPlasma.AGENT_HUB;
 
-    /// @dev Bounds every parameter step an agent injects. A freshly assigned agent id inherits no
-    ///      default config and the module reads a missing one as a zero bound, so an unset range is
-    ///      not a loose stack, it is a dead one. Phase 3 reads it for exactly that reason.
+    /// @dev A fresh agent id has no range config and a missing one reads as a zero bound.
     address internal constant RANGE_VALIDATION_MODULE = MiscPlasma.RANGE_VALIDATION_MODULE;
 
-    // ============================================================================================
-    // Chainlink CRE
-    // ============================================================================================
-
-    /// @notice KeystoneForwarder on Plasma. Every route pins it, and the Router accepts `onReport`
-    ///         from no other address.
-    /// @dev    No book entry. Verified live: it is the forwarder the shadow routes pin and the
-    ///         sender of every shadow report accepted on chain 9745.
+    /// @notice KeystoneForwarder on Plasma; every route pins it. No book entry; verified live.
     address internal constant CRE_FORWARDER = 0x7BCcaFBD064cB3658476066Cc33ceE3F3414c04c;
 
-    /// @notice The Aave CRE organisation multisig that owns and deploys the three workflows,
-    ///         pinned as `expectedAuthor` on every route. Same safe as Ethereum production: the
-    ///         WorkflowRegistry lives on ethereum-mainnet for every target chain, so one org safe
-    ///         owns production workflows regardless of where they write.
-    /// @dev    Must equal the `workflow-owner-address` of the CRE deploy target, or the hashed
-    ///         workflow ids will not be the deployed ids and every report is rejected onchain.
+    /// @notice The Aave CRE org safe, same as Ethereum production: the WorkflowRegistry lives on
+    ///         ethereum-mainnet for every target chain.
+    /// @dev    Must equal the CRE deploy target's `workflow-owner-address`.
     address internal constant CRE_WORKFLOW_OWNER = 0x73494691C9B28b91A0b4C9dF213c1893fddA3a3B;
 }

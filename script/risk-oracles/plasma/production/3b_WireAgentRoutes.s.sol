@@ -7,19 +7,8 @@ import { SafeTx } from "../../ethereum/production/SafeTx.sol";
 import { WirePlasmaCoreRoutesBase } from "./WirePlasmaCoreRoutesBase.sol";
 
 /// @title WireAgentRoutes
-/// @notice Phase 3b of the PT oracle activation on Plasma: the discount and risk-params routes,
-///         after the AIP has executed.
-/// @dev    Runs AFTER the AIP and AFTER `cre workflow deploy`, because it needs both the agent ids
-///         the hub assigned and the workflow ids CRE minted. Neither can be known earlier: ids
-///         come from `agentCount++`, and a workflow id hashes the wasm together with the config,
-///         which itself carries the agent id.
-///
-///         It also needs phase 1's handover to be complete. `acceptOwnership` is the last step of
-///         phase 1, and until it lands the Router owner is still the deploy key, so this batch
-///         would revert from the safe.
-///
-///         These are the routes that inject through the AgentHub, so `requireTheAipLanded` runs
-///         first: every way the payload can be wrong fails silently once the routes are live.
+/// @notice Phase 3b: the discount and risk-params routes. Runs AFTER the AIP and AFTER
+///         `cre workflow deploy`; `requireTheAipLanded` checks the payload onchain first.
 contract WireAgentRoutes is WirePlasmaCoreRoutesBase {
     function run() public view {
         PlasmaCoreConfig.validate(address(0));
