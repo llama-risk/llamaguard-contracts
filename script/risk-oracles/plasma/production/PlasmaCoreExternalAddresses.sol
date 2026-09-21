@@ -69,18 +69,10 @@ library PlasmaCoreExternalAddresses {
     address internal constant CRE_FORWARDER = 0x7BCcaFBD064cB3658476066Cc33ceE3F3414c04c;
 
     /// @notice The Aave CRE organisation multisig that owns and deploys the three workflows,
-    ///         pinned as `expectedAuthor` on every route. Same safe as Ethereum production, read
-    ///         back from its live Router: the WorkflowRegistry lives on ethereum-mainnet for every
-    ///         target chain, so one org safe owns production workflows regardless of where they
-    ///         write. It needs no code on Plasma.
+    ///         pinned as `expectedAuthor` on every route. Same safe as Ethereum production: the
+    ///         WorkflowRegistry lives on ethereum-mainnet for every target chain, so one org safe
+    ///         owns production workflows regardless of where they write.
     /// @dev    Must equal the `workflow-owner-address` of the CRE deploy target, or the hashed
     ///         workflow ids will not be the deployed ids and every report is rejected onchain.
-    ///         Because it is a multisig, every `cre workflow deploy` runs `--unsigned` and is
-    ///         executed from the safe.
-    ///
-    ///         Not the two other candidates in circulation: the onboarding doc's
-    ///         `0xde6AFc48…0a3D` has no code and nonce 0 on ethereum-mainnet, so it cannot own
-    ///         any registered workflow and that entry is stale; the llr-multisig `0x4EDE…8f17`
-    ///         owns the Plasma STAGING workflows and stays with staging.
     address internal constant CRE_WORKFLOW_OWNER = 0x73494691C9B28b91A0b4C9dF213c1893fddA3a3B;
 }
