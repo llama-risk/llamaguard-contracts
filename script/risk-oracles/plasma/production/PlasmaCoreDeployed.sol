@@ -17,9 +17,13 @@ library PlasmaCoreDeployed {
     // Phase 2, broadcast 2026-09-21, roles read back onchain.
     address internal constant EMA_ORACLE_PT_SUSDE_22OCT2026 = 0xfA3187E63d5eEc6189702E24dEAbC82b80853809;
 
-    // Predeployed 2026-09-21 (ownerless, immutables read back onchain); the AIP registers them.
+    // Predeployed (ownerless, immutables read back onchain); the AIP registers them. The eMode
+    // agent was redeployed 2026-09-22 from aave-dao/aave-risk-agents@dec4cc7, which adds
+    // `isolated: KEEP_CURRENT` for the Aave 3.7 config-engine surface; the pre-fix instance
+    // 0x3DdA…9ae6 is orphaned (ownerless, never registered). The discount agent does not touch
+    // the config engine and stands.
     address internal constant DISCOUNT_RATE_AGENT = 0x8feb86657dbBbB89B7D2D115263D6927Afeb8bd4;
-    address internal constant EMODE_AGENT = 0x3DdAAcFFaeBb466B026cBb38C21b1723129D9ae6;
+    address internal constant EMODE_AGENT = 0xBcFaBC3ea806d4755ED3F1eA2C5EAE92706Beb29;
     uint256 internal constant DISCOUNT_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
     uint256 internal constant EMODE_AGENT_ID = PlasmaCoreConfig.AGENT_ID_UNSET;
 
