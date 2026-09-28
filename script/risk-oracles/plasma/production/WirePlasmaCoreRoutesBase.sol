@@ -205,7 +205,8 @@ abstract contract WirePlasmaCoreRoutesBase is Script {
             string.concat("WirePlasmaCoreRoutes: id is not the ", label, " agent")
         );
         require(
-            hub.isAgentEnabled(agentId), string.concat("WirePlasmaCoreRoutes: ", label, " agent registered but disabled")
+            hub.isAgentEnabled(agentId),
+            string.concat("WirePlasmaCoreRoutes: ", label, " agent registered but disabled")
         );
         require(
             hub.getRiskOracle(agentId) == ctx.riskOracle,

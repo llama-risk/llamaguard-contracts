@@ -84,9 +84,7 @@ library PlasmaCoreConfig {
 
     /// @notice Reverts if the config is not safe to act on; `address(0)` skips the deployer check.
     function validate(address broadcaster) internal view {
-        require(
-            block.chainid == PlasmaCoreExternalAddresses.PLASMA_CHAIN_ID, "PlasmaCoreConfig: not on Plasma mainnet"
-        );
+        require(block.chainid == PlasmaCoreExternalAddresses.PLASMA_CHAIN_ID, "PlasmaCoreConfig: not on Plasma mainnet");
         require(DEPLOYER != address(0), "PlasmaCoreConfig: DEPLOYER unset");
         require(LLAMARISK_SAFE != address(0), "PlasmaCoreConfig: LLAMARISK_SAFE unset");
         require(ROUTER_UPDATER != address(0), "PlasmaCoreConfig: ROUTER_UPDATER cannot be zero");
