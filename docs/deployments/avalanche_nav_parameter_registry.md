@@ -23,11 +23,11 @@
 
 The constructor set both roles. The deployer holds no role.
 
-| Role           | Holder                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------ |
+| Role           | Holder                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------- |
 | `owner`        | Aave governance executor `0x3C06dce358add17aAf230f2234bCCC4afd50d090` (`EXECUTOR_LVL_1`) |
-| `pendingOwner` | `0x0000000000000000000000000000000000000000`                                               |
-| `updater`      | Avalanche Risk Council safe `0xCa66149425E7DC8f81276F6D80C4b486B9503D1a` (2-of-2)          |
+| `pendingOwner` | `0x0000000000000000000000000000000000000000`                                             |
+| `updater`      | Avalanche Risk Council safe `0xCa66149425E7DC8f81276F6D80C4b486B9503D1a` (2-of-2)        |
 
 The owner can only rotate the updater. The updater writes all asset parameters.
 
