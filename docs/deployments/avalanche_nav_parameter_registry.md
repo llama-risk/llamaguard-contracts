@@ -5,17 +5,19 @@
 
 ## Deployed Contract
 
-| Contract          | Address                                      |
-| ----------------- | -------------------------------------------- |
-| ParameterRegistry | `0x7CBFF0Bd45f75a80aBF9F7a235A6a59A69539252` |
+| Contract                   | Address                                      |
+| -------------------------- | -------------------------------------------- |
+| AvalancheParameterRegistry | `0x23B81c8374A99A0648ee951750839b1AE486E203` |
 
 | Field        | Value                                                                |
 | ------------ | -------------------------------------------------------------------- |
-| Transaction  | `0x4f2ce69f97c8e38bf31bb960e7b687f969d10466c1076371e17f742dfd1ab8b7` |
-| Block        | 96,475,649 (2026-09-30 19:24:33 UTC)                                 |
-| Source       | `09e2a0a`                                                            |
+| Transaction  | `0x7c63d387e680a3447430a0349ca814ee595b55c0de69052ae5fdc313cd387a0a` |
+| Block        | 96,476,882 (2026-09-30 19:50:49 UTC)                                 |
+| Source       | `d45aa12`, `src/AvalancheParameterRegistry.sol`                      |
 | Compiler     | solc 0.8.27, optimizer 10,000 runs, EVM shanghai                     |
 | Verification | Verified on Snowtrace. The runtime bytecode matches the artifact.    |
+
+`AvalancheParameterRegistry` is a copy of `ParameterRegistry`. Only the contract name and `MAX_DISCOUNT_LIMIT` differ.
 
 ## Current Ownership
 
@@ -33,7 +35,7 @@ The owner can only rotate the updater. The updater writes all asset parameters.
 
 | Constant                    | Value      |
 | --------------------------- | ---------- |
-| `MAX_DISCOUNT_LIMIT`        | 250 bps    |
+| `MAX_DISCOUNT_LIMIT`        | 1,000 bps  |
 | `MAX_LOWER_BOUND_TOLERANCE` | 250 bps    |
 | `MAX_UPPER_BOUND_TOLERANCE` | 250 bps    |
 | `MAX_EXPECTED_APY_LIMIT`    | 20,000 bps |
@@ -41,3 +43,9 @@ The owner can only rotate the updater. The updater writes all asset parameters.
 ## State
 
 The registry has no assets. The updater adds each asset with `setParametersForAsset`.
+
+## Superseded Deployment
+
+Do not use `0x7CBFF0Bd45f75a80aBF9F7a235A6a59A69539252`. It is a `ParameterRegistry` from `09e2a0a` with
+`MAX_DISCOUNT_LIMIT` = 250 bps (tx `0x4f2ce69f97c8e38bf31bb960e7b687f969d10466c1076371e17f742dfd1ab8b7`, block
+96,475,649). It has the same roles and no assets.
