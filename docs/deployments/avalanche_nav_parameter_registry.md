@@ -43,9 +43,3 @@ The owner can only rotate the updater. The updater writes all asset parameters.
 ## State
 
 The registry has no assets. The updater adds each asset with `setParametersForAsset`.
-
-## Superseded Deployment
-
-Do not use `0x7CBFF0Bd45f75a80aBF9F7a235A6a59A69539252`. It is a `ParameterRegistry` from `09e2a0a` with
-`MAX_DISCOUNT_LIMIT` = 250 bps (tx `0x4f2ce69f97c8e38bf31bb960e7b687f969d10466c1076371e17f742dfd1ab8b7`, block
-96,475,649). It has the same roles and no assets.
