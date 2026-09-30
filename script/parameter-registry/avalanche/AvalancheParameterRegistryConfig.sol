@@ -10,7 +10,7 @@ interface ISafeOwners {
 }
 
 /// @title AvalancheParameterRegistryConfig
-/// @notice The owner and the updater of the Avalanche NAV `ParameterRegistry`. The constructor sets
+/// @notice The owner, the updater and the discount limit of the NAV `AvalancheParameterRegistry`. The constructor sets
 ///         both roles.
 library AvalancheParameterRegistryConfig {
     uint256 internal constant AVALANCHE_CHAIN_ID = 43_114;
@@ -20,6 +20,9 @@ library AvalancheParameterRegistryConfig {
 
     /// @notice Updater: the Avalanche Risk Council safe. The updater writes all asset parameters.
     address internal constant REGISTRY_UPDATER = 0xCa66149425E7DC8f81276F6D80C4b486B9503D1a;
+
+    /// @notice Maximum `maxDiscount` in BPS that the deployed registry must enforce.
+    uint32 internal constant MAX_DISCOUNT_LIMIT = 1000;
 
     /// @notice Signers and threshold that the updater safe must have.
     address internal constant LLAMARISK_SIGNER = 0xb291232F480F41c75802C4a60F1D2AC03404Afef;

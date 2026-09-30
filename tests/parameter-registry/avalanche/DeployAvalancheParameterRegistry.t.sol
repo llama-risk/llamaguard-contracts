@@ -3,7 +3,7 @@ pragma solidity 0.8.27;
 
 import { Test } from "forge-std/Test.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ParameterRegistry } from "../../../src/ParameterRegistry.sol";
+import { AvalancheParameterRegistry } from "../../../src/AvalancheParameterRegistry.sol";
 import {
     AvalancheParameterRegistryConfig,
     ISafeOwners
@@ -70,17 +70,43 @@ contract DeployAvalancheParameterRegistryTest is Test {
     }
 
     function test_deploySetsTheFinalRoles() public onlyForked {
-        ParameterRegistry registry = script.deploy();
+        AvalancheParameterRegistry registry = script.deploy();
 
         assertEq(registry.owner(), AvalancheParameterRegistryConfig.REGISTRY_OWNER, "owner");
         assertEq(registry.pendingOwner(), address(0), "pending owner");
         assertEq(registry.updater(), AvalancheParameterRegistryConfig.REGISTRY_UPDATER, "updater");
     }
 
-    function test_onlyTheUpdaterCanWrite() public onlyForked {
-        ParameterRegistry registry = script.deploy();
+    function test_onlyTheDiscountLimitDiffersFromTheBase() public onlyForked {
+        AvalancheParameterRegistry registry = script.deploy();
 
-        vm.expectRevert(ParameterRegistry.OnlyUpdater.selector);
+        assertEq(registry.MAX_DISCOUNT_LIMIT(), 1000, "discount limit");
+        assertEq(registry.MAX_LOWER_BOUND_TOLERANCE(), 250, "lower bound tolerance limit");
+        assertEq(registry.MAX_UPPER_BOUND_TOLERANCE(), 250, "upper bound tolerance limit");
+        assertEq(registry.MAX_EXPECTED_APY_LIMIT(), 20_000, "expected APY limit");
+    }
+
+    function test_theUpdaterCanSetADiscountOfUpTo1000Bps() public onlyForked {
+        AvalancheParameterRegistry registry = script.deploy();
+
+        vm.startPrank(AvalancheParameterRegistryConfig.REGISTRY_UPDATER);
+        registry.setParametersForAsset(address(1), "X", address(2), 100, 10, 10, 1000, 4, true, true, false);
+        (,,, uint32 maxDiscount,,,,) = registry.getParametersForAsset(address(1));
+        assertEq(maxDiscount, 1000, "maxDiscount");
+
+        vm.expectRevert(abi.encodeWithSelector(AvalancheParameterRegistry.MaxDiscountTooHigh.selector, 1001));
+        registry.setParametersForAsset(address(1), "X", address(2), 100, 10, 10, 1001, 4, true, true, false);
+
+        registry.setMaxDiscount(address(1), 999);
+        vm.expectRevert(abi.encodeWithSelector(AvalancheParameterRegistry.MaxDiscountTooHigh.selector, 1001));
+        registry.setMaxDiscount(address(1), 1001);
+        vm.stopPrank();
+    }
+
+    function test_onlyTheUpdaterCanWrite() public onlyForked {
+        AvalancheParameterRegistry registry = script.deploy();
+
+        vm.expectRevert(AvalancheParameterRegistry.OnlyUpdater.selector);
         registry.setParametersForAsset(address(1), "X", address(2), 100, 10, 10, 10, 4, true, true, false);
 
         vm.prank(AvalancheParameterRegistryConfig.REGISTRY_UPDATER);
@@ -89,7 +115,7 @@ contract DeployAvalancheParameterRegistryTest is Test {
     }
 
     function test_onlyTheOwnerCanRotateTheUpdater() public onlyForked {
-        ParameterRegistry registry = script.deploy();
+        AvalancheParameterRegistry registry = script.deploy();
 
         vm.prank(AvalancheParameterRegistryConfig.REGISTRY_UPDATER);
         vm.expectRevert(
