@@ -10,10 +10,11 @@ import { XLayerCoreConfig } from "./XLayerCoreConfig.sol";
 /// @dev    Each phase prints `OUTPUT:` lines; paste them here and commit before running the next
 ///         phase, so every recorded address is one read back onchain.
 library XLayerCoreDeployed {
-    // Phase 1. RISK_ORACLE is also the AIP payload's LLAMARISK_RISK_ORACLE.
-    address internal constant RISK_ORACLE = address(0);
-    address internal constant PT_PARAMETER_REGISTRY = address(0);
-    address internal constant ROUTER = address(0);
+    // Phase 1, broadcast 2026-10-15 at blocks 73332554-73332571, principals read back onchain.
+    // RISK_ORACLE is also the AIP payload's LLAMARISK_RISK_ORACLE.
+    address internal constant RISK_ORACLE = 0x3e0C920C2bdDF6DF87f9A39Ea4db9CF65Cec1EDE;
+    address internal constant PT_PARAMETER_REGISTRY = 0x101D7eA4D0F8Ab848D3CC24e7b391F19DaaF6a2d;
+    address internal constant ROUTER = 0xfC354324B152E2A358A17182d2AF0d3f882c27D2;
 
     // Phase 2.
     address internal constant EMA_ORACLE_PT_USDG_25FEB2027 = address(0);
