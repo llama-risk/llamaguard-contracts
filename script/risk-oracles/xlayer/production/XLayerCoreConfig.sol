@@ -8,7 +8,8 @@ import { XLayerCoreExternalAddresses } from "./XLayerCoreExternalAddresses.sol";
 ///         Mirror of `EthereumCoreConfig`, which documents the ownership model in full.
 library XLayerCoreConfig {
     /// @notice Phase 1/2 broadcaster. Fresh key; must equal `$ETH_FROM`.
-    /// @dev    Fresh key used on X Layer alone (nonce 0 on 2026-10-15), not another chain's deployer.
+    /// @dev    Key used on X Layer alone, not another chain's deployer. It also deployed the X Layer
+    ///         AgentHub (nonces 0-2), which leaves it no rights.
     ///         Keeps no rights after phase 1 — every ownership is handed to `LLAMARISK_SAFE`, and
     ///         `_verify` reads back that the deployer holds nothing.
     address internal constant DEPLOYER = 0x5c47373F4B3324DF318150fFEc079CFF5dEa66EB;

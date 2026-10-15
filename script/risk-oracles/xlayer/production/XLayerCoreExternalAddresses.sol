@@ -25,14 +25,14 @@ library XLayerCoreExternalAddresses {
     address internal constant AAVE_ACL_MANAGER = address(AaveV3XLayer.ACL_MANAGER);
 
     /// @dev From the aave-agent-hub `DeployXLayer` broadcast; proxy and ProxyAdmin both owned by
-    ///      `AAVE_EXECUTOR`. Zero until then, and phase 3 refuses to run while it is zero or has no
-    ///      code. Replace with `MiscXLayer.AGENT_HUB` once the book carries it.
-    address internal constant AGENT_HUB = address(0);
+    ///      `AAVE_EXECUTOR`. Deployed 2026-10-15, blocks 73,330,114-118, read back onchain.
+    ///      Replace with `MiscXLayer.AGENT_HUB` once the book carries it.
+    address internal constant AGENT_HUB = 0x7532F38Be8AB746DD6c1B686A9aAED3400eD35a0;
 
     /// @dev From the same broadcast. A missing range config reads as a zero bound, so a wrong
     ///      address here fails open rather than loudly. Replace with
     ///      `MiscXLayer.RANGE_VALIDATION_MODULE` once published.
-    address internal constant RANGE_VALIDATION_MODULE = address(0);
+    address internal constant RANGE_VALIDATION_MODULE = 0x863D5B3f24E6b84564432dd20606a82bB1C61dC5;
 
     /// @notice KeystoneForwarder on X Layer (`ethereum-mainnet-xlayer-1`); every route pins it.
     /// @dev    Per chain, from the Chainlink CRE forwarder directory:
