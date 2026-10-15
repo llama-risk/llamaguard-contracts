@@ -18,10 +18,11 @@ library XLayerCoreDeployed {
     // Phase 2.
     address internal constant EMA_ORACLE_PT_USDG_25FEB2027 = address(0);
 
-    // From the aave-risk-agents `DeployXLayer` broadcast. The AIP registers them and assigns the
-    // ids below; read the hub's `getAgentCount()` before the AIP to know which ids to expect.
-    address internal constant DISCOUNT_RATE_AGENT = address(0);
-    address internal constant EMODE_AGENT = address(0);
+    // aave-risk-agents `DeployXLayer`, 2026-10-15, blocks 73,330,738 and 73,330,741, verified on
+    // OKLink and read back onchain (hub, range module and pool). The AIP registers them and assigns
+    // the ids below; the hub's `getAgentCount()` reads 0, so 0 and 1 are expected.
+    address internal constant DISCOUNT_RATE_AGENT = 0xb00251C67dB290D0AD779903bfFeB092DAE76fFa;
+    address internal constant EMODE_AGENT = 0x19ae7c91dfd35a4515595cEd305d2102C3b1B02D;
     uint256 internal constant DISCOUNT_AGENT_ID = XLayerCoreConfig.AGENT_ID_UNSET;
     uint256 internal constant EMODE_AGENT_ID = XLayerCoreConfig.AGENT_ID_UNSET;
 
