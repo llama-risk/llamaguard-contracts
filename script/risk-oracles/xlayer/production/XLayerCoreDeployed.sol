@@ -24,13 +24,19 @@ library XLayerCoreDeployed {
     // the ids below; the hub's `getAgentCount()` reads 0, so 0 and 1 are expected.
     address internal constant DISCOUNT_RATE_AGENT = 0xb00251C67dB290D0AD779903bfFeB092DAE76fFa;
     address internal constant EMODE_AGENT = 0x19ae7c91dfd35a4515595cEd305d2102C3b1B02D;
-    uint256 internal constant DISCOUNT_AGENT_ID = XLayerCoreConfig.AGENT_ID_UNSET;
-    uint256 internal constant EMODE_AGENT_ID = XLayerCoreConfig.AGENT_ID_UNSET;
+    // PROVISIONAL, predicted from `getAgentCount()` on the hub, which reads 0: the first two
+    // registrations take 0 and 1, and aave-proposals-v3#1226 registers the discount agent first.
+    // Agent id 0 is a legitimate hub id, so a wrong guess cannot be detected from the value —
+    // assert the id-to-address pairing onchain after the AIP, and re-hash both workflows on a
+    // mismatch.
+    uint256 internal constant DISCOUNT_AGENT_ID = 0;
+    uint256 internal constant EMODE_AGENT_ID = 1;
 
     // `cre workflow hash --target=xlayer-production` output, owner the Aave CRE org safe. Editing a
     // config after this point mints a new id, and the discount and risk-params ids depend on the
     // hub agent ids the AIP assigns, so they are re-hashed if the AIP lands different ones.
-    bytes32 internal constant EMA_WORKFLOW_ID = bytes32(0);
-    bytes32 internal constant DISCOUNT_WORKFLOW_ID = bytes32(0);
-    bytes32 internal constant RISK_PARAMS_WORKFLOW_ID = bytes32(0);
+    bytes32 internal constant EMA_WORKFLOW_ID = 0x001c059c96fc6583e8d214d4e3aba98f05233bceb37f57a2441d825f739d002d;
+    bytes32 internal constant DISCOUNT_WORKFLOW_ID = 0x003c64808fecbda4fd46777331da908c5e750fee76c44dfeeb4777f92bc9b7ca;
+    bytes32 internal constant RISK_PARAMS_WORKFLOW_ID =
+        0x006100968f1b8471cd689774d7ff884d990a4e7a9f97513c40c52da03a7440eb;
 }
