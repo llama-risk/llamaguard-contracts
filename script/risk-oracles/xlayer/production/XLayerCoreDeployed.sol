@@ -16,8 +16,8 @@ library XLayerCoreDeployed {
     address internal constant PT_PARAMETER_REGISTRY = 0x101D7eA4D0F8Ab848D3CC24e7b391F19DaaF6a2d;
     address internal constant ROUTER = 0xfC354324B152E2A358A17182d2AF0d3f882c27D2;
 
-    // Phase 2.
-    address internal constant EMA_ORACLE_PT_USDG_25FEB2027 = address(0);
+    // Phase 2, broadcast 2026-10-26 at blocks 74275019-74275022, roles read back onchain.
+    address internal constant EMA_ORACLE_PT_USDG_25FEB2027 = 0x9d1F315D6072be7D929aC9dd60ECfd3AD00443c1;
 
     // aave-risk-agents `DeployXLayer`, 2026-10-15, blocks 73,330,738 and 73,330,741, verified on
     // OKLink and read back onchain (hub, range module and pool). The AIP registers them and assigns
