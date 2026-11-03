@@ -51,6 +51,7 @@ libs = ["node_modules", "lib"]
   sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
   plasma = "https://rpc.plasma.to"
   mantle = "https://rpc.mantle.xyz"
+  xlayer = "https://rpc.xlayer.tech"
 
 [lint]
   ignore = ["tests/**/*.sol", "script/**/*.sol"]
