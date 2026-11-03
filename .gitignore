@@ -18,3 +18,6 @@ yarn.lock
 !broadcast
 broadcast/*
 broadcast/*/31337/
+
+# Operational safe material: signer sets and creation calldata, shared out of band.
+script/risk-oracles/*/production/llamarisk-safe-*.json
