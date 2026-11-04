@@ -9,6 +9,15 @@ import { LlamaGuardOracleProxy } from "llamaguard-contracts/src/LlamaGuardOracle
 import { Addresses } from "../../../../script/risk-oracles/config/Addresses.sol";
 import { PTEmaConfig } from "../../../../script/risk-oracles/config/PTEmaConfig.sol";
 
+/// @dev Pins the broadcaster after `BaseScript`'s constructor ran. `vm.setEnv`
+///      is process-global and forge runs suites in parallel, so a test that
+///      sets `ETH_FROM` races with any other suite that reads it.
+contract DeployPTEmaOracleHarness is DeployPTEmaOracle {
+    constructor(address broadcaster_) {
+        broadcaster = broadcaster_;
+    }
+}
+
 /// @notice Exercises the `DeployPTEmaOracle` script as a unit test (no fork).
 ///         Sepolia covers the happy path (config synthesizes non-zero CRE
 ///         workflow params from the deployer). Plasma covers the deploy-time
@@ -16,10 +25,15 @@ import { PTEmaConfig } from "../../../../script/risk-oracles/config/PTEmaConfig.
 ///         a Plasma broadcast must revert with `MissingWorkflowParam` until
 ///         the multisig fills them in.
 contract DeployPTEmaOracleTest is Test {
+    /// @dev First account of the forge test mnemonic, independent of `ETH_FROM`/`MNEMONIC`.
+    address internal broadcaster;
+
     function setUp() public {
-        // Force-clear `ETH_FROM` so `BaseScript` falls back to the forge test
-        // mnemonic — keeps the broadcaster deterministic across chain dispatches.
-        vm.setEnv("ETH_FROM", "");
+        broadcaster = _deriveBroadcaster();
+    }
+
+    function _newScript() internal returns (DeployPTEmaOracle) {
+        return new DeployPTEmaOracleHarness(broadcaster);
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -32,7 +46,7 @@ contract DeployPTEmaOracleTest is Test {
     function test_deployOnPlasma_revertsWhileWorkflowParamsArePlaceholders() public {
         vm.chainId(Addresses.PLASMA);
 
-        DeployPTEmaOracle script = new DeployPTEmaOracle();
+        DeployPTEmaOracle script = _newScript();
         vm.expectRevert(abi.encodeWithSelector(PTEmaDeployer.MissingWorkflowParam.selector, "emaWorkflowForwarder"));
         script.run();
     }
@@ -44,12 +58,10 @@ contract DeployPTEmaOracleTest is Test {
     function test_deployOnSepolia_wiresOraclePipeline() public {
         vm.chainId(Addresses.SEPOLIA);
 
-        DeployPTEmaOracle.Deployed memory deployed = new DeployPTEmaOracle().run();
+        DeployPTEmaOracle.Deployed memory deployed = _newScript().run();
 
-        // For Sepolia the config is deployer-derived. Re-derive the
-        // broadcaster the same way `BaseScript` does so the config comparison
-        // lines up.
-        address broadcaster = _deriveBroadcaster();
+        // For Sepolia the config is deployer-derived; the harness pins the
+        // broadcaster, so the config comparison lines up.
         PTEmaConfig.PTEmaDeployConfig memory cfg = PTEmaConfig.getSepoliaConfig(broadcaster);
         _assertDeployment(deployed, cfg);
     }
@@ -60,7 +72,7 @@ contract DeployPTEmaOracleTest is Test {
 
     function test_deployOnUnsupportedChain_reverts() public {
         vm.chainId(424_242);
-        DeployPTEmaOracle script = new DeployPTEmaOracle();
+        DeployPTEmaOracle script = _newScript();
         vm.expectRevert(abi.encodeWithSelector(DeployPTEmaOracle.UnsupportedChain.selector, uint256(424_242)));
         script.run();
     }

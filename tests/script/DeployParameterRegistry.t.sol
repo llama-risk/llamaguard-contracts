@@ -9,6 +9,15 @@ import { MainnetConfig } from "../../script/config/MainnetConfig.sol";
 import { AnvilConfig } from "../../script/config/AnvilConfig.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
+/// @dev Pins the broadcaster after `BaseScript`'s constructor ran. `vm.setEnv`
+///      is process-global and forge runs suites in parallel, so setting
+///      `ETH_FROM` here raced with other suites that read it.
+contract DeployParameterRegistryHarness is DeployParameterRegistry {
+    constructor(address broadcaster_) {
+        broadcaster = broadcaster_;
+    }
+}
+
 /// @title ParameterRegistryDeploymentTest
 /// @notice Test suite for ParameterRegistry deployment
 contract ParameterRegistryDeploymentTest is Test {
@@ -22,14 +31,13 @@ contract ParameterRegistryDeploymentTest is Test {
     address internal unauthorizedUser;
 
     function setUp() public {
-        vm.setEnv("ETH_FROM", "0x0000000000000000000000000000000000000aBc");
         deployer = address(0x0000000000000000000000000000000000000aBc);
 
         pendingOwner = makeAddr("pendingOwner");
         pendingUpdater = makeAddr("pendingUpdater");
         unauthorizedUser = makeAddr("unauthorizedUser");
 
-        deployScript = new DeployParameterRegistry();
+        deployScript = new DeployParameterRegistryHarness(deployer);
         mainnetConfig = new MainnetConfig();
         anvilConfig = new AnvilConfig();
 
