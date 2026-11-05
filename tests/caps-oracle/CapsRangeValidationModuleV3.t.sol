@@ -1112,6 +1112,33 @@ contract CapsRangeValidationModuleV3WriteRulesTest is RvmTestBase {
         }
     }
 
+    /// A retire of a key with no entry reverts for both callers, also right after a retire.
+    function test_retire_missingKey_reverts_ownerAndRiskCouncil() public {
+        address[2] memory callers = [governance, riskCouncil];
+        for (uint256 i; i < 2; ++i) {
+            vm.prank(callers[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, address(usdc), IRvm.CapKind.BORROW)
+            );
+            rvm.setRateLimitConfig(address(usdc), IRvm.CapKind.BORROW, IRvm.RateLimitConfig(0, 0, 0, 0));
+
+            vm.prank(callers[i]);
+            vm.expectRevert(abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, w, IRvm.CapKind.SUPPLY));
+            rvm.setRateLimitConfig(w, IRvm.CapKind.SUPPLY, IRvm.RateLimitConfig(0, 0, 0, 0));
+        }
+
+        address[2] memory retirers = [riskCouncil, governance];
+        for (uint256 i; i < 2; ++i) {
+            vm.prank(retirers[i]);
+            rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, IRvm.RateLimitConfig(0, 0, 0, 0));
+            assertEq(_keyState(w).maxCap, 0, "existing key retired");
+            vm.prank(retirers[(i + 1) % 2]);
+            vm.expectRevert(abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, w, IRvm.CapKind.BORROW));
+            rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, IRvm.RateLimitConfig(0, 0, 0, 0));
+            _setRateLimitConfig(w, IRvm.CapKind.BORROW, _rateLimitConfigOf(_f1()));
+        }
+    }
+
     function test_riskCouncil_cannotListNewKey() public {
         IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
         vm.prank(riskCouncil);
@@ -1173,14 +1200,24 @@ contract CapsRangeValidationModuleV3WriteRulesTest is RvmTestBase {
         vm.expectRevert(IRvm.InvalidBounds.selector);
         rvm.setBounds(IRvm.CapKind.BORROW, b);
 
-        b = IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 0 });
+        b = IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 });
         rvm.setBounds(IRvm.CapKind.BORROW, b);
         vm.stopPrank();
 
-        // maxIncreaseBps 10_000 and cooldown 0: the Risk Council Safe may double maxCap twice in one block.
+        // maxIncreaseBps 10_000 and cooldown 1: the Risk Council Safe may double maxCap once per second.
         _rcSetMaxCap(20_000);
+        vm.warp(block.timestamp + 1);
         _rcSetMaxCap(40_000);
         assertEq(_keyState(w).maxCap, 40_000);
+    }
+
+    function test_setBounds_zeroCooldown_reverts() public {
+        IRvm.Bounds memory b = _globalBorrowBounds();
+        b.cooldown = 0;
+        vm.prank(governance);
+        vm.expectRevert(IRvm.InvalidBounds.selector);
+        rvm.setBounds(IRvm.CapKind.BORROW, b);
+        assertEq(rvm.getBounds(IRvm.CapKind.BORROW).cooldown, COOLDOWN, "unchanged");
     }
 
     /// maxIncreaseBps 0 stops every Risk Council raise but no lowering.
@@ -1312,7 +1349,6 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         assertLe(s.cutTrigger, MAX_AAVE_CAP);
     }
 
-    /// TODO(params): rounding. The direction is down until it is fixed.
     function test_CAP_UNIT_04_raiseCap_roundsDown() public {
         Fixture memory f = _f1();
         f.debt = 1005; // alpha * D = 100.5
@@ -1338,7 +1374,6 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         assertLt(headroom, (s.headroomTarget + 1) * 1e18);
     }
 
-    /// TODO(params): rounding direction. Placeholder: down.
     function test_CAP_UNIT_06_alphaD_roundsDown() public {
         Fixture memory f = _f1();
         f.debt = 1005;
@@ -1401,7 +1436,6 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         assertEq(_state(w).headroomTarget, (uint256(maxHeadroom) + 24) / 25, "Lmin == ceilDiv(maxHeadroom, 25)");
     }
 
-    /// TODO(params): rounding direction. Placeholder: down.
     function test_CAP_UNIT_08_bandTop_roundsDown() public {
         Fixture memory f = _f1();
         f.debt = 950; // L = 95, exact band top 1,054.5

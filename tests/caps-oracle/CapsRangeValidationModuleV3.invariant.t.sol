@@ -141,7 +141,7 @@ contract RvmHandler is Test {
         b.alphaBpsLimit = uint16(bound(alphaMax, 0, 10_000));
         b.cutBandBpsLimit = uint16(bound(bandMax, 0, 10_000));
         b.maxIncreaseBps = uint16(bound(increaseBps, 0, 10_000));
-        b.cooldown = uint40(bound(cooldown, 0, 3 days));
+        b.cooldown = uint40(bound(cooldown, 1, 3 days));
         vm.prank(governance);
         rvm.setBounds(IRvm.CapKind.BORROW, b);
     }
