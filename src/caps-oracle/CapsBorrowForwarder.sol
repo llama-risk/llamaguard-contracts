@@ -82,6 +82,8 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
 
         // 5. Borrow with the debt on the borrower. The Pool sends the tokens to the Safe.
         uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        // The balance check around the borrow is the point: any balance change, re-entrant or not, reverts.
+        // slither-disable-next-line reentrancy-balance
         IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
 
         // 6. Send the tokens to the borrower and require the Safe to keep nothing.
