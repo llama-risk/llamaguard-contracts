@@ -23,8 +23,8 @@ interface ICapsParameterRegistry {
     /// @notice Workflow parameters. Used as the market default and, resolved, as the effective value.
     struct WorkflowParams {
         bool enabled; // false: the workflow sends no raise
-        uint16 triggerBps; // raise due when headroom <= theta * L
-        uint16 marginBps; // raise margin as a share of L
+        uint16 triggerBps; // raise due when headroom <= triggerBps * headroomTarget
+        uint16 marginBps; // raise margin as a share of headroomTarget
         uint64 minMarginTokens; // margin floor, whole tokens
     }
 
@@ -59,11 +59,11 @@ interface ICapsParameterRegistry {
         address asset; // token address, as passed in
         bool found; // false: skip the key
         WorkflowParams params; // effective parameters
-        uint256 cap; // C, live Aave cap, whole tokens
-        uint256 usage; // D, whole tokens
-        uint256 supplyBound; // S, whole tokens
-        uint256 headroomTarget; // L, whole tokens
-        uint256 maxCap; // C-bar the RVM uses, whole tokens
+        uint256 cap; // live Aave cap, whole tokens
+        uint256 usage; // whole tokens
+        uint256 supplyBound; // whole tokens
+        uint256 headroomTarget; // whole tokens
+        uint256 maxCap; // the maxCap the RVM uses, whole tokens
         bool raiseBlocked; // reserve frozen or paused
         bool allowed; // RVM previewRaise: a raise to newCap passes the RVM in this block
         uint256 newCap; // RVM previewRaise newCap, whole tokens
@@ -96,6 +96,8 @@ interface ICapsParameterRegistry {
     error InvalidKind(uint8 kind);
     /// @notice triggerBps or marginBps above 10_000, or a market default triggerBps of 0.
     error InvalidBps(uint16 value);
+    /// @notice A non-zero RVM whose `POOL()` is not the market.
+    error InvalidRvm(address rvm);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNER
@@ -109,11 +111,11 @@ interface ICapsParameterRegistry {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Add a market with its max base fee, defaults and RVM. Caller: updater.
-    /// @dev Reverts MarketAlreadyExists, ZeroAddress, InvalidBps.
+    /// @dev Reverts MarketAlreadyExists, ZeroAddress, InvalidBps, InvalidRvm (non-zero RVM with POOL() != market).
     function addMarket(address market, MarketParams calldata params) external;
 
     /// @notice Change the max base fee, defaults and RVM of a market. Caller: updater.
-    /// @dev Same bounds as addMarket.
+    /// @dev Reverts MarketNotFound, InvalidBps, InvalidRvm. Same bounds as addMarket.
     function setMarketParams(address market, MarketParams calldata params) external;
 
     /// @notice Remove a market with an empty work list. Caller: updater. Reverts MarketNotEmpty.
@@ -145,6 +147,10 @@ interface ICapsParameterRegistry {
     /// @notice Work list of a market, enabled or not.
     function getReservesList(address market) external view returns (ReserveKey[] memory);
 
+    /// @notice Work list keys of `market` with this `kind`, in set order.
+    /// @dev Reverts MarketNotFound, InvalidKind (kind > MAX_KIND).
+    function getReservesListByKind(address market, uint8 kind) external view returns (ReserveKey[] memory keys);
+
     /// @notice The stored overrides of a key.
     function getReserveOverride(
         address market,
@@ -163,7 +169,8 @@ interface ICapsParameterRegistry {
 
     /**
      * @notice Raise inputs for a page of assets, one row per asset in input order.
-     * @dev View. Never reverts on a missing key: the row has `found` false.
+     * @dev View. Never reverts on a missing key: the row has `found` false. Reverts if the market RVM
+     *      reverts on `previewRaise` or returns data that does not decode.
      * @param market the Aave Pool
      * @param kind 0 = BORROW, 1 = SUPPLY
      * @param assets token addresses, one page of the work list

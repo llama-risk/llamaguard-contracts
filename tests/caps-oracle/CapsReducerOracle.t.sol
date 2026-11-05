@@ -18,8 +18,7 @@ import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interf
 ///         CAP-ACL-15, CAP-ACL-22) and against a local AgentHub (CAP-ST-16).
 contract CapsReducerOracleTest is CapsTestBase {
     MockCapsRvm internal rvm;
-    CapsReducerOracle internal oracle; // BORROW
-    CapsReducerOracle internal supplyOracle;
+    CapsReducerOracle internal oracle; // serves BORROW and SUPPLY
 
     // F1 cut example (CAP-INV-03): cap 1,200 cuts to lo = 1,100. Cap 1,110 (= hi) is not due.
     uint256 internal constant F1_CUT_FROM = 1200;
@@ -27,8 +26,7 @@ contract CapsReducerOracleTest is CapsTestBase {
     function setUp() public virtual override {
         super.setUp();
         rvm = new MockCapsRvm();
-        oracle = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.BORROW);
-        supplyOracle = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.SUPPLY);
+        oracle = new CapsReducerOracle(IRvm(address(rvm)));
     }
 
     function _read(
@@ -73,28 +71,74 @@ contract CapsReducerOracleTest is CapsTestBase {
     }
 
     function test_CAP_INV_03_reducer_noCutForKind_revertsNoCutDue() public {
-        // BORROW cut due, SUPPLY not: the SUPPLY reducer asks the RVM on its own key and reverts.
+        // BORROW cut due, SUPPLY not: the supply update type asks the RVM on the SUPPLY key and reverts.
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
         vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.NoCutDue.selector, address(weth)));
-        supplyOracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
+        oracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
     }
 
-    function test_CAP_INV_03_reducer_updateTypeNotParsed_echoed() public {
-        // The kind is KIND, whatever the string: any update type reads the BORROW key and is echoed.
+    function test_CAP_INV_03_reducer_borrowUpdateType_borrowCut() public {
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
         rvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
-        string[3] memory types = ["LtvUpdate_Core", SUPPLY_UPDATE_TYPE, ""];
+        IRiskOracle.RiskParameterUpdate memory u = _read(BORROW_UPDATE_TYPE, address(weth));
+        assertEq(abi.decode(u.newValue, (uint256)), F1_CUT_FLOOR, "BORROW cut");
+        assertEq(abi.decode(u.previousValue, (uint256)), F1_CUT_FROM);
+        assertEq(u.updateType, BORROW_UPDATE_TYPE, "updateType echoed");
+    }
+
+    function test_CAP_INV_03_reducer_supplyUpdateType_supplyCut() public {
+        rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
+        rvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
+        IRiskOracle.RiskParameterUpdate memory u = _read(SUPPLY_UPDATE_TYPE, address(weth));
+        assertEq(abi.decode(u.newValue, (uint256)), 6000, "SUPPLY cut");
+        assertEq(abi.decode(u.previousValue, (uint256)), 9000);
+        assertEq(u.updateType, SUPPLY_UPDATE_TYPE, "updateType echoed");
+    }
+
+    function test_CAP_INV_03_reducer_unknownUpdateType_reverts() public {
+        rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
+        rvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
+        string[3] memory types = ["LtvUpdate_Core", "BorrowCapUpdate_Prime", "borrowcapupdate_core"];
         for (uint256 i = 0; i < types.length; ++i) {
-            IRiskOracle.RiskParameterUpdate memory u = _read(types[i], address(weth));
-            assertEq(abi.decode(u.newValue, (uint256)), F1_CUT_FLOOR, "BORROW cut");
-            assertEq(u.updateType, types[i], "updateType echoed");
+            vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.UnknownUpdateType.selector, types[i]));
+            _read(types[i], address(weth));
         }
+    }
+
+    function test_CAP_INV_03_reducer_emptyUpdateType_reverts() public {
+        rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
+        vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.UnknownUpdateType.selector, ""));
+        _read("", address(weth));
+    }
+
+    function test_CAP_INV_03_reducer_fuzz_unknownUpdateType_reverts(string memory updateType) public {
+        bytes32 h = keccak256(bytes(updateType));
+        vm.assume(h != keccak256(bytes(BORROW_UPDATE_TYPE)) && h != keccak256(bytes(SUPPLY_UPDATE_TYPE)));
+        rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
+        vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.UnknownUpdateType.selector, updateType));
+        _read(updateType, address(weth));
+    }
+
+    function test_CAP_INV_03_reducer_hashesFromRvm() public {
+        // The oracle matches against the RVM's update types, read once at construction.
+        MockCapsRvm primeRvm = new MockCapsRvm();
+        primeRvm.setUpdateTypeHashes(keccak256("BorrowCapUpdate_Prime"), keccak256("SupplyCapUpdate_Prime"));
+        CapsReducerOracle primeOracle = new CapsReducerOracle(IRvm(address(primeRvm)));
+        assertEq(primeOracle.BORROW_UPDATE_TYPE_HASH(), keccak256("BorrowCapUpdate_Prime"));
+        assertEq(primeOracle.SUPPLY_UPDATE_TYPE_HASH(), keccak256("SupplyCapUpdate_Prime"));
+        primeRvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
+
+        IRiskOracle.RiskParameterUpdate memory u =
+            primeOracle.getLatestUpdateByParameterAndMarket("SupplyCapUpdate_Prime", address(weth));
+        assertEq(abi.decode(u.newValue, (uint256)), 6000);
+        vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.UnknownUpdateType.selector, SUPPLY_UPDATE_TYPE));
+        primeOracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
     }
 
     function test_CAP_INV_03_reducer_asksRvmWithAssetAndKind() public {
         rvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
         vm.expectCall(address(rvm), abi.encodeCall(IRvm.previewCut, (address(weth), IRvm.CapKind.SUPPLY)));
-        supplyOracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
+        oracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
     }
 
     function test_CAP_INV_03_reducer_oneRvmCallPerRead() public {
@@ -106,15 +150,13 @@ contract CapsReducerOracleTest is CapsTestBase {
     }
 
     function test_CAP_INV_03_reducer_returnsCutOfItsKind() public {
-        // One oracle per (Pool, kind): each returns the cut of its KIND on the shared RVM.
-        assertEq(uint8(oracle.KIND()), uint8(IRvm.CapKind.BORROW));
-        assertEq(uint8(supplyOracle.KIND()), uint8(IRvm.CapKind.SUPPLY));
+        // One oracle per Pool: the update type selects the kind on the shared RVM.
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
         rvm.setCut(address(weth), IRvm.CapKind.SUPPLY, true, 9000, 6000);
 
         assertEq(abi.decode(_read(BORROW_UPDATE_TYPE, address(weth)).newValue, (uint256)), F1_CUT_FLOOR);
         IRiskOracle.RiskParameterUpdate memory s =
-            supplyOracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
+            oracle.getLatestUpdateByParameterAndMarket(SUPPLY_UPDATE_TYPE, address(weth));
         assertEq(abi.decode(s.newValue, (uint256)), 6000);
         assertEq(abi.decode(s.previousValue, (uint256)), 9000);
     }
@@ -126,7 +168,7 @@ contract CapsReducerOracleTest is CapsTestBase {
     function test_CAP_ACL_22_twoPools_ownReducerEach() public {
         // Core and Prime each have their own RVM and reducer, so the same AgentHub call returns each Pool's cut.
         MockCapsRvm primeRvm = new MockCapsRvm();
-        CapsReducerOracle primeOracle = new CapsReducerOracle(IRvm(address(primeRvm)), IRvm.CapKind.BORROW);
+        CapsReducerOracle primeOracle = new CapsReducerOracle(IRvm(address(primeRvm)));
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, F1_CUT_FROM, F1_CUT_FLOOR);
         primeRvm.setCut(address(weth), IRvm.CapKind.BORROW, true, 3000, 2200);
 
@@ -202,8 +244,9 @@ contract CapsReducerOracleTest is CapsTestBase {
 
     function test_CAP_ACL_11_reducer_rvmFixedAtConstruction() public view {
         assertEq(address(oracle.RVM()), address(rvm));
-        assertEq(uint8(oracle.KIND()), uint8(IRvm.CapKind.BORROW));
-        // No storage at all: the RVM link and the kind live in the bytecode.
+        assertEq(oracle.BORROW_UPDATE_TYPE_HASH(), keccak256(bytes(BORROW_UPDATE_TYPE)));
+        assertEq(oracle.SUPPLY_UPDATE_TYPE_HASH(), keccak256(bytes(SUPPLY_UPDATE_TYPE)));
+        // No storage at all: the RVM link and the update type hashes live in the bytecode.
         for (uint256 slot = 0; slot < 8; slot++) {
             assertEq(vm.load(address(oracle), bytes32(slot)), bytes32(0));
         }
@@ -211,7 +254,7 @@ contract CapsReducerOracleTest is CapsTestBase {
 
     function test_CAP_ACL_11_reducer_zeroRvm_reverts() public {
         vm.expectRevert(CapsReducerOracle.ZeroAddress.selector);
-        new CapsReducerOracle(IRvm(address(0)), IRvm.CapKind.BORROW);
+        new CapsReducerOracle(IRvm(address(0)));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -241,7 +284,7 @@ contract CapsReducerOracleAgentHubTest is CapsTestBase {
         AgentHub impl = new AgentHub();
         hub = AgentHub(address(new ERC1967Proxy(address(impl), abi.encodeCall(AgentHub.initialize, (governance)))));
         rvm = new MockCapsRvm();
-        oracle = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.BORROW);
+        oracle = new CapsReducerOracle(IRvm(address(rvm)));
         agent = new MockCutAgent(address(hub));
 
         address[] memory markets = new address[](1);
@@ -344,7 +387,7 @@ contract CapsReducerOracleInvariantTest is CapsTestBase {
     function setUp() public virtual override {
         super.setUp();
         rvm = new MockCapsRvm();
-        oracle = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.BORROW);
+        oracle = new CapsReducerOracle(IRvm(address(rvm)));
         initialRvm = address(rvm);
 
         address[] memory assets = new address[](3);
