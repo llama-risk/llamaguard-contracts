@@ -96,6 +96,8 @@ interface ICapsParameterRegistry {
     error InvalidKind(uint8 kind);
     /// @notice triggerBps or marginBps above 10_000, or a market default triggerBps of 0.
     error InvalidBps(uint16 value);
+    /// @notice A non-zero RVM whose `POOL()` is not the market.
+    error InvalidRvm(address rvm);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNER
@@ -109,11 +111,11 @@ interface ICapsParameterRegistry {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Add a market with its max base fee, defaults and RVM. Caller: updater.
-    /// @dev Reverts MarketAlreadyExists, ZeroAddress, InvalidBps.
+    /// @dev Reverts MarketAlreadyExists, ZeroAddress, InvalidBps, InvalidRvm (non-zero RVM with POOL() != market).
     function addMarket(address market, MarketParams calldata params) external;
 
     /// @notice Change the max base fee, defaults and RVM of a market. Caller: updater.
-    /// @dev Same bounds as addMarket.
+    /// @dev Reverts MarketNotFound, InvalidBps, InvalidRvm. Same bounds as addMarket.
     function setMarketParams(address market, MarketParams calldata params) external;
 
     /// @notice Remove a market with an empty work list. Caller: updater. Reverts MarketNotEmpty.

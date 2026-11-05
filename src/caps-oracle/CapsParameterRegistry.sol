@@ -13,7 +13,7 @@ import { ICapsRangeValidationModule } from "./interfaces/ICapsRangeValidationMod
 ///         pointer to it, and the hold lives in the RVM.
 /// @dev Access model of PTParameterRegistry: `Ownable2Step` owner (LlamaRisk Safe) appoints the updater, and the
 ///      updater (Risk Council Safe at deploy) writes every parameter. `kind` uses the RVM
-///      numbering (0 = BORROW, 1 = SUPPLY). Any Aave-listed asset can be added.
+///      numbering (0 = BORROW, 1 = SUPPLY). Any non-zero asset address can be added.
 ///      The RVM interface is imported for the ABI of the RVM reads in `getReservesRaiseData`, which reads the
 ///      market's `MarketParams.rvm` (one RVM per Pool) through the keyed raise preview. The
 ///      registry does not read AgentHub. The asset-list mismatch check runs in the monitoring stack.
@@ -67,7 +67,7 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     /// @inheritdoc ICapsParameterRegistry
     function addMarket(address market, MarketParams calldata params) external onlyUpdater {
         if (market == address(0)) revert ZeroAddress();
-        _validateMarketParams(params);
+        _validateMarketParams(market, params);
         if (!_markets.add(market)) revert MarketAlreadyExists(market);
         _marketParams[market] = params;
         emit MarketAdded(market, params);
@@ -76,7 +76,7 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     /// @inheritdoc ICapsParameterRegistry
     function setMarketParams(address market, MarketParams calldata params) external onlyUpdater {
         _requireMarket(market);
-        _validateMarketParams(params);
+        _validateMarketParams(market, params);
         _marketParams[market] = params;
         emit MarketParamsSet(market, params);
     }
@@ -318,10 +318,14 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     }
 
     /// @dev Market default: triggerBps in 1..10_000 (a default theta of 0 would never trigger), marginBps <= 10_000.
-    function _validateMarketParams(MarketParams calldata params) internal pure {
+    ///      A non-zero RVM must serve `market` (`POOL() == market`).
+    function _validateMarketParams(address market, MarketParams calldata params) internal view {
         uint16 trigger = params.defaultParams.triggerBps;
         if (trigger == 0 || trigger > MAX_BPS) revert InvalidBps(trigger);
         if (params.defaultParams.marginBps > MAX_BPS) revert InvalidBps(params.defaultParams.marginBps);
+        if (params.rvm != address(0) && ICapsRangeValidationModule(params.rvm).POOL() != market) {
+            revert InvalidRvm(params.rvm);
+        }
     }
 
     /// @dev Override: 0 means "use the market default", so only the upper bound applies.

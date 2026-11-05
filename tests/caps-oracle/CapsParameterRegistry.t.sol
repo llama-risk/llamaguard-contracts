@@ -37,6 +37,13 @@ abstract contract RegistryTestBase is CapsTestBase {
         });
     }
 
+    /// @dev A mock RVM whose `POOL()` returns `pool_`.
+    function _rvmFor(address pool_) internal returns (address) {
+        MockCapsRvm r = new MockCapsRvm();
+        r.setPool(pool_);
+        return address(r);
+    }
+
     function _noOverride() internal pure returns (IReg.ReserveOverride memory o) { }
 
     function _override(uint16 triggerBps) internal pure returns (IReg.ReserveOverride memory o) {
@@ -290,7 +297,8 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         address prime = makeAddr("primePool");
         IReg.MarketParams memory mp = _marketParams();
         mp.maxBaseFeeGwei = 0; // 0 = no gas gate
-        mp.rvm = makeAddr("primeRvm");
+        address primeRvm = _rvmFor(prime);
+        mp.rvm = primeRvm;
         vm.expectEmit(address(registry));
         emit IReg.MarketAdded(prime, mp);
         vm.prank(riskCouncil);
@@ -302,7 +310,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         IReg.MarketParams memory got = registry.getMarketParams(prime);
         assertEq(got.maxBaseFeeGwei, 0);
         assertEq(got.defaultParams.triggerBps, THETA_BPS);
-        assertEq(got.rvm, makeAddr("primeRvm"), "RVM per market");
+        assertEq(got.rvm, primeRvm, "RVM per market");
         assertEq(registry.getMarketParams(market).rvm, address(0), "the other market keeps its own (unset) RVM");
         assertEq(registry.getReservesList(prime).length, 0);
     }
@@ -350,18 +358,56 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
         mp.defaultParams.triggerBps = 3000;
         mp.maxBaseFeeGwei = 80;
-        mp.rvm = makeAddr("newRvm");
+        address newRvm = _rvmFor(market);
+        mp.rvm = newRvm;
         vm.expectEmit(address(registry));
         emit IReg.MarketParamsSet(market, mp);
         registry.setMarketParams(market, mp);
         assertEq(registry.getMarketParams(market).maxBaseFeeGwei, 80);
-        assertEq(registry.getMarketParams(market).rvm, makeAddr("newRvm"));
+        assertEq(registry.getMarketParams(market).rvm, newRvm);
 
         // address(0) is accepted and means "not set".
         mp.rvm = address(0);
         registry.setMarketParams(market, mp);
         vm.stopPrank();
         assertEq(registry.getMarketParams(market).rvm, address(0));
+    }
+
+    function test_Registry_addMarket_rvmWrongPool_reverts() public {
+        address prime = makeAddr("primePool");
+        IReg.MarketParams memory mp = _marketParams();
+        mp.rvm = _rvmFor(market); // serves the other market
+        vm.expectRevert(abi.encodeWithSelector(IReg.InvalidRvm.selector, mp.rvm));
+        vm.prank(riskCouncil);
+        registry.addMarket(prime, mp);
+    }
+
+    function test_Registry_setMarketParams_rvmWrongPool_reverts() public {
+        IReg.MarketParams memory mp = _marketParams();
+        mp.rvm = _rvmFor(makeAddr("primePool"));
+        vm.expectRevert(abi.encodeWithSelector(IReg.InvalidRvm.selector, mp.rvm));
+        vm.prank(riskCouncil);
+        registry.setMarketParams(market, mp);
+    }
+
+    function test_Registry_marketParams_rvmEoa_reverts() public {
+        IReg.MarketParams memory mp = _marketParams();
+        mp.rvm = makeAddr("eoaRvm"); // no code: the POOL() call fails to decode
+        vm.startPrank(riskCouncil);
+        vm.expectRevert();
+        registry.addMarket(makeAddr("primePool"), mp);
+        vm.expectRevert();
+        registry.setMarketParams(market, mp);
+        vm.stopPrank();
+    }
+
+    function test_Registry_addMarket_rvmZero_allowed() public {
+        address prime = makeAddr("primePool");
+        IReg.MarketParams memory mp = _marketParams();
+        mp.rvm = address(0);
+        vm.prank(riskCouncil);
+        registry.addMarket(prime, mp);
+        assertEq(registry.getMarketParams(prime).rvm, address(0));
     }
 
     function test_Registry_removeMarket_needsEmptyWorkList() public {

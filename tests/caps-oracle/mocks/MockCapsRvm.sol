@@ -6,8 +6,10 @@ import { ICapsRangeValidationModule } from "../../../src/caps-oracle/interfaces/
 /// @title MockCapsRvm
 /// @notice Minimal RVM for testing CapsReducerOracle in isolation. It implements only the one read that the
 ///         oracle makes (the keyed `previewCut(asset, kind)`) with settable results, plus a stored entry for
-///         the registry independence tests.
+///         the registry independence tests and a settable `POOL()` for the registry RVM check.
 contract MockCapsRvm {
+    address public POOL;
+
     struct CutResult {
         bool due;
         uint256 currentCap;
@@ -19,6 +21,10 @@ contract MockCapsRvm {
     mapping(
         address asset => mapping(ICapsRangeValidationModule.CapKind kind => ICapsRangeValidationModule.RateLimitConfig)
     ) internal _rateLimitConfigs;
+
+    function setPool(address pool) external {
+        POOL = pool;
+    }
 
     function setCut(
         address asset,
