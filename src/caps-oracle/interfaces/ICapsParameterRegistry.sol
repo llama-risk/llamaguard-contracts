@@ -169,7 +169,8 @@ interface ICapsParameterRegistry {
 
     /**
      * @notice Raise inputs for a page of assets, one row per asset in input order.
-     * @dev View. Never reverts on a missing key: the row has `found` false.
+     * @dev View. Never reverts on a missing key: the row has `found` false. Reverts if the market RVM
+     *      reverts on `previewRaise` or returns data that does not decode.
      * @param market the Aave Pool
      * @param kind 0 = BORROW, 1 = SUPPLY
      * @param assets token addresses, one page of the work list
