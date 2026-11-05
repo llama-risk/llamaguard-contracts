@@ -478,6 +478,67 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         assertEq(keys[0].asset, asset);
         assertEq(keys[0].kind, BORROW);
     }
+
+    function test_Registry_getReservesListByKind_filtersAndKeepsOrder() public {
+        _add(address(weth), BORROW, _noOverride());
+        _add(address(weth), SUPPLY, _noOverride());
+        _add(address(wbtc), SUPPLY, _noOverride());
+        _add(address(usdc), BORROW, _noOverride());
+
+        IReg.ReserveKey[] memory b = registry.getReservesListByKind(market, BORROW);
+        assertEq(b.length, 2);
+        assertEq(b[0].asset, address(weth));
+        assertEq(b[0].kind, BORROW);
+        assertEq(b[1].asset, address(usdc));
+        assertEq(b[1].kind, BORROW);
+
+        IReg.ReserveKey[] memory s = registry.getReservesListByKind(market, SUPPLY);
+        assertEq(s.length, 2);
+        assertEq(s[0].asset, address(weth));
+        assertEq(s[0].kind, SUPPLY);
+        assertEq(s[1].asset, address(wbtc));
+        assertEq(s[1].kind, SUPPLY);
+    }
+
+    function test_Registry_getReservesListByKind_noKeys_empty() public {
+        assertEq(registry.getReservesListByKind(market, BORROW).length, 0, "empty market");
+        _add(address(weth), BORROW, _noOverride());
+        assertEq(registry.getReservesListByKind(market, SUPPLY).length, 0, "no SUPPLY keys");
+    }
+
+    function test_Registry_getReservesListByKind_invalid_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IReg.InvalidKind.selector, uint8(2)));
+        registry.getReservesListByKind(market, 2);
+
+        address prime = makeAddr("primePool");
+        vm.expectRevert(abi.encodeWithSelector(IReg.MarketNotFound.selector, prime));
+        registry.getReservesListByKind(prime, BORROW);
+    }
+
+    function test_Registry_getReservesListByKind_fuzz_partitionsFullList(uint256 seed, uint8 count) public {
+        count = uint8(bound(count, 0, 24));
+        for (uint256 i = 0; i < count; i++) {
+            uint256 r = uint256(keccak256(abi.encode(seed, i)));
+            address asset = address(uint160(1 + (r % 8))); // small universe so assets repeat across kinds
+            uint8 kind = uint8((r >> 128) % 2);
+            if (!registry.isListed(market, asset, kind)) _add(asset, kind, _noOverride());
+        }
+
+        IReg.ReserveKey[] memory all = registry.getReservesList(market);
+        IReg.ReserveKey[] memory b = registry.getReservesListByKind(market, BORROW);
+        IReg.ReserveKey[] memory s = registry.getReservesListByKind(market, SUPPLY);
+        assertEq(b.length + s.length, all.length, "union size");
+
+        // Walk the full list: each key is the next unread key of its kind's list, so both views keep set order.
+        uint256 bi;
+        uint256 si;
+        for (uint256 i = 0; i < all.length; i++) {
+            IReg.ReserveKey memory k = all[i];
+            IReg.ReserveKey memory got = k.kind == BORROW ? b[bi++] : s[si++];
+            assertEq(got.asset, k.asset, "asset");
+            assertEq(got.kind, k.kind, "kind");
+        }
+    }
 }
 
 /// @notice Handler for the registry invariants. It acts as the updater on a small key universe and keeps a

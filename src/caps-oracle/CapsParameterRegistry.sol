@@ -176,6 +176,28 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     }
 
     /// @inheritdoc ICapsParameterRegistry
+    /// @dev Reverts MarketNotFound for an unknown market, as getReservesList. Two passes: count, then fill.
+    function getReservesListByKind(address market, uint8 kind) external view returns (ReserveKey[] memory keys) {
+        _requireMarket(market);
+        _validateKind(kind);
+        EnumerableSet.Bytes32Set storage set = _reserves[market];
+        uint256 n = set.length();
+        uint256 count;
+        for (uint256 i = 0; i < n; i++) {
+            if (uint8(uint256(set.at(i))) == kind) count++;
+        }
+        keys = new ReserveKey[](count);
+        uint256 j;
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 key = set.at(i);
+            if (uint8(uint256(key)) == kind) {
+                (keys[j].asset, keys[j].kind) = _unpackKey(key);
+                j++;
+            }
+        }
+    }
+
+    /// @inheritdoc ICapsParameterRegistry
     /// @dev All zero (every field "use the market default") for a key that is not listed.
     function getReserveOverride(
         address market,

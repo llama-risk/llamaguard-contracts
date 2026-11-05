@@ -145,6 +145,10 @@ interface ICapsParameterRegistry {
     /// @notice Work list of a market, enabled or not.
     function getReservesList(address market) external view returns (ReserveKey[] memory);
 
+    /// @notice Work list keys of `market` with this `kind`, in set order.
+    /// @dev Reverts MarketNotFound, InvalidKind (kind > MAX_KIND).
+    function getReservesListByKind(address market, uint8 kind) external view returns (ReserveKey[] memory keys);
+
     /// @notice The stored overrides of a key.
     function getReserveOverride(
         address market,
