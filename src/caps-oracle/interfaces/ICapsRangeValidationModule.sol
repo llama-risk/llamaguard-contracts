@@ -35,8 +35,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Entry written by the owner or the Risk Council Safe. `maxCap` 0 retires the key.
     struct RateLimitConfig {
-        uint64 maxCap; // hard maximum C-bar, whole tokens
-        uint64 maxHeadroom; // ceiling of L, whole tokens. Floor of L is ceil(maxHeadroom / 25)
+        uint64 maxCap; // hard maximum C-bar, whole tokens, at most 2^36 - 1
+        uint64 maxHeadroom; // ceiling of L, whole tokens, non-zero. Floor of L is ceil(maxHeadroom / 25)
         uint16 alphaBps; // headroom target L as a share of usage D
         uint16 cutBandBps; // a cut needs headroom above (1 + band) * L
     }
@@ -110,7 +110,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice A bps field of the bounds is above 10_000.
     error InvalidBounds();
 
-    /// @notice alphaBps or cutBandBps is above the global limit of the kind.
+    /// @notice alphaBps or cutBandBps is above the global limit of the kind, maxHeadroom is 0, or maxCap is
+    ///         above 2^36 - 1.
     error RateLimitConfigOutOfBounds();
 
     /// @notice The key has no entry (max cap 0).
@@ -214,9 +215,10 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /**
      * @notice Set the entry of a key. `maxCap` 0 retires the key and clears its slot.
-     * @dev The owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing entry, and a
-     *      raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once per
-     *      cooldown shared by both fields. Lowering is free.
+     * @dev A live entry needs a non-zero maxHeadroom and a maxCap of at most 2^36 - 1, for both callers.
+     *      Within that, the owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing
+     *      entry, and a raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once
+     *      per cooldown shared by both fields. Lowering is free.
      *      Reverts OnlyRiskCouncilOrOwner, RateLimitConfigOutOfBounds, RateLimitConfigNotFound,
      *      IncreaseTooLarge, CooldownActive.
      * @param asset the token address

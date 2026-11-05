@@ -14,7 +14,7 @@ import { RvmTestBase } from "./RvmTestBase.sol";
 ///         writes (a cap write only after `validate` returns true, as AaveBorrowCapAgent does).
 /// @dev Ghost flags record a broken property at the moment it happens, for the post-call invariants.
 contract RvmHandler is Test {
-    uint256 internal constant MAX_CAP = 68_719_476_735;
+    uint256 internal constant MAX_VALID_CAP = 68_719_476_735;
 
     CapsRangeValidationModuleV3 internal rvm;
     MockPoolV3 internal pool;
@@ -62,12 +62,12 @@ contract RvmHandler is Test {
     }
 
     function setBorrowCap(uint256 cap) external {
-        pool.setBorrowCap(asset, bound(cap, 0, MAX_CAP));
+        pool.setBorrowCap(asset, bound(cap, 0, MAX_VALID_CAP));
     }
 
     function setSupplyCap(uint256 cap) external {
         if (!fuzzSupplyCap) return;
-        pool.setSupplyCap(asset, bound(cap, 0, MAX_CAP));
+        pool.setSupplyCap(asset, bound(cap, 0, MAX_VALID_CAP));
     }
 
     function setFrozen(bool frozen) external {
@@ -103,7 +103,7 @@ contract RvmHandler is Test {
         configDoesNotWriteCap
     {
         maxCap = uint64(bound(maxCap, 0, 10_000_000));
-        maxHeadroom = uint64(bound(maxHeadroom, 0, 3000));
+        maxHeadroom = uint64(bound(maxHeadroom, 1, 3000));
         alphaBps = uint16(bound(alphaBps, 0, 11_000));
         cutBandBps = uint16(bound(cutBandBps, 0, 11_000));
         IRvm.RateLimitConfig memory e = IRvm.RateLimitConfig(maxCap, maxHeadroom, alphaBps, cutBandBps);
@@ -164,12 +164,12 @@ contract RvmHandler is Test {
 
     function agentRaise(uint256 to) external {
         (uint256 cap,) = pool.getReserveCaps(asset);
-        _agentWrite(raiseId, cap, bound(to, 0, MAX_CAP));
+        _agentWrite(raiseId, cap, bound(to, 0, MAX_VALID_CAP));
     }
 
     function agentCut(uint256 to) external {
         (uint256 cap,) = pool.getReserveCaps(asset);
-        _agentWrite(cutId, cap, bound(to, 0, MAX_CAP));
+        _agentWrite(cutId, cap, bound(to, 0, MAX_VALID_CAP));
     }
 
     function agentRaiseFromPreview() external {
@@ -199,14 +199,17 @@ contract RvmHandler is Test {
     /// @dev min(entry.maxCap, 2^36 - 1), the max cap the RVM uses.
     function effectiveMaxCap() public view returns (uint256 c) {
         c = rvm.getKeyState(asset, IRvm.CapKind.BORROW).maxCap;
-        if (MAX_CAP < c) c = MAX_CAP;
+        if (MAX_VALID_CAP < c) c = MAX_VALID_CAP;
     }
 
     function _checkStoredRateLimitConfigInBounds() internal {
         IRvm.KeyState memory k = rvm.getKeyState(asset, IRvm.CapKind.BORROW);
         if (k.maxCap == 0) return; // retired, always allowed
         IRvm.Bounds memory b = rvm.getBounds(IRvm.CapKind.BORROW);
-        if (k.alphaBps > b.alphaBpsLimit || k.cutBandBps > b.cutBandBpsLimit) ghostRateLimitConfigOutOfBounds = true;
+        if (
+            k.alphaBps > b.alphaBpsLimit || k.cutBandBps > b.cutBandBpsLimit || k.maxHeadroom == 0
+                || k.maxCap > (1 << 36) - 1
+        ) ghostRateLimitConfigOutOfBounds = true;
     }
 
     /// @dev After a successful Risk Council write: no new key, and a maxCap or maxHeadroom raise within the

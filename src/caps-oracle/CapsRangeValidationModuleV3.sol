@@ -27,7 +27,8 @@ import { IAaveCapAgent } from "./interfaces/IAaveCapAgent.sol";
  *        lo    = min(max(min(D + L, S), D), C-bar)
  *        hi    = max(min(D + (1 + band) * L, C-bar, S), lo)
  *        cut   : cap > hi, lo <= to <= hi, no active hold
- *      D and the floor of L round up, everything else rounds down. `validate` and the previews never revert on a rule failure.
+ *      D and the floor of L round up, everything else rounds down. `validate` and the previews never revert
+ *      on a rule failure.
  */
 contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
@@ -37,11 +38,11 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
     /// @inheritdoc ICapsRangeValidationModule
     uint256 public constant MAX_HOLD_DURATION = 24 hours;
 
-    /// @dev Floor of L = ceilDiv(maxHeadroom, MIN_HEADROOM_DIVISOR), so L >= 1 when maxHeadroom > 0.
+    /// @dev Floor of L = ceilDiv(maxHeadroom, MIN_HEADROOM_DIVISOR). A live entry has maxHeadroom > 0, so L >= 1.
     uint256 internal constant MIN_HEADROOM_DIVISOR = 25;
 
     /// @dev Largest cap Aave stores, 36 bits. The borrow and supply limits are equal.
-    uint256 internal constant MAX_CAP = ReserveConfiguration.MAX_VALID_BORROW_CAP;
+    uint256 internal constant MAX_VALID_CAP = ReserveConfiguration.MAX_VALID_BORROW_CAP;
 
     /// @dev Saturation of D, so that D + L never overflows.
     uint256 internal constant MAX_USAGE = type(uint128).max;
@@ -276,7 +277,10 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
 
         if (!isOwner && k.maxCap == 0) revert RateLimitConfigNotFound(asset, kind);
         Bounds memory b = _bounds[kind];
-        if (rateLimitConfig.alphaBps > b.alphaBpsLimit || rateLimitConfig.cutBandBps > b.cutBandBpsLimit) {
+        if (
+            rateLimitConfig.alphaBps > b.alphaBpsLimit || rateLimitConfig.cutBandBps > b.cutBandBpsLimit
+                || rateLimitConfig.maxHeadroom == 0 || rateLimitConfig.maxCap > MAX_VALID_CAP
+        ) {
             revert RateLimitConfigOutOfBounds();
         }
 
@@ -358,8 +362,8 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
 
         _readReserve(asset, kind, s);
         uint256 d = Math.min(s.usage, MAX_USAGE);
-        uint256 supplyBound = Math.min(s.supplyBound, MAX_CAP);
-        uint256 maxCap = Math.min(k.maxCap, MAX_CAP);
+        uint256 supplyBound = Math.min(s.supplyBound, MAX_VALID_CAP);
+        uint256 maxCap = Math.min(k.maxCap, MAX_VALID_CAP);
         uint256 l = Math.max(
             Math.ceilDiv(k.maxHeadroom, MIN_HEADROOM_DIVISOR),
             Math.min(k.maxHeadroom, d.percentMulFloor(Math.min(k.alphaBps, b.alphaBpsLimit)))
@@ -381,7 +385,7 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
     /**
      * @dev Fills cap, usage D, supply bound S and raiseBlocked of `s` from the Pool. D rounds up to whole
      *      tokens: BORROW is the variable debt, SUPPLY the aToken supply plus the accrued treasury. S is the
-     *      supply cap for BORROW and MAX_CAP for SUPPLY or an uncapped supply. An unreadable reserve leaves
+     *      supply cap for BORROW and MAX_VALID_CAP for SUPPLY or an uncapped supply. An unreadable reserve leaves
      *      cap 0, so every check fails.
      */
     function _readReserve(address asset, CapKind kind, ReserveState memory s) internal view {
@@ -396,13 +400,13 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
             s.cap = config.getBorrowCap();
             s.usage = Math.ceilDiv(IERC20(data.variableDebtTokenAddress).totalSupply(), unit);
             uint256 supplyCap = config.getSupplyCap();
-            s.supplyBound = supplyCap == 0 ? MAX_CAP : supplyCap;
+            s.supplyBound = supplyCap == 0 ? MAX_VALID_CAP : supplyCap;
         } else {
             if (data.aTokenAddress == address(0)) return;
             s.cap = config.getSupplyCap();
             uint256 treasury = uint256(data.accruedToTreasury).rayMul(IPool(POOL).getReserveNormalizedIncome(asset));
             s.usage = Math.ceilDiv(IERC20(data.aTokenAddress).totalSupply() + treasury, unit);
-            s.supplyBound = MAX_CAP;
+            s.supplyBound = MAX_VALID_CAP;
         }
         s.raiseBlocked = config.getFrozen() || config.getPaused();
     }

@@ -70,13 +70,6 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
         (bool due,, uint256 newCap) = _previewCut(w);
         assertTrue(due);
         assertEq(newCap, F1_LMIN, "cut to Lmin on an unused reserve");
-
-        // maxHeadroom 0: no floor, so an unused reserve gets neither a raise nor a cut.
-        f.maxHeadroom = 0;
-        _useFixture(w, f, 1200);
-        assertEq(_state(w).headroomTarget, 0);
-        (due,,) = _previewCut(w);
-        assertFalse(due);
     }
 
     /// @dev Fuzz: an accepted raise is never above min(D + L, C-bar, S), computed here from the entry.
@@ -816,14 +809,14 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         assertTrue(_cut(w, 1));
     }
 
-    /// CAP-ACL-20: the Risk Council Safe can lower any entry field to 0.
-    function test_CAP_ACL_20_setRateLimitConfig_anyFieldToZero_succeeds() public {
+    /// CAP-ACL-20: the Risk Council Safe can lower the bps fields to 0, and maxCap and maxHeadroom to 1.
+    function test_CAP_ACL_20_setRateLimitConfig_lowerToMinimum_succeeds() public {
         _useF1(1200);
         IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
-        e.maxHeadroom = 0;
+        e.maxHeadroom = 1;
         vm.prank(riskCouncil);
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
-        assertEq(_keyState(w).maxHeadroom, 0);
+        assertEq(_keyState(w).maxHeadroom, 1);
         e.alphaBps = 0;
         vm.prank(riskCouncil);
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
@@ -837,7 +830,7 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
         IRvm.KeyState memory k = _keyState(w);
         assertEq(k.maxCap, 1);
-        assertEq(k.maxHeadroom, 0);
+        assertEq(k.maxHeadroom, 1);
         assertEq(k.alphaBps, 0);
         assertEq(k.cutBandBps, 0);
         assertTrue(_cut(w, 1), "the key still drives a cut to the max cap");
@@ -856,7 +849,7 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         _setRateLimitConfig(
             w, IRvm.CapKind.BORROW, IRvm.RateLimitConfig(5_000_000, 2000, g.alphaBpsLimit, g.cutBandBpsLimit)
         );
-        maxHeadroom = uint64(bound(maxHeadroom, 0, 2000));
+        maxHeadroom = uint64(bound(maxHeadroom, 1, 2000));
         alphaBps = uint16(bound(alphaBps, 0, g.alphaBpsLimit));
         cutBandBps = uint16(bound(cutBandBps, 0, g.cutBandBpsLimit));
         maxCap = uint64(bound(maxCap, 1, 5_000_000));
@@ -895,20 +888,20 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         _setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
     }
 
-    /// CAP-INV-14: the clamp only lowers. Fields below every limit, including 0, are used as stored.
+    /// CAP-INV-14: the clamp only lowers. Fields below every limit, including bps fields at 0, are used as stored.
     function test_CAP_INV_14_clampOnlyLowers() public {
         IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
-        e.maxHeadroom = 0;
+        e.maxHeadroom = 1;
         e.alphaBps = 0;
         e.cutBandBps = 0;
         _applyFixture(w, _f1(), 1200);
         _setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
 
         IRvm.ReserveState memory s = _state(w);
-        assertEq(s.headroomTarget, 0, "maxHeadroom 0: no headroomTarget");
-        assertEq(s.raiseCap, F1_DEBT, "raise target D");
-        assertEq(s.cutFloor, F1_DEBT);
-        assertEq(s.cutTrigger, F1_DEBT, "band 0: no band");
+        assertEq(s.headroomTarget, 1, "alpha 0: L at the floor ceil(1 / 25)");
+        assertEq(s.raiseCap, F1_DEBT + 1, "raise target D + 1");
+        assertEq(s.cutFloor, F1_DEBT + 1);
+        assertEq(s.cutTrigger, F1_DEBT + 1, "band 0: no band");
         assertEq(s.maxCap, F1_MAX_CAP);
 
         IRvm.Bounds memory b = _globalBorrowBounds();
@@ -917,8 +910,8 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         vm.prank(governance);
         rvm.setBounds(IRvm.CapKind.BORROW, b);
         s = _state(w);
-        assertEq(s.headroomTarget, 0, "widening never lifts a field");
-        assertEq(s.cutTrigger, F1_DEBT);
+        assertEq(s.headroomTarget, 1, "widening never lifts a field");
+        assertEq(s.cutTrigger, F1_DEBT + 1);
     }
 }
 
@@ -1027,10 +1020,8 @@ contract CapsRangeValidationModuleV3WriteRulesTest is RvmTestBase {
         assertEq(k.maxHeadroom, limit);
         assertEq(k.lastIncreaseAt, block.timestamp, "maxHeadroom raise starts the cooldown");
 
-        // From 0 the relative limit is 0: only the owner can set a first maxHeadroom.
-        _rcSetMaxHeadroom(0);
-        vm.warp(block.timestamp + COOLDOWN);
-        _rcWriteReverts(_cfgMaxHeadroom(1), abi.encodeWithSelector(IRvm.IncreaseTooLarge.selector, 1, 0));
+        // maxHeadroom 0 is out of bounds, so the Risk Council can never strand a key at L = 0.
+        _rcWriteReverts(_cfgMaxHeadroom(0), abi.encodeWithSelector(IRvm.RateLimitConfigOutOfBounds.selector));
     }
 
     /// maxCap and maxHeadroom share one cooldown per key; both may rise in the same write.
@@ -1062,14 +1053,63 @@ contract CapsRangeValidationModuleV3WriteRulesTest is RvmTestBase {
         e.maxCap = 5_000_000;
         vm.prank(governance);
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
-        e.maxCap = type(uint64).max;
+        e.maxCap = uint64(MAX_AAVE_CAP);
         vm.prank(governance);
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
 
         IRvm.KeyState memory k = _keyState(w);
-        assertEq(k.maxCap, type(uint64).max);
+        assertEq(k.maxCap, MAX_AAVE_CAP);
         assertEq(k.lastIncreaseAt, lastIncreaseAt, "owner writes do not move the cooldown");
-        assertEq(_state(w).maxCap, MAX_AAVE_CAP, "maxCap above 36 bits reads as the largest Aave cap");
+        assertEq(_state(w).maxCap, MAX_AAVE_CAP);
+    }
+
+    /// A live entry needs maxHeadroom above 0 and maxCap within 36 bits, for the owner and the Risk Council.
+    function test_liveEntryBounds_ownerAndRiskCouncil() public {
+        address[2] memory callers = [governance, riskCouncil];
+        for (uint256 i; i < 2; ++i) {
+            IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
+            e.maxHeadroom = 0;
+            vm.prank(callers[i]);
+            vm.expectRevert(IRvm.RateLimitConfigOutOfBounds.selector);
+            rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+
+            e = _rateLimitConfigOf(_f1());
+            e.maxCap = uint64(MAX_AAVE_CAP + 1);
+            vm.prank(callers[i]);
+            vm.expectRevert(IRvm.RateLimitConfigOutOfBounds.selector);
+            rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+        }
+    }
+
+    function test_owner_acceptsMaxCapAtMaxValidCap() public {
+        IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
+        e.maxCap = uint64(MAX_AAVE_CAP);
+        vm.prank(governance);
+        rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+        assertEq(_keyState(w).maxCap, MAX_AAVE_CAP);
+    }
+
+    /// The Risk Council reaches MAX_VALID_CAP by relative raises from a stored value at least half of it.
+    function test_riskCouncil_acceptsMaxCapAtMaxValidCap() public {
+        IRvm.RateLimitConfig memory e = _rateLimitConfigOf(_f1());
+        e.maxCap = uint64(MAX_AAVE_CAP / 2 + 1);
+        _setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+        vm.warp(block.timestamp + COOLDOWN);
+        e.maxCap = uint64(MAX_AAVE_CAP);
+        vm.prank(riskCouncil);
+        rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+        assertEq(_keyState(w).maxCap, MAX_AAVE_CAP);
+    }
+
+    /// A retire (maxCap 0) skips the live-entry bounds, so maxHeadroom 0 is fine there.
+    function test_retire_withZeroMaxHeadroom_ownerAndRiskCouncil() public {
+        address[2] memory callers = [governance, riskCouncil];
+        for (uint256 i; i < 2; ++i) {
+            _setRateLimitConfig(w, IRvm.CapKind.BORROW, _rateLimitConfigOf(_f1()));
+            vm.prank(callers[i]);
+            rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, IRvm.RateLimitConfig(0, 0, 0, 0));
+            assertEq(_keyState(w).maxCap, 0);
+        }
     }
 
     function test_riskCouncil_cannotListNewKey() public {
@@ -1255,10 +1295,16 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         f.maxCap = uint64(1) << 40;
         f.debt = 1 << 36;
         f.supply = 0; // no supply clamp
+        _applyFixture(w, f, 1000);
+        vm.prank(governance);
+        vm.expectRevert(IRvm.RateLimitConfigOutOfBounds.selector);
+        rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, _rateLimitConfigOf(f));
+
+        f.maxCap = uint64(MAX_AAVE_CAP);
         _useFixture(w, f, 1000);
         (bool allowed,, uint256 newCap) = _previewRaise(w);
         assertTrue(allowed);
-        assertEq(newCap, MAX_AAVE_CAP, "stored maxCap above 36 bits acts as 2^36 - 1");
+        assertEq(newCap, MAX_AAVE_CAP, "usage above 36 bits raises to 2^36 - 1");
         assertFalse(_raise(w, MAX_AAVE_CAP + 1));
         IRvm.ReserveState memory s = _state(w);
         assertLe(s.raiseCap, MAX_AAVE_CAP);
@@ -1332,22 +1378,20 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         assertTrue(_raise(w, 2), "raise possible");
     }
 
-    function test_CAP_UNIT_07_minHeadroom_zeroMaxHeadroom_noFloor() public {
+    /// maxHeadroom 0 would pin L to 0 and the cap to D, so a live entry rejects it.
+    function test_CAP_UNIT_07_minHeadroom_zeroMaxHeadroom_reverts() public {
         Fixture memory f = _f1();
         f.maxHeadroom = 0;
         f.debt = 0;
-        _useFixture(w, f, 1200);
-        IRvm.ReserveState memory s = _state(w);
-        assertEq(s.headroomTarget, 0);
-        assertEq(s.raiseCap, 0);
-        assertEq(s.cutFloor, 0);
-        (bool due,,) = _previewCut(w);
-        assertFalse(due);
+        _applyFixture(w, f, 1200);
+        vm.prank(governance);
+        vm.expectRevert(IRvm.RateLimitConfigOutOfBounds.selector);
+        rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, _rateLimitConfigOf(f));
     }
 
     /// @dev Fuzz: with alpha * D below the floor, L equals ceilDiv(maxHeadroom, 25).
     function test_CAP_UNIT_07_fuzz_minHeadroom_isCeilDiv(uint64 maxHeadroom) public {
-        maxHeadroom = uint64(bound(maxHeadroom, 0, 5_000_000));
+        maxHeadroom = uint64(bound(maxHeadroom, 1, 5_000_000));
         Fixture memory f = _f1();
         f.maxHeadroom = maxHeadroom;
         f.maxCap = 20_000_000;

@@ -26,7 +26,7 @@ import { MockRiskOracle } from "../mocks/MockRiskOracle.sol";
 ///         SUPPLY), so BORROW and SUPPLY keys mix in every sequence.
 /// @dev Ghost flags record a broken property at the moment it happens, for the post-call invariants.
 contract CapsSystemHandler is Test {
-    uint256 internal constant MAX_CAP = 68_719_476_735;
+    uint256 internal constant MAX_VALID_CAP = 68_719_476_735;
     uint256 internal constant BPS = 10_000;
     uint256 internal constant NUM_ASSETS = 2;
 
@@ -170,7 +170,7 @@ contract CapsSystemHandler is Test {
     ///      (uncapped) so CAP-INV-07 sees live cap 0.
     function manualCapWrite(uint256 assetSeed, uint256 kindSeed, uint256 cap) external {
         address a = _asset(assetSeed);
-        cap = cap % 5 == 0 ? bound(cap, 0, MAX_CAP) : bound(cap, 0, 20_000);
+        cap = cap % 5 == 0 ? bound(cap, 0, MAX_VALID_CAP) : bound(cap, 0, 20_000);
         if (_kind(kindSeed) == IRvm.CapKind.BORROW) pool.setBorrowCap(a, cap);
         else pool.setSupplyCap(a, cap);
     }
@@ -190,7 +190,7 @@ contract CapsSystemHandler is Test {
         uint256 newCap;
         if (mode % 4 < 2 && allowed) newCap = target;
         else if (mode % 4 == 2) newCap = bound(to, cap, cap + 2000);
-        else newCap = bound(to, 0, MAX_CAP);
+        else newCap = bound(to, 0, MAX_VALID_CAP);
         raiseOracle.publish(updateType(k), a, newCap, cap);
         if (_executeAgent(raiseId, a, k)) ++agentRaises;
     }
@@ -448,7 +448,7 @@ contract CapsSystemHandler is Test {
     /// @dev min(entry.maxCap, 2^36 - 1), the max cap the RVM uses.
     function effectiveMaxCap(address a, IRvm.CapKind k) public view returns (uint256 c) {
         c = rvm.getKeyState(a, k).maxCap;
-        if (MAX_CAP < c) c = MAX_CAP;
+        if (MAX_VALID_CAP < c) c = MAX_VALID_CAP;
     }
 
     /// @dev The stored entry with its bps fields clamped down to the global limits of the kind.
@@ -551,11 +551,11 @@ contract CapsSystemHandler is Test {
         r.cap = liveCap(a, k);
         uint256 u = _unit(a);
         uint256 d;
-        uint256 s = MAX_CAP;
+        uint256 s = MAX_VALID_CAP;
         if (k == IRvm.CapKind.BORROW) {
             d = (_debtToken(a).totalSupply() + u - 1) / u;
             (, uint256 supplyCap) = pool.getReserveCaps(a);
-            if (supplyCap != 0 && supplyCap < MAX_CAP) s = supplyCap;
+            if (supplyCap != 0 && supplyCap < MAX_VALID_CAP) s = supplyCap;
         } else {
             // Normalized income is 1 ray in the mock, so the treasury adds its scaled amount.
             uint256 treasury = pool.getReserveData(a).accruedToTreasury;
@@ -590,7 +590,10 @@ contract CapsSystemHandler is Test {
         IRvm.KeyState memory e = rvm.getKeyState(a, k);
         if (e.maxCap == 0) return;
         IRvm.Bounds memory b = rvm.getBounds(k);
-        if (e.alphaBps > b.alphaBpsLimit || e.cutBandBps > b.cutBandBpsLimit) ghostRateLimitConfigOutOfBounds = true;
+        if (
+            e.alphaBps > b.alphaBpsLimit || e.cutBandBps > b.cutBandBpsLimit || e.maxHeadroom == 0
+                || e.maxCap > (1 << 36) - 1
+        ) ghostRateLimitConfigOutOfBounds = true;
     }
 
     /// @dev After a successful non-owner write: no new key, and a maxCap or maxHeadroom raise within the relative
