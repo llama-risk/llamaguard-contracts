@@ -376,6 +376,28 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         assertEq(s.cutTrigger, hi, "hi from clamped band");
     }
 
+    /// @dev CAP-INV-15 to 19 check every agent write that lands against the rule recomputed from the state
+    ///      just before the write, in the same block.
+    function invariant_CAP_INV_15_raiseInsideRule() public view {
+        assertFalse(handler.ghostRaiseOutsideRule(), "raise outside (cap, min(D + L, C-bar, S)]");
+    }
+
+    function invariant_CAP_INV_16_noRaiseWhileFrozenOrPaused() public view {
+        assertFalse(handler.ghostRaiseWhileBlocked(), "raise on a frozen or paused reserve");
+    }
+
+    function invariant_CAP_INV_17_cutInsideBand() public view {
+        assertFalse(handler.ghostCutOutsideBand(), "cut with cap <= hi or to outside [lo, hi]");
+    }
+
+    function invariant_CAP_INV_18_noCutDuringHold() public view {
+        assertFalse(handler.ghostCutDuringHold(), "cut during an active hold");
+    }
+
+    function invariant_CAP_INV_19_agentNeverWritesZero() public view {
+        assertFalse(handler.ghostAgentWroteZero(), "agent wrote cap 0");
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ACCESS CONTROL AND CUT GRIEF, IN INVARIANT FORM
     // ═══════════════════════════════════════════════════════════════════════════
@@ -442,6 +464,11 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         invariant_CAP_INV_09_registryIndependence();
         invariant_CAP_INV_12_configNeverWritesCap();
         invariant_CAP_INV_13_rateLimitConfigInsideEffectiveBounds();
+        invariant_CAP_INV_15_raiseInsideRule();
+        invariant_CAP_INV_16_noRaiseWhileFrozenOrPaused();
+        invariant_CAP_INV_17_cutInsideBand();
+        invariant_CAP_INV_18_noCutDuringHold();
+        invariant_CAP_INV_19_agentNeverWritesZero();
         invariant_CAP_ST_28_cutGriefBounded();
     }
 

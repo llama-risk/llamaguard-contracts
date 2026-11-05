@@ -69,6 +69,11 @@ contract CapsSystemHandler is Test {
     bool public ghostHoldByNonWriter; // CAP-ACL-06
     bool public ghostRiskCouncilRaiseRuleBroken; // Risk Council raise limit, cooldown, no listing
     bool public ghostGriefBroke; // CAP-ST-28
+    bool public ghostRaiseOutsideRule; // CAP-INV-15: raise not in (cap, min(D + L, C-bar, S)]
+    bool public ghostRaiseWhileBlocked; // CAP-INV-16: raise on a frozen or paused reserve
+    bool public ghostCutOutsideBand; // CAP-INV-17: cut with cap <= hi or to outside [lo, hi]
+    bool public ghostCutDuringHold; // CAP-INV-18: cut before holdUntil
+    bool public ghostAgentWroteZero; // CAP-INV-19: agent write of cap 0
 
     // ─── Call counters (coverage)
     // ─────────────────────────────────────────────
@@ -505,9 +510,10 @@ contract CapsSystemHandler is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @dev Runs AgentHub.execute for one agentId and asset. On success, every cap the agent changed must be at
-    ///      most the effective max cap at that moment (CAP-INV-01).
+    ///      most the effective max cap at that moment (CAP-INV-01) and follow the rule computed from the state
+    ///      before the write (CAP-INV-15 to 19).
     function _executeAgent(uint256 agentId, address a, IRvm.CapKind k) internal returns (bool ok) {
-        uint256 before = liveCap(a, k);
+        RuleSnapshot memory r = _ruleSnapshot(a, k);
         IAgentHub.ActionData[] memory ad = new IAgentHub.ActionData[](1);
         ad[0].agentId = agentId;
         ad[0].markets = new address[](1);
@@ -517,7 +523,66 @@ contract CapsSystemHandler is Test {
         } catch { }
         if (!ok) return false;
         uint256 afterCap = liveCap(a, k);
-        if (afterCap != before && afterCap > effectiveMaxCap(a, k)) ghostAgentWriteAboveMaxCap = true;
+        if (afterCap == r.cap) return true;
+        if (afterCap > effectiveMaxCap(a, k)) ghostAgentWriteAboveMaxCap = true;
+        if (afterCap == 0) ghostAgentWroteZero = true;
+        (uint256 raiseId,) = agentIds(k);
+        if (agentId == raiseId) {
+            if (r.cap == 0 || afterCap <= r.cap || afterCap > r.raiseMax) ghostRaiseOutsideRule = true;
+            if (r.blocked) ghostRaiseWhileBlocked = true;
+        } else {
+            if (r.cap <= r.hi || afterCap < r.lo || afterCap > r.hi) ghostCutOutsideBand = true;
+            if (r.held) ghostCutDuringHold = true;
+        }
+    }
+
+    /// @dev Pre-write inputs of the rule, read from the Pool and the stored entry without the RVM math.
+    struct RuleSnapshot {
+        uint256 cap;
+        uint256 raiseMax; // min(D + L, C-bar, S)
+        uint256 lo;
+        uint256 hi;
+        bool blocked; // frozen or paused
+        bool held; // block.timestamp < holdUntil
+    }
+
+    /// @dev Recomputes the rule in whole tokens: D rounds up, the floor of L rounds up, the rest rounds down.
+    function _ruleSnapshot(address a, IRvm.CapKind k) internal view returns (RuleSnapshot memory r) {
+        r.cap = liveCap(a, k);
+        uint256 u = _unit(a);
+        uint256 d;
+        uint256 s = MAX_CAP;
+        if (k == IRvm.CapKind.BORROW) {
+            d = (_debtToken(a).totalSupply() + u - 1) / u;
+            (, uint256 supplyCap) = pool.getReserveCaps(a);
+            if (supplyCap != 0 && supplyCap < MAX_CAP) s = supplyCap;
+        } else {
+            // Normalized income is 1 ray in the mock, so the treasury adds its scaled amount.
+            uint256 treasury = pool.getReserveData(a).accruedToTreasury;
+            d = (IERC20(pool.getReserveData(a).aTokenAddress).totalSupply() + treasury + u - 1) / u;
+        }
+        if (d > type(uint128).max) d = type(uint128).max;
+        IRvm.RateLimitConfig memory e = clampedRateLimitConfig(a, k);
+        uint256 cBar = e.maxCap;
+        uint256 lMin = (uint256(e.maxHeadroom) + 24) / 25;
+        uint256 l = (d * e.alphaBps) / BPS;
+        if (l > e.maxHeadroom) l = e.maxHeadroom;
+        if (l < lMin) l = lMin;
+        r.raiseMax = _min3(d + l, cBar, s);
+        uint256 dl = d + l < s ? d + l : s;
+        if (dl < d) dl = d;
+        r.lo = dl < cBar ? dl : cBar;
+        r.hi = _min3(d + l + (l * e.cutBandBps) / BPS, cBar, s);
+        if (r.hi < r.lo) r.hi = r.lo;
+        r.blocked = pool.getPaused(a);
+        (,,,,,,,,, bool frozen) = pool.getReserveConfigurationData(a);
+        r.blocked = r.blocked || frozen;
+        r.held = block.timestamp < rvm.getKeyState(a, k).holdUntil;
+    }
+
+    function _min3(uint256 x, uint256 y, uint256 z) internal pure returns (uint256 m) {
+        m = x < y ? x : y;
+        if (z < m) m = z;
     }
 
     /// @dev CAP-INV-13: the written bps fields are inside the global limits. A retired entry is always allowed.
