@@ -6,9 +6,13 @@ import { ICapsRangeValidationModule } from "../../../src/caps-oracle/interfaces/
 /// @title MockCapsRvm
 /// @notice Minimal RVM for testing CapsReducerOracle in isolation. It implements only the one read that the
 ///         oracle makes (the keyed `previewCut(asset, kind)`) with settable results, plus a stored entry for
-///         the registry independence tests and a settable `POOL()` for the registry RVM check.
+///         the registry independence tests, a settable `POOL()` for the registry RVM check, and settable update
+///         type hashes (default: the Core borrow and supply update types) that the oracle reads at construction.
 contract MockCapsRvm {
     address public POOL;
+
+    bytes32 public BORROW_UPDATE_TYPE_HASH = keccak256("BorrowCapUpdate_Core");
+    bytes32 public SUPPLY_UPDATE_TYPE_HASH = keccak256("SupplyCapUpdate_Core");
 
     struct CutResult {
         bool due;
@@ -24,6 +28,11 @@ contract MockCapsRvm {
 
     function setPool(address pool) external {
         POOL = pool;
+    }
+
+    function setUpdateTypeHashes(bytes32 borrowHash, bytes32 supplyHash) external {
+        BORROW_UPDATE_TYPE_HASH = borrowHash;
+        SUPPLY_UPDATE_TYPE_HASH = supplyHash;
     }
 
     function setCut(

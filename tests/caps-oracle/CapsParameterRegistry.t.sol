@@ -723,7 +723,7 @@ contract CapsParameterRegistryInvariantTest is RegistryTestBase {
         rvm = new MockCapsRvm();
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, 1200, F1_CUT_FLOOR);
         rvm.setRateLimitConfig(address(weth), IRvm.CapKind.BORROW, _rateLimitConfigOf(_f1()));
-        oracle = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.BORROW);
+        oracle = new CapsReducerOracle(IRvm(address(rvm)));
 
         targetContract(address(handler));
     }
