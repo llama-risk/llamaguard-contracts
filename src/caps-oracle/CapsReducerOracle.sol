@@ -43,11 +43,11 @@ contract CapsReducerOracle is ICapsReducerOracle {
         view
         returns (IRiskOracle.RiskParameterUpdate memory update)
     {
-        bytes32 h = keccak256(bytes(updateType));
+        bytes32 updateTypeHash = keccak256(bytes(updateType));
         ICapsRangeValidationModule.CapKind kind;
-        if (h == BORROW_UPDATE_TYPE_HASH) {
+        if (updateTypeHash == BORROW_UPDATE_TYPE_HASH) {
             kind = ICapsRangeValidationModule.CapKind.BORROW;
-        } else if (h == SUPPLY_UPDATE_TYPE_HASH) {
+        } else if (updateTypeHash == SUPPLY_UPDATE_TYPE_HASH) {
             kind = ICapsRangeValidationModule.CapKind.SUPPLY;
         } else {
             revert UnknownUpdateType(updateType);

@@ -35,10 +35,10 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Entry written by the owner or the Risk Council Safe. `maxCap` 0 retires the key.
     struct RateLimitConfig {
-        uint64 maxCap; // hard maximum C-bar, whole tokens
-        uint64 maxHeadroom; // ceiling of L, whole tokens. Floor of L is maxHeadroom / 25
-        uint16 alphaBps; // headroom target L as a share of usage D
-        uint16 cutBandBps; // a cut needs headroom above (1 + band) * L
+        uint64 maxCap; // hard maximum cap, whole tokens
+        uint64 maxHeadroom; // ceiling of headroomTarget, whole tokens. Floor is maxHeadroom / 25
+        uint16 alphaBps; // headroomTarget as a share of usage
+        uint16 cutBandBps; // a cut needs headroom above (1 + band) * headroomTarget
     }
 
     /// @notice Stored state of one key, one slot (240 bits). `maxCap` 0 means no entry.
@@ -61,16 +61,16 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Live view of one key, read from Aave in the current block.
     struct ReserveState {
-        uint256 cap; // C, current cap, whole tokens. 0 means no cap
-        uint256 usage; // D, whole tokens
-        uint256 supplyBound; // S, whole tokens
-        uint256 headroomTarget; // L
+        uint256 cap; // current cap, whole tokens. 0 means no cap
+        uint256 usage; // whole tokens
+        uint256 supplyBound; // whole tokens
+        uint256 headroomTarget; // whole tokens
         uint256 raiseCap; // highest accepted raise
         uint256 cutFloor; // lowest accepted cut
         uint256 cutTrigger; // a cut needs cap > cutTrigger
         uint40 holdUntil; // end of the hold, unix seconds. 0 or past means no hold
         bool raiseBlocked; // reserve frozen or paused
-        uint256 maxCap; // C-bar the rule uses, at most the largest cap Aave stores
+        uint256 maxCap; // the maxCap the rule uses, at most the largest cap Aave stores
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

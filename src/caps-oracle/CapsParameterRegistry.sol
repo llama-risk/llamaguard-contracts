@@ -8,7 +8,7 @@ import { ICapsRangeValidationModule } from "./interfaces/ICapsRangeValidationMod
 
 /// @title CapsParameterRegistry
 /// @notice Parameters of the offchain rate limiter workflow: the market list, the work list per market, the max
-///         base fee per market, and theta, the raise margin and the `enabled` switch per (market, asset, kind)
+///         base fee per market, and triggerBps, the raise margin and the `enabled` switch per (market, asset, kind)
 ///         with a market-wide default. Nothing onchain reads this contract for a cap decision: the RVM has no
 ///         pointer to it, and the hold lives in the RVM.
 /// @dev Access model of PTParameterRegistry: `Ownable2Step` owner (LlamaRisk Safe) appoints the updater, and the
@@ -168,9 +168,9 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     function getReservesList(address market) public view returns (ReserveKey[] memory keys) {
         _requireMarket(market);
         EnumerableSet.Bytes32Set storage set = _reserves[market];
-        uint256 n = set.length();
-        keys = new ReserveKey[](n);
-        for (uint256 i = 0; i < n; i++) {
+        uint256 keyCount = set.length();
+        keys = new ReserveKey[](keyCount);
+        for (uint256 i = 0; i < keyCount; i++) {
             (keys[i].asset, keys[i].kind) = _unpackKey(set.at(i));
         }
     }
@@ -181,18 +181,18 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
         _requireMarket(market);
         _validateKind(kind);
         EnumerableSet.Bytes32Set storage set = _reserves[market];
-        uint256 n = set.length();
+        uint256 keyCount = set.length();
         uint256 count;
-        for (uint256 i = 0; i < n; i++) {
+        for (uint256 i = 0; i < keyCount; i++) {
             if (uint8(uint256(set.at(i))) == kind) count++;
         }
         keys = new ReserveKey[](count);
-        uint256 j;
-        for (uint256 i = 0; i < n; i++) {
+        uint256 writeIndex;
+        for (uint256 i = 0; i < keyCount; i++) {
             bytes32 key = set.at(i);
             if (uint8(uint256(key)) == kind) {
-                (keys[j].asset, keys[j].kind) = _unpackKey(key);
-                j++;
+                (keys[writeIndex].asset, keys[writeIndex].kind) = _unpackKey(key);
+                writeIndex++;
             }
         }
     }
@@ -264,16 +264,17 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     )
         internal
         view
-        returns (WorkflowParams memory p)
+        returns (WorkflowParams memory params)
     {
-        WorkflowParams memory d = _marketParams[market].defaultParams;
-        ReserveOverride memory o = _overrides[market][asset][kind];
+        WorkflowParams memory defaults = _marketParams[market].defaultParams;
+        ReserveOverride memory reserveOverride = _overrides[market][asset][kind];
 
-        if (o.enabled == EnabledOverride.INHERIT) p.enabled = d.enabled;
-        else p.enabled = o.enabled == EnabledOverride.ON;
-        p.triggerBps = o.triggerBps != 0 ? o.triggerBps : d.triggerBps;
-        p.marginBps = o.marginBps != 0 ? o.marginBps : d.marginBps;
-        p.minMarginTokens = o.minMarginTokens != 0 ? o.minMarginTokens : d.minMarginTokens;
+        if (reserveOverride.enabled == EnabledOverride.INHERIT) params.enabled = defaults.enabled;
+        else params.enabled = reserveOverride.enabled == EnabledOverride.ON;
+        params.triggerBps = reserveOverride.triggerBps != 0 ? reserveOverride.triggerBps : defaults.triggerBps;
+        params.marginBps = reserveOverride.marginBps != 0 ? reserveOverride.marginBps : defaults.marginBps;
+        params.minMarginTokens =
+            reserveOverride.minMarginTokens != 0 ? reserveOverride.minMarginTokens : defaults.minMarginTokens;
     }
 
     /// @dev Fills one listed row of getReservesRaiseData with two RVM reads keyed by (asset, kind):
@@ -281,27 +282,29 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
     ///      false if the state read reverts, which covers a key with no rate limit config.
     function _fillRaiseRow(
         ReserveRaiseData memory row,
-        ICapsRangeValidationModule r,
+        ICapsRangeValidationModule rvm,
         address market,
         uint8 kind
     )
         internal
         view
     {
-        ICapsRangeValidationModule.CapKind k = ICapsRangeValidationModule.CapKind(kind);
-        try r.getReserveState(row.asset, k) returns (ICapsRangeValidationModule.ReserveState memory s) {
-            row.cap = s.cap;
-            row.usage = s.usage;
-            row.supplyBound = s.supplyBound;
-            row.headroomTarget = s.headroomTarget;
-            row.raiseBlocked = s.raiseBlocked;
-            row.maxCap = s.maxCap;
+        ICapsRangeValidationModule.CapKind capKind = ICapsRangeValidationModule.CapKind(kind);
+        try rvm.getReserveState(row.asset, capKind) returns (
+            ICapsRangeValidationModule.ReserveState memory reserveState
+        ) {
+            row.cap = reserveState.cap;
+            row.usage = reserveState.usage;
+            row.supplyBound = reserveState.supplyBound;
+            row.headroomTarget = reserveState.headroomTarget;
+            row.raiseBlocked = reserveState.raiseBlocked;
+            row.maxCap = reserveState.maxCap;
         } catch {
             return;
         }
         row.found = true;
         row.params = _effectiveParams(market, row.asset, kind);
-        (row.allowed,, row.newCap) = r.previewRaise(row.asset, k);
+        (row.allowed,, row.newCap) = rvm.previewRaise(row.asset, capKind);
     }
 
     function _requireMarket(address market) internal view {
@@ -317,7 +320,7 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
         if (kind > MAX_KIND) revert InvalidKind(kind);
     }
 
-    /// @dev Market default: triggerBps in 1..10_000 (a default theta of 0 would never trigger), marginBps <= 10_000.
+    /// @dev Market default: triggerBps in 1..10_000 (0 never triggers), marginBps <= 10_000.
     ///      A non-zero RVM must serve `market` (`POOL() == market`).
     function _validateMarketParams(address market, MarketParams calldata params) internal view {
         uint16 trigger = params.defaultParams.triggerBps;

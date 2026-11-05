@@ -23,8 +23,8 @@ interface ICapsParameterRegistry {
     /// @notice Workflow parameters. Used as the market default and, resolved, as the effective value.
     struct WorkflowParams {
         bool enabled; // false: the workflow sends no raise
-        uint16 triggerBps; // raise due when headroom <= theta * L
-        uint16 marginBps; // raise margin as a share of L
+        uint16 triggerBps; // raise due when headroom <= triggerBps * headroomTarget
+        uint16 marginBps; // raise margin as a share of headroomTarget
         uint64 minMarginTokens; // margin floor, whole tokens
     }
 
@@ -59,11 +59,11 @@ interface ICapsParameterRegistry {
         address asset; // token address, as passed in
         bool found; // false: skip the key
         WorkflowParams params; // effective parameters
-        uint256 cap; // C, live Aave cap, whole tokens
-        uint256 usage; // D, whole tokens
-        uint256 supplyBound; // S, whole tokens
-        uint256 headroomTarget; // L, whole tokens
-        uint256 maxCap; // C-bar the RVM uses, whole tokens
+        uint256 cap; // live Aave cap, whole tokens
+        uint256 usage; // whole tokens
+        uint256 supplyBound; // whole tokens
+        uint256 headroomTarget; // whole tokens
+        uint256 maxCap; // the maxCap the RVM uses, whole tokens
         bool raiseBlocked; // reserve frozen or paused
         bool allowed; // RVM previewRaise: a raise to newCap passes the RVM in this block
         uint256 newCap; // RVM previewRaise newCap, whole tokens
