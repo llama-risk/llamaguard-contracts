@@ -251,7 +251,7 @@ contract CapsOracleIntegrationTest is CapsSystemBase {
         CapsRangeValidationModuleV3 primeRvm = new CapsRangeValidationModuleV3(
             governance, agentHub, address(prime), riskCouncil, BORROW_UPDATE_TYPE, SUPPLY_UPDATE_TYPE
         );
-        CapsReducerOracle primeReducer = new CapsReducerOracle(primeRvm, IRvm.CapKind.BORROW);
+        CapsReducerOracle primeReducer = new CapsReducerOracle(primeRvm);
         AaveBorrowCapAgent primeCutAgent =
             new AaveBorrowCapAgent(agentHub, address(primeRvm), UPDATE_TYPE_SUFFIX, address(prime));
         assertEq(primeCutAgent.getUpdateType(), borrowCutAgent.getUpdateType(), "shared update type");

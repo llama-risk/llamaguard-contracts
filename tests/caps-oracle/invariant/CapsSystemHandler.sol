@@ -26,7 +26,7 @@ import { MockRiskOracle } from "../mocks/MockRiskOracle.sol";
 ///         SUPPLY), so BORROW and SUPPLY keys mix in every sequence.
 /// @dev Ghost flags record a broken property at the moment it happens, for the post-call invariants.
 contract CapsSystemHandler is Test {
-    uint256 internal constant MAX_CAP = 68_719_476_735;
+    uint256 internal constant MAX_VALID_CAP = 68_719_476_735;
     uint256 internal constant BPS = 10_000;
     uint256 internal constant NUM_ASSETS = 2;
 
@@ -69,6 +69,11 @@ contract CapsSystemHandler is Test {
     bool public ghostHoldByNonWriter; // CAP-ACL-06
     bool public ghostRiskCouncilRaiseRuleBroken; // Risk Council raise limit, cooldown, no listing
     bool public ghostGriefBroke; // CAP-ST-28
+    bool public ghostRaiseOutsideRule; // CAP-INV-15: raise not in (cap, min(D + L, C-bar, S)]
+    bool public ghostRaiseWhileBlocked; // CAP-INV-16: raise on a frozen or paused reserve
+    bool public ghostCutOutsideBand; // CAP-INV-17: cut with cap <= hi or to outside [lo, hi]
+    bool public ghostCutDuringHold; // CAP-INV-18: cut before holdUntil
+    bool public ghostAgentWroteZero; // CAP-INV-19: agent write of cap 0
 
     // ─── Call counters (coverage)
     // ─────────────────────────────────────────────
@@ -165,7 +170,7 @@ contract CapsSystemHandler is Test {
     ///      (uncapped) so CAP-INV-07 sees live cap 0.
     function manualCapWrite(uint256 assetSeed, uint256 kindSeed, uint256 cap) external {
         address a = _asset(assetSeed);
-        cap = cap % 5 == 0 ? bound(cap, 0, MAX_CAP) : bound(cap, 0, 20_000);
+        cap = cap % 5 == 0 ? bound(cap, 0, MAX_VALID_CAP) : bound(cap, 0, 20_000);
         if (_kind(kindSeed) == IRvm.CapKind.BORROW) pool.setBorrowCap(a, cap);
         else pool.setSupplyCap(a, cap);
     }
@@ -185,7 +190,7 @@ contract CapsSystemHandler is Test {
         uint256 newCap;
         if (mode % 4 < 2 && allowed) newCap = target;
         else if (mode % 4 == 2) newCap = bound(to, cap, cap + 2000);
-        else newCap = bound(to, 0, MAX_CAP);
+        else newCap = bound(to, 0, MAX_VALID_CAP);
         raiseOracle.publish(updateType(k), a, newCap, cap);
         if (_executeAgent(raiseId, a, k)) ++agentRaises;
     }
@@ -320,7 +325,7 @@ contract CapsSystemHandler is Test {
         b.alphaBpsLimit = uint16(bound(alphaMax, 0, 10_000));
         b.cutBandBpsLimit = uint16(bound(bandMax, 0, 10_000));
         b.maxIncreaseBps = uint16(bound(increaseBps, 0, 10_000));
-        b.cooldown = uint40(bound(cooldown, 0, 3 days));
+        b.cooldown = uint40(bound(cooldown, 1, 3 days));
         vm.prank(actor);
         try rvm.setBounds(k, b) {
             ++boundsWrites;
@@ -443,7 +448,7 @@ contract CapsSystemHandler is Test {
     /// @dev min(entry.maxCap, 2^36 - 1), the max cap the RVM uses.
     function effectiveMaxCap(address a, IRvm.CapKind k) public view returns (uint256 c) {
         c = rvm.getKeyState(a, k).maxCap;
-        if (MAX_CAP < c) c = MAX_CAP;
+        if (MAX_VALID_CAP < c) c = MAX_VALID_CAP;
     }
 
     /// @dev The stored entry with its bps fields clamped down to the global limits of the kind.
@@ -505,9 +510,10 @@ contract CapsSystemHandler is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @dev Runs AgentHub.execute for one agentId and asset. On success, every cap the agent changed must be at
-    ///      most the effective max cap at that moment (CAP-INV-01).
+    ///      most the effective max cap at that moment (CAP-INV-01) and follow the rule computed from the state
+    ///      before the write (CAP-INV-15 to 19).
     function _executeAgent(uint256 agentId, address a, IRvm.CapKind k) internal returns (bool ok) {
-        uint256 before = liveCap(a, k);
+        RuleSnapshot memory r = _ruleSnapshot(a, k);
         IAgentHub.ActionData[] memory ad = new IAgentHub.ActionData[](1);
         ad[0].agentId = agentId;
         ad[0].markets = new address[](1);
@@ -517,7 +523,66 @@ contract CapsSystemHandler is Test {
         } catch { }
         if (!ok) return false;
         uint256 afterCap = liveCap(a, k);
-        if (afterCap != before && afterCap > effectiveMaxCap(a, k)) ghostAgentWriteAboveMaxCap = true;
+        if (afterCap == r.cap) return true;
+        if (afterCap > effectiveMaxCap(a, k)) ghostAgentWriteAboveMaxCap = true;
+        if (afterCap == 0) ghostAgentWroteZero = true;
+        (uint256 raiseId,) = agentIds(k);
+        if (agentId == raiseId) {
+            if (r.cap == 0 || afterCap <= r.cap || afterCap > r.raiseMax) ghostRaiseOutsideRule = true;
+            if (r.blocked) ghostRaiseWhileBlocked = true;
+        } else {
+            if (r.cap <= r.hi || afterCap < r.lo || afterCap > r.hi) ghostCutOutsideBand = true;
+            if (r.held) ghostCutDuringHold = true;
+        }
+    }
+
+    /// @dev Pre-write inputs of the rule, read from the Pool and the stored entry without the RVM math.
+    struct RuleSnapshot {
+        uint256 cap;
+        uint256 raiseMax; // min(D + L, C-bar, S)
+        uint256 lo;
+        uint256 hi;
+        bool blocked; // frozen or paused
+        bool held; // block.timestamp < holdUntil
+    }
+
+    /// @dev Recomputes the rule in whole tokens: D rounds up, the floor of L rounds up, the rest rounds down.
+    function _ruleSnapshot(address a, IRvm.CapKind k) internal view returns (RuleSnapshot memory r) {
+        r.cap = liveCap(a, k);
+        uint256 u = _unit(a);
+        uint256 d;
+        uint256 s = MAX_VALID_CAP;
+        if (k == IRvm.CapKind.BORROW) {
+            d = (_debtToken(a).totalSupply() + u - 1) / u;
+            (, uint256 supplyCap) = pool.getReserveCaps(a);
+            if (supplyCap != 0 && supplyCap < MAX_VALID_CAP) s = supplyCap;
+        } else {
+            // Normalized income is 1 ray in the mock, so the treasury adds its scaled amount.
+            uint256 treasury = pool.getReserveData(a).accruedToTreasury;
+            d = (IERC20(pool.getReserveData(a).aTokenAddress).totalSupply() + treasury + u - 1) / u;
+        }
+        if (d > type(uint128).max) d = type(uint128).max;
+        IRvm.RateLimitConfig memory e = clampedRateLimitConfig(a, k);
+        uint256 cBar = e.maxCap;
+        uint256 lMin = (uint256(e.maxHeadroom) + 24) / 25;
+        uint256 l = (d * e.alphaBps) / BPS;
+        if (l > e.maxHeadroom) l = e.maxHeadroom;
+        if (l < lMin) l = lMin;
+        r.raiseMax = _min3(d + l, cBar, s);
+        uint256 dl = d + l < s ? d + l : s;
+        if (dl < d) dl = d;
+        r.lo = dl < cBar ? dl : cBar;
+        r.hi = _min3(d + l + (l * e.cutBandBps) / BPS, cBar, s);
+        if (r.hi < r.lo) r.hi = r.lo;
+        r.blocked = pool.getPaused(a);
+        (,,,,,,,,, bool frozen) = pool.getReserveConfigurationData(a);
+        r.blocked = r.blocked || frozen;
+        r.held = block.timestamp < rvm.getKeyState(a, k).holdUntil;
+    }
+
+    function _min3(uint256 x, uint256 y, uint256 z) internal pure returns (uint256 m) {
+        m = x < y ? x : y;
+        if (z < m) m = z;
     }
 
     /// @dev CAP-INV-13: the written bps fields are inside the global limits. A retired entry is always allowed.
@@ -525,7 +590,10 @@ contract CapsSystemHandler is Test {
         IRvm.KeyState memory e = rvm.getKeyState(a, k);
         if (e.maxCap == 0) return;
         IRvm.Bounds memory b = rvm.getBounds(k);
-        if (e.alphaBps > b.alphaBpsLimit || e.cutBandBps > b.cutBandBpsLimit) ghostRateLimitConfigOutOfBounds = true;
+        if (
+            e.alphaBps > b.alphaBpsLimit || e.cutBandBps > b.cutBandBpsLimit || e.maxHeadroom == 0
+                || e.maxCap > (1 << 36) - 1
+        ) ghostRateLimitConfigOutOfBounds = true;
     }
 
     /// @dev After a successful non-owner write: no new key, and a maxCap or maxHeadroom raise within the relative
