@@ -20,11 +20,11 @@ import { MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
 /// @title CapsSystemBase
 /// @notice The Stage 1 system wired end to end on the mock Pool: the real AgentHub (behind an ERC1967 proxy,
 ///         owner the governance executor), the real `AaveBorrowCapAgent` and `AaveSupplyCapAgent`
-///         (aave-risk-agents), CapsRangeValidationModuleV3 and one CapsReducerOracle per kind. Four agentIds:
+///         (aave-risk-agents), CapsRangeValidationModuleV3 and one CapsReducerOracle for both kinds. Four agentIds:
 ///           borrow raise  - risk oracle MockRiskOracle (the rate limiter workflow), minimumDelay tau
-///           borrow cut    - risk oracle the BORROW CapsReducerOracle, minimumDelay 0, not permissioned
+///           borrow cut    - risk oracle the CapsReducerOracle, minimumDelay 0, not permissioned
 ///           supply raise  - as borrow raise, on the SUPPLY kind
-///           supply cut    - risk oracle the SUPPLY CapsReducerOracle, as borrow cut
+///           supply cut    - risk oracle the same CapsReducerOracle, as borrow cut
 ///         The agents write caps by delegatecall into MockCapsEngine, which sets the caps on the mock Pool.
 /// @dev AgentHub settings follow the assumed Certora settings, so the RVM never checks them
 ///     .
@@ -33,8 +33,7 @@ abstract contract CapsSystemBase is CapsTestBase {
 
     AgentHub internal hub;
     CapsRangeValidationModuleV3 internal rvm;
-    CapsReducerOracle internal reducer; // BORROW
-    CapsReducerOracle internal supplyReducer;
+    CapsReducerOracle internal reducer; // both kinds
     MockRiskOracle internal raiseOracle;
     MockCapsEngine internal engine;
 
@@ -59,9 +58,8 @@ abstract contract CapsSystemBase is CapsTestBase {
         rvm = new CapsRangeValidationModuleV3(
             governance, agentHub, address(pool), riskCouncil, BORROW_UPDATE_TYPE, SUPPLY_UPDATE_TYPE
         );
-        // One reducer per (Pool, kind).
-        reducer = new CapsReducerOracle(rvm, IRvm.CapKind.BORROW);
-        supplyReducer = new CapsReducerOracle(rvm, IRvm.CapKind.SUPPLY);
+        // One reducer per Pool, the kind comes from the update type.
+        reducer = new CapsReducerOracle(rvm);
         raiseOracle = new MockRiskOracle();
         engine = new MockCapsEngine(pool);
 
@@ -73,7 +71,7 @@ abstract contract CapsSystemBase is CapsTestBase {
         borrowRaiseId = _registerOnHub(address(borrowRaiseAgent), address(raiseOracle), BORROW_UPDATE_TYPE, TAU);
         borrowCutId = _registerOnHub(address(borrowCutAgent), address(reducer), BORROW_UPDATE_TYPE, 0);
         supplyRaiseId = _registerOnHub(address(supplyRaiseAgent), address(raiseOracle), SUPPLY_UPDATE_TYPE, TAU);
-        supplyCutId = _registerOnHub(address(supplyCutAgent), address(supplyReducer), SUPPLY_UPDATE_TYPE, 0);
+        supplyCutId = _registerOnHub(address(supplyCutAgent), address(reducer), SUPPLY_UPDATE_TYPE, 0);
 
         vm.startPrank(governance);
         rvm.setAgent(borrowRaiseId, IRvm.Direction.RAISE);
@@ -154,10 +152,6 @@ abstract contract CapsSystemBase is CapsTestBase {
 
     function _updateType(IRvm.CapKind kind) internal pure returns (string memory) {
         return kind == IRvm.CapKind.BORROW ? BORROW_UPDATE_TYPE : SUPPLY_UPDATE_TYPE;
-    }
-
-    function _reducer(IRvm.CapKind kind) internal view returns (CapsReducerOracle) {
-        return kind == IRvm.CapKind.BORROW ? reducer : supplyReducer;
     }
 
     function _actions(uint256 agentId, address asset) internal pure returns (IAgentHub.ActionData[] memory a) {

@@ -781,7 +781,7 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         assertEq(currentCap, 0);
         assertEq(newCap, 0);
         assertFalse(_cut(w, F1_CUT_FLOOR));
-        CapsReducerOracle reducer = new CapsReducerOracle(IRvm(address(rvm)), IRvm.CapKind.BORROW);
+        CapsReducerOracle reducer = new CapsReducerOracle(IRvm(address(rvm)));
         vm.expectRevert(abi.encodeWithSelector(ICapsReducerOracle.NoCutDue.selector, w));
         reducer.getLatestUpdateByParameterAndMarket(BORROW_UPDATE_TYPE, w);
         vm.expectRevert(abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, w, IRvm.CapKind.BORROW));

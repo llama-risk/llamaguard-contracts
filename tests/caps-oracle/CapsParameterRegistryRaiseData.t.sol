@@ -279,7 +279,13 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
     }
 
     function test_Registry_marketRvm_onlyUpdater_event() public {
-        IReg.MarketParams memory p = _defaultMarketParams(address(1));
+        // The registry checks RVM.POOL() == market, so the new RVM sits on the same Pool.
+        address newRvm = address(
+            new CapsRangeValidationModuleV3(
+                governance, agentHub, market, riskCouncil, BORROW_UPDATE_TYPE, SUPPLY_UPDATE_TYPE
+            )
+        );
+        IReg.MarketParams memory p = _defaultMarketParams(newRvm);
 
         vm.prank(attacker);
         vm.expectRevert(IReg.OnlyUpdater.selector);
@@ -293,6 +299,6 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         emit IReg.MarketParamsSet(market, p);
         vm.prank(riskCouncil);
         registry.setMarketParams(market, p);
-        assertEq(registry.getMarketParams(market).rvm, address(1));
+        assertEq(registry.getMarketParams(market).rvm, newRvm);
     }
 }

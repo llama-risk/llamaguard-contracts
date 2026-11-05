@@ -193,7 +193,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
 
     function _checkReducer(address a, IRvm.CapKind k) internal view {
         (bool due, uint256 cur, uint256 to) = rvm.previewCut(a, k);
-        try _reducer(k).getLatestUpdateByParameterAndMarket(handler.updateType(k), a) returns (
+        try reducer.getLatestUpdateByParameterAndMarket(handler.updateType(k), a) returns (
             IRiskOracle.RiskParameterUpdate memory u
         ) {
             assertTrue(due, "reducer returned a value while previewCut is false");
@@ -293,10 +293,9 @@ contract CapsSystemInvariantTest is CapsSystemBase {
                 _runCheckPath(assets[i], _kinds()[j]);
             }
         }
-        address[9] memory watched = [
+        address[8] memory watched = [
             address(rvm),
             address(reducer),
-            address(supplyReducer),
             address(pool),
             address(hub),
             handler.debtTokenOf(assets[0]),
@@ -318,7 +317,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         handler.validateAt(raiseId, a, cap, cap + 1);
         handler.validateAt(cutId, a, cap, cap > 1 ? cap - 1 : 1);
         if (_hasRateLimitConfig(a, k)) rvm.getReserveState(a, k);
-        try _reducer(k).getLatestUpdateByParameterAndMarket(handler.updateType(k), a) { } catch { }
+        try reducer.getLatestUpdateByParameterAndMarket(handler.updateType(k), a) { } catch { }
     }
 
     /// @dev A revert in any of these calls fails the invariant, so making the calls is the check. Extreme
@@ -416,9 +415,8 @@ contract CapsSystemInvariantTest is CapsSystemBase {
 
     function invariant_CAP_ACL_11_reducerLinkImmutable() public view {
         assertEq(address(reducer.RVM()), address(rvm));
-        assertEq(address(supplyReducer.RVM()), address(rvm));
-        assertEq(uint8(reducer.KIND()), uint8(IRvm.CapKind.BORROW));
-        assertEq(uint8(supplyReducer.KIND()), uint8(IRvm.CapKind.SUPPLY));
+        assertEq(reducer.BORROW_UPDATE_TYPE_HASH(), keccak256(bytes(BORROW_UPDATE_TYPE)));
+        assertEq(reducer.SUPPLY_UPDATE_TYPE_HASH(), keccak256(bytes(SUPPLY_UPDATE_TYPE)));
         assertEq(rvm.POOL(), address(pool));
         assertEq(rvm.AGENT_HUB(), agentHub);
     }
