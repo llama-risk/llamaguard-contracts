@@ -36,7 +36,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice Entry written by the owner or the Risk Council Safe. `maxCap` 0 retires the key.
     struct RateLimitConfig {
         uint64 maxCap; // hard maximum C-bar, whole tokens
-        uint64 maxHeadroom; // ceiling of L, whole tokens. Floor of L is maxHeadroom / 25
+        uint64 maxHeadroom; // ceiling of L, whole tokens. Floor of L is ceil(maxHeadroom / 25)
         uint16 alphaBps; // headroom target L as a share of usage D
         uint16 cutBandBps; // a cut needs headroom above (1 + band) * L
     }

@@ -279,7 +279,7 @@ contract CapsRangeValidationModuleV3InvariantTest is RvmTestBase {
         if (!_hasRateLimitConfig()) return;
         IRvm.ReserveState memory s = _state(w);
         uint256 maxHeadroom = _keyState(w).maxHeadroom;
-        assertGe(s.headroomTarget, maxHeadroom / 25, "L >= Lmin");
+        assertGe(s.headroomTarget, (maxHeadroom + 24) / 25, "L >= Lmin");
         assertLe(s.headroomTarget, maxHeadroom, "L <= Lmax");
     }
 
@@ -360,7 +360,7 @@ contract CapsRangeValidationModuleV3InvariantTest is RvmTestBase {
         uint256 d = s.usage;
         uint256 l = (d * alpha) / 10_000;
         if (l > k.maxHeadroom) l = k.maxHeadroom;
-        if (l < k.maxHeadroom / 25) l = k.maxHeadroom / 25;
+        l = _max(l, (uint256(k.maxHeadroom) + 24) / 25);
         assertEq(s.headroomTarget, l, "L from maxHeadroom and clamped alpha");
         assertEq(s.maxCap, maxCap, "maxCap the rule uses");
         assertEq(s.raiseCap, _min3(d + l, maxCap, s.supplyBound), "raise target");

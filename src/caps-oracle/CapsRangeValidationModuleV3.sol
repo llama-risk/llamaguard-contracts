@@ -22,12 +22,12 @@ import { IAaveCapAgent } from "./interfaces/IAaveCapAgent.sol";
  * @title CapsRangeValidationModuleV3
  * @notice Rate-limiter RVM for the borrow and supply caps of one Aave V3 Pool.
  * @dev Rule, in whole tokens, with alpha and band clamped to the global limits of the kind:
- *        L     = max(maxHeadroom / 25, min(maxHeadroom, alpha * D))
+ *        L     = max(ceil(maxHeadroom / 25), min(maxHeadroom, alpha * D))
  *        raise : not frozen or paused, cap < to <= min(D + L, C-bar, S)
  *        lo    = min(max(min(D + L, S), D), C-bar)
  *        hi    = max(min(D + (1 + band) * L, C-bar, S), lo)
  *        cut   : cap > hi, lo <= to <= hi, no active hold
- *      D rounds up, everything else rounds down. `validate` and the previews never revert on a rule failure.
+ *      D and the floor of L round up, everything else rounds down. `validate` and the previews never revert on a rule failure.
  */
 contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
@@ -37,7 +37,7 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
     /// @inheritdoc ICapsRangeValidationModule
     uint256 public constant MAX_HOLD_DURATION = 24 hours;
 
-    /// @dev Floor of L = maxHeadroom / MIN_HEADROOM_DIVISOR.
+    /// @dev Floor of L = ceilDiv(maxHeadroom, MIN_HEADROOM_DIVISOR), so L >= 1 when maxHeadroom > 0.
     uint256 internal constant MIN_HEADROOM_DIVISOR = 25;
 
     /// @dev Largest cap Aave stores, 36 bits. The borrow and supply limits are equal.
@@ -361,7 +361,7 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
         uint256 supplyBound = Math.min(s.supplyBound, MAX_CAP);
         uint256 maxCap = Math.min(k.maxCap, MAX_CAP);
         uint256 l = Math.max(
-            k.maxHeadroom / MIN_HEADROOM_DIVISOR,
+            Math.ceilDiv(k.maxHeadroom, MIN_HEADROOM_DIVISOR),
             Math.min(k.maxHeadroom, d.percentMulFloor(Math.min(k.alphaBps, b.alphaBpsLimit)))
         );
         uint256 dPlusL = d + l;

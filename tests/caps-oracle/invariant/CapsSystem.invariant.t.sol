@@ -229,7 +229,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
                 if (!_hasRateLimitConfig(a, k)) continue;
                 uint256 maxHeadroom = handler.clampedRateLimitConfig(a, k).maxHeadroom;
                 IRvm.ReserveState memory s = rvm.getReserveState(a, k);
-                assertGe(s.headroomTarget, maxHeadroom / 25, "L >= Lmin");
+                assertGe(s.headroomTarget, (maxHeadroom + 24) / 25, "L >= Lmin");
                 assertLe(s.headroomTarget, maxHeadroom, "L <= Lmax");
             }
         }
@@ -367,7 +367,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         IRvm.RateLimitConfig memory e = handler.clampedRateLimitConfig(a, k);
         IRvm.ReserveState memory s = rvm.getReserveState(a, k);
         uint256 d = s.usage;
-        uint256 l = _max(_min(e.maxHeadroom, (d * e.alphaBps) / 10_000), e.maxHeadroom / 25);
+        uint256 l = _max(_min(e.maxHeadroom, (d * e.alphaBps) / 10_000), (uint256(e.maxHeadroom) + 24) / 25);
         assertEq(s.headroomTarget, l, "L from clamped maxHeadroom and alpha");
         assertEq(s.raiseCap, _min(_min(d + l, e.maxCap), s.supplyBound), "raise target from clamped maxCap");
         uint256 lo = _min(_max(_min(d + l, s.supplyBound), d), e.maxCap);

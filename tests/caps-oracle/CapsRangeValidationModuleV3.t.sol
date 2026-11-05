@@ -104,7 +104,7 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
 
         uint256 l = (debt * alphaBps) / 10_000;
         if (l > maxHeadroom) l = maxHeadroom;
-        if (l < maxHeadroom / 25) l = maxHeadroom / 25;
+        l = _max(l, (uint256(maxHeadroom) + 24) / 25);
         uint256 s = supply == 0 ? MAX_AAVE_CAP : supply;
         uint256 bound_ = debt + l;
         if (maxCap < bound_) bound_ = maxCap;
@@ -188,7 +188,7 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
 
         uint256 l = (debt * ALPHA_BPS) / 10_000;
         if (l > MAX_HEADROOM) l = MAX_HEADROOM;
-        if (l < MAX_HEADROOM / 25) l = MAX_HEADROOM / 25;
+        l = _max(l, (uint256(MAX_HEADROOM) + 24) / 25);
         uint256 s = supply == 0 ? MAX_AAVE_CAP : supply;
         uint256 lo = _min(_max(_min(debt + l, s), debt), maxCap);
         uint256 hi = _max(_min(_min(debt + l + (l * cutBandBps) / 10_000, maxCap), s), lo);
@@ -1300,13 +1300,61 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         assertEq(_state(w).headroomTarget, 100);
     }
 
-    /// TODO(params): rounding direction. Placeholder: down.
-    function test_CAP_UNIT_07_minHeadroom_roundsDown() public {
+    function test_CAP_UNIT_07_minHeadroom_roundsUp() public {
         Fixture memory f = _f1();
         f.maxHeadroom = 510;
         f.debt = 100; // alpha * D = 10, below Lmin
         _useFixture(w, f, 1000);
-        assertEq(_state(w).headroomTarget, 20, "Lmin = 510 / 25 = 20.4 -> 20");
+        assertEq(_state(w).headroomTarget, 21, "Lmin = 510 / 25 = 20.4 -> 21");
+    }
+
+    /// Small maxHeadroom at D = 0: Lmin rounds up to 1, so the key can still raise and cut.
+    function test_CAP_UNIT_07_minHeadroom_smallMaxHeadroom_notStuck(uint64 maxHeadroom) public {
+        maxHeadroom = uint64(bound(maxHeadroom, 1, 24));
+        Fixture memory f = _f1();
+        f.maxHeadroom = maxHeadroom;
+        f.debt = 0;
+
+        _useFixture(w, f, 1200);
+        IRvm.ReserveState memory s = _state(w);
+        assertEq(s.headroomTarget, 1, "Lmin = 1");
+        assertEq(s.cutFloor, 1);
+        (bool due,, uint256 newCap) = _previewCut(w);
+        assertTrue(due, "cut possible");
+        assertEq(newCap, 1);
+        assertTrue(_cut(w, 1));
+
+        // Raise needs cap < raiseCap = 1, so check the bound and a raise from a reserve with D = 1.
+        assertEq(_state(w).raiseCap, 1);
+        f.debt = 1;
+        _useFixture(w, f, 1);
+        assertEq(_state(w).raiseCap, 2);
+        assertTrue(_raise(w, 2), "raise possible");
+    }
+
+    function test_CAP_UNIT_07_minHeadroom_zeroMaxHeadroom_noFloor() public {
+        Fixture memory f = _f1();
+        f.maxHeadroom = 0;
+        f.debt = 0;
+        _useFixture(w, f, 1200);
+        IRvm.ReserveState memory s = _state(w);
+        assertEq(s.headroomTarget, 0);
+        assertEq(s.raiseCap, 0);
+        assertEq(s.cutFloor, 0);
+        (bool due,,) = _previewCut(w);
+        assertFalse(due);
+    }
+
+    /// @dev Fuzz: with alpha * D below the floor, L equals ceilDiv(maxHeadroom, 25).
+    function test_CAP_UNIT_07_fuzz_minHeadroom_isCeilDiv(uint64 maxHeadroom) public {
+        maxHeadroom = uint64(bound(maxHeadroom, 0, 5_000_000));
+        Fixture memory f = _f1();
+        f.maxHeadroom = maxHeadroom;
+        f.maxCap = 20_000_000;
+        f.supply = 0;
+        f.debt = 0;
+        _useFixture(w, f, 1);
+        assertEq(_state(w).headroomTarget, (uint256(maxHeadroom) + 24) / 25, "Lmin == ceilDiv(maxHeadroom, 25)");
     }
 
     /// TODO(params): rounding direction. Placeholder: down.
