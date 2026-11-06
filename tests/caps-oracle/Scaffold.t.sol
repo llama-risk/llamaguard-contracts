@@ -105,7 +105,7 @@ contract ScaffoldTest is CapsTestBase {
         assertEq(l, F1_L);
         assertEq(d + l, F1_RAISE_BOUND);
         assertEq(d + l + l * CUT_CUT_BAND_BPS / 10_000, F1_CUT_TRIGGER);
-        assertEq(uint256(MAX_HEADROOM) / 25, F1_LMIN);
+        assertEq((uint256(MAX_HEADROOM) + 24) / 25, F1_LMIN);
         // F2: alpha * D = 1,000 clamps to maxHeadroom = 500
         assertEq(F2_DEBT + F2_L, F2_RAISE_BOUND);
     }
