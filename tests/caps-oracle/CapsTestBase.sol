@@ -60,8 +60,6 @@ abstract contract CapsTestBase is Test {
     uint16 internal constant MARGIN_BPS = 100;
     /// TODO(params): raise margin floor, whole tokens. Placeholder: 1 token.
     uint64 internal constant MIN_MARGIN_TOKENS = 1;
-    /// TODO(params): max base fee in gwei. Placeholder: 50 gwei.
-    uint64 internal constant MAX_BASE_FEE_GWEI = 50;
     /// TODO(params): tau, raise agentId `minimumDelay`, seconds. Placeholder: 1800.
     uint256 internal constant TAU = 1800;
     /// TODO(params): `expirationPeriod` of the raise agentId, seconds. Placeholder: 86400.

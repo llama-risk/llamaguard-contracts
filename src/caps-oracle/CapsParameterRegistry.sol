@@ -7,9 +7,9 @@ import { ICapsParameterRegistry } from "./interfaces/ICapsParameterRegistry.sol"
 import { ICapsRangeValidationModule } from "./interfaces/ICapsRangeValidationModule.sol";
 
 /// @title CapsParameterRegistry
-/// @notice Parameters of the offchain rate limiter workflow: the market list, the work list per market, the max
-///         base fee per market, and triggerBps, the raise margin and the `enabled` switch per (market, asset, kind)
-///         with a market-wide default. Nothing onchain reads this contract for a cap decision: the RVM has no
+/// @notice Parameters of the offchain rate limiter workflow: the market list, the work list per market, and
+///         triggerBps, the raise margin and the `enabled` switch per (market, asset, kind) with a market-wide
+///         default. Nothing onchain reads this contract for a cap decision: the RVM has no
 ///         pointer to it, and the hold lives in the RVM.
 /// @dev Access model of PTParameterRegistry: `Ownable2Step` owner (LlamaRisk Safe) appoints the updater, and the
 ///      updater (Risk Council Safe at deploy) writes every parameter. `kind` uses the RVM
@@ -157,7 +157,7 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
 
     /// @inheritdoc ICapsParameterRegistry
     /// @dev Reverts MarketNotFound for an unknown market, so a
-    ///      reader cannot mistake a missing market for one with the gas gate off and every default at 0.
+    ///      reader cannot mistake a missing market for one with every default at 0.
     function getMarketParams(address market) external view returns (MarketParams memory) {
         _requireMarket(market);
         return _marketParams[market];

@@ -30,7 +30,6 @@ interface ICapsParameterRegistry {
 
     /// @notice Per market (Aave Pool).
     struct MarketParams {
-        uint64 maxBaseFeeGwei; // raises skipped while base fee is above it. 0 = no gas gate
         WorkflowParams defaultParams; // market-wide default for every key
         address rvm; // RVM of the market, read by the views only. 0 = not set
     }
@@ -110,11 +109,11 @@ interface ICapsParameterRegistry {
     // UPDATER
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Add a market with its max base fee, defaults and RVM. Caller: updater.
+    /// @notice Add a market with its defaults and RVM. Caller: updater.
     /// @dev Reverts MarketAlreadyExists, ZeroAddress, InvalidBps, InvalidRvm (non-zero RVM with POOL() != market).
     function addMarket(address market, MarketParams calldata params) external;
 
-    /// @notice Change the max base fee, defaults and RVM of a market. Caller: updater.
+    /// @notice Change the defaults and RVM of a market. Caller: updater.
     /// @dev Reverts MarketNotFound, InvalidBps, InvalidRvm. Same bounds as addMarket.
     function setMarketParams(address market, MarketParams calldata params) external;
 
