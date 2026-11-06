@@ -392,7 +392,6 @@ contract CapsSystemHandler is Test {
             } catch { }
         } else if (op == 2) {
             IReg.MarketParams memory p;
-            p.maxBaseFeeGwei = uint64(bound(v2, 0, 1000));
             p.defaultParams = IReg.WorkflowParams({
                 enabled: v1 % 2 == 0,
                 triggerBps: uint16(bound(v1 >> 8, 0, 10_000)),

@@ -20,7 +20,6 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
     address internal market;
 
     function _defaultMarketParams(address rvm_) internal pure returns (IReg.MarketParams memory p) {
-        p.maxBaseFeeGwei = MAX_BASE_FEE_GWEI;
         p.defaultParams = IReg.WorkflowParams({
             enabled: true, triggerBps: THETA_BPS, marginBps: MARGIN_BPS, minMarginTokens: MIN_MARGIN_TOKENS
         });

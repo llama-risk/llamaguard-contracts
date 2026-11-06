@@ -32,8 +32,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
 
         registry = new CapsParameterRegistry(llamaRiskSafe, riskCouncil);
         IReg.MarketParams memory p;
-        // TODO(params): theta, margin, margin floor and max base fee are placeholders.
-        p.maxBaseFeeGwei = MAX_BASE_FEE_GWEI;
+        // TODO(params): theta, margin and margin floor are placeholders.
         p.defaultParams = IReg.WorkflowParams({
             enabled: true, triggerBps: THETA_BPS, marginBps: MARGIN_BPS, minMarginTokens: MIN_MARGIN_TOKENS
         });
