@@ -28,10 +28,9 @@ abstract contract RegistryTestBase is CapsTestBase {
         registry.addMarket(market, _marketParams());
     }
 
-    /// TODO(params): theta, margin, margin floor and max base fee are placeholders
+    /// TODO(params): theta, margin and margin floor are placeholders
     /// (CapsTestBase constants).
     function _marketParams() internal pure returns (IReg.MarketParams memory p) {
-        p.maxBaseFeeGwei = MAX_BASE_FEE_GWEI;
         p.defaultParams = IReg.WorkflowParams({
             enabled: true, triggerBps: THETA_BPS, marginBps: MARGIN_BPS, minMarginTokens: MIN_MARGIN_TOKENS
         });
@@ -296,7 +295,6 @@ contract CapsParameterRegistryTest is RegistryTestBase {
     function test_Registry_addMarket_storesAndLists() public {
         address prime = makeAddr("primePool");
         IReg.MarketParams memory mp = _marketParams();
-        mp.maxBaseFeeGwei = 0; // 0 = no gas gate
         address primeRvm = _rvmFor(prime);
         mp.rvm = primeRvm;
         vm.expectEmit(address(registry));
@@ -308,7 +306,6 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         assertEq(markets.length, 2);
         assertEq(markets[1], prime);
         IReg.MarketParams memory got = registry.getMarketParams(prime);
-        assertEq(got.maxBaseFeeGwei, 0);
         assertEq(got.defaultParams.triggerBps, THETA_BPS);
         assertEq(got.rvm, primeRvm, "RVM per market");
         assertEq(registry.getMarketParams(market).rvm, address(0), "the other market keeps its own (unset) RVM");
@@ -357,13 +354,11 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         registry.setMarketParams(market, mp);
 
         mp.defaultParams.triggerBps = 3000;
-        mp.maxBaseFeeGwei = 80;
         address newRvm = _rvmFor(market);
         mp.rvm = newRvm;
         vm.expectEmit(address(registry));
         emit IReg.MarketParamsSet(market, mp);
         registry.setMarketParams(market, mp);
-        assertEq(registry.getMarketParams(market).maxBaseFeeGwei, 80);
         assertEq(registry.getMarketParams(market).rvm, newRvm);
 
         // address(0) is accepted and means "not set".
@@ -672,9 +667,8 @@ contract RegistryHandler is Test {
         delete _ghostOverride[k];
     }
 
-    function setMarketDefaultParams(bool enabled, uint16 trigger, uint16 margin, uint64 floor, uint64 gas) external {
+    function setMarketDefaultParams(bool enabled, uint16 trigger, uint16 margin, uint64 floor) external {
         IReg.MarketParams memory mp;
-        mp.maxBaseFeeGwei = gas;
         mp.defaultParams = IReg.WorkflowParams({
             enabled: enabled,
             triggerBps: uint16(bound(trigger, 1, 10_000)),
