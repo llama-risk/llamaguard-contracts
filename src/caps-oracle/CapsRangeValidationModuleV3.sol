@@ -30,6 +30,14 @@ import { IAaveCapAgent } from "./interfaces/IAaveCapAgent.sol";
  *      L = headroomTarget, D = usage, S = supplyBound, C-bar = maxCap, to = the new cap.
  *      D and the floor of L round up, everything else rounds down. `validate` and the previews never revert
  *      on a rule failure.
+ *      Not enforced here, by design:
+ *      - the time between two raises: the raise agentId's AgentHub `minimumDelay` sets it (30 minutes), written
+ *        by the agent admin (the Aave Protocol Guardian). Registering a second raise agentId is an owner call.
+ *      - the cap's history: a Risk Steward or AIP cap write is a new starting point, so a decrease below D + L
+ *        can be raised back and an increase above hi cut back, unless maxCap or a hold changes with it.
+ *      A hold also blocks the cut down to maxCap, so a Risk Steward raise above maxCap under a hold stays until
+ *      the hold ends, leaving time to fit maxCap to it. Only the Risk Council Safe writes holds, for at most
+ *      MAX_HOLD_DURATION each.
  */
 contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
