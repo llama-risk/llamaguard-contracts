@@ -81,8 +81,10 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
         uint256 oldCap = config.getBorrowCap();
         if (oldCap == 0) revert BorrowCapNotSet(asset);
 
-        // 3. newCap = live cap + amount in whole tokens (rounded up) + extraCapTokens, at most maxNewCap.
-        uint256 newCap = oldCap + Math.ceilDiv(amount, 10 ** config.getDecimals()) + extraCapTokens;
+        // 3. newCap = the larger of the live cap and the debt, plus the amount and extraCapTokens, at most
+        //    maxNewCap. Whole tokens, the debt and the amount rounded up. Starting from the debt keeps room for
+        //    the amount when accrued interest has pushed the debt above the cap.
+        uint256 newCap = _newCap(asset, oldCap, config.getDecimals(), amount, extraCapTokens);
         if (newCap > maxNewCap) revert NewCapAboveMax(newCap, maxNewCap);
 
         // 4. At most the RVM max cap, so a later cut never sets the cap below the debt. 0: no rate limit entry.
@@ -107,5 +109,23 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
         if (balanceAfter != balanceBefore) revert SafeBalanceChanged(balanceBefore, balanceAfter);
 
         emit CapRaisedAndBorrowed(asset, onBehalfOf, amount, oldCap, newCap);
+    }
+
+    /// @dev max(live cap, debt) + amount + extraCapTokens, in whole tokens. The debt and the amount round up.
+    function _newCap(
+        address asset,
+        uint256 oldCap,
+        uint256 decimals,
+        uint256 amount,
+        uint256 extraCapTokens
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 unit = 10 ** decimals;
+        uint256 debt =
+            Math.ceilDiv(IERC20(IPool(POOL).getReserveData(asset).variableDebtTokenAddress).totalSupply(), unit);
+        return Math.max(oldCap, debt) + Math.ceilDiv(amount, unit) + extraCapTokens;
     }
 }

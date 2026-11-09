@@ -6,6 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AaveV3Ethereum, AaveV3EthereumAssets } from "aave-address-book/AaveV3Ethereum.sol";
 import { IPool } from "aave-v3-origin/src/contracts/interfaces/IPool.sol";
+import { IPoolConfigurator } from "aave-v3-origin/src/contracts/interfaces/IPoolConfigurator.sol";
 import { ICreditDelegationToken } from "aave-v3-origin/src/contracts/interfaces/ICreditDelegationToken.sol";
 import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {
@@ -130,6 +131,22 @@ contract CapsForkEthereumCore is Test {
         assertEq(_borrowCap(USDC), capAfterFirst, "cap unchanged");
         assertEq(IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower), debtAfterFirst, "debt unchanged");
         assertEq(IERC20(USDC).balanceOf(borrower), 10_000e6, "no second transfer");
+    }
+
+    /// Accrued interest above the cap: the cap is set to the debt, then 30 days of interest push the debt above
+    /// it. The new cap starts from the debt, so the borrow fits.
+    function test_fork_raiseCapAndBorrow_debtAboveCap_startsFromDebt() public onlyForked {
+        address vToken = AaveV3EthereumAssets.USDC_V_TOKEN;
+        uint256 debt = Math.ceilDiv(IERC20(vToken).totalSupply(), 1e6);
+        vm.prank(AaveV3Ethereum.ACL_ADMIN);
+        IPoolConfigurator(address(AaveV3Ethereum.POOL_CONFIGURATOR)).setBorrowCap(USDC, debt);
+        vm.warp(block.timestamp + 30 days);
+        uint256 debtNow = Math.ceilDiv(IERC20(vToken).totalSupply(), 1e6);
+        assertGt(debtNow, debt, "interest pushed the debt above the cap");
+
+        _raise(10_000e6, 0);
+        assertEq(_borrowCap(USDC), debtNow + 10_000, "new cap = debt + amount");
+        assertEq(IERC20(USDC).balanceOf(borrower), 10_000e6, "borrower got the tokens");
     }
 
     /// The live RVM borrow maxCap bounds the forwarder: 1 token below the new cap reverts, at it passes.

@@ -328,6 +328,24 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
     }
 
+    /// Accrued interest pushed the debt above the cap: 1,000,500.000001 USDC of debt against a 1,000,000 cap.
+    /// The new cap starts from the debt rounded up (1,000,501), so the 5,000 borrow fits:
+    /// 1,000,501 + 5,000 + 10 = 1,005,511. Starting from the cap (1,005,010) the borrow would exceed it.
+    function test_raiseCapAndBorrow_debtAboveCap_startsFromDebt() public {
+        _setDebt(address(usdc), 1_000_500, 1);
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6, 10, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_511);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+    }
+
+    /// Debt below the cap: the new cap still starts from the cap.
+    function test_raiseCapAndBorrow_debtBelowCap_startsFromCap() public {
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6, 0, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5000);
+    }
+
     /// An asset with no rate limit entry (maxCap 0) has no RVM bound.
     function test_raiseCapAndBorrow_noRvmEntry_noMaxCapBound() public {
         _delegate(address(usdc), 5000e6);
@@ -428,14 +446,23 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(steward.borrowCapLastUpdated(address(usdc)), 0, "steward timer rolled back");
     }
 
-    /// CAP-ST-31: the borrow hits the Aave borrow cap (debt moved up after signing and no extra): reverts.
+    /// CAP-ST-31: the borrow hits the Aave borrow cap: reverts. The new cap starts from the debt, so this takes
+    /// Aave's own rounding: debt of exactly 1,000,000 USDC at a borrow index other than 1 ray, no extraCapTokens.
+    /// The scaled sum rounds the new debt to 1,005,000.000001 USDC, 1 unit above the new cap of 1,005,000.
+    /// One extra cap token covers it.
     function test_CAP_ST_31_raiseCapAndBorrow_aaveCapCheckFails_revertsAll() public {
-        // Debt sits 1 unit above the live cap, so live cap + ceil(amount) cannot fit debt + amount.
-        _setDebt(address(usdc), LIVE_CAP, 1);
+        pool.setIndex(address(usdc), 1_039_061_234_472_907_871_979_912_753);
+        pool.setScaledDebt(address(usdc), 962_407_187_202);
+        assertEq(_debtToken(address(usdc)).totalSupply(), 1_000_000e6, "debt exactly on whole tokens");
         _delegate(address(usdc), 5000e6);
+
         vm.expectRevert(MockPoolV3.BorrowCapExceeded.selector);
         _run(address(usdc), 5000e6, 0, 2_000_000);
         assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+
+        _run(address(usdc), 5000e6, 1, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_001);
     }
 
     /// CAP-ST-31: the transfer to the borrower fails (returns false, as for a blocklisted borrower).
@@ -571,8 +598,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     /// CAP-ACL-16: in the Safe's context raiseCapAndBorrow calls only POOL.getConfiguration, RISK_STEWARD.updateCaps
     /// for the given asset, POOL.borrow with onBehalfOf = borrower and asset.transfer(borrower, amount).
     /// The interface step 7 also needs asset.balanceOf(Safe) (twice), the transfer helper checks the asset has
-    /// code, and the maxCap bound reads RVM.getKeyState(asset, BORROW); CAP-ACL-16 lists four calls. These
-    /// read-only calls are allowed here.
+    /// code, the maxCap bound reads RVM.getKeyState(asset, BORROW), and the debt is read with
+    /// POOL.getReserveData(asset) and the debt token's totalSupply; CAP-ACL-16 lists four calls. These read-only
+    /// calls are allowed here.
     function test_CAP_ACL_16_raiseCapAndBorrow_onlyExpectedCalls() public {
         uint256 amount = 5000e6;
         _delegate(address(usdc), amount);
@@ -587,7 +615,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         uint256 nBorrow;
         uint256 nTransfer;
         uint256 nBalance;
-        uint256 nKeyState;
+        uint256 nReads; // RVM.getKeyState, POOL.getReserveData, debt token totalSupply
         for (uint256 i = 0; i < acc.length; i++) {
             Vm.AccountAccess memory a = acc[i];
             bytes4 sel = a.data.length >= 4 ? bytes4(a.data) : bytes4(0);
@@ -601,6 +629,10 @@ contract CapsBorrowForwarderTest is CapsTestBase {
             }
             if (a.accessor != riskCouncil) continue;
             if (a.kind == Vm.AccountAccessKind.Resume) continue;
+            if (_isExpectedRead(a)) {
+                nReads++;
+                continue;
+            }
 
             if (a.kind == Vm.AccountAccessKind.Extcodesize) {
                 // The transfer helper checks the asset; solc checks the Pool and Steward before calls with no
@@ -620,9 +652,6 @@ contract CapsBorrowForwarderTest is CapsTestBase {
                 } else {
                     revert("unexpected Pool call");
                 }
-            } else if (a.account == address(capsRvm)) {
-                assertEq(a.data, abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)));
-                nKeyState++;
             } else if (a.account == address(steward)) {
                 assertEq(sel, MockRiskSteward.updateCaps.selector, "unexpected Steward call");
                 IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
@@ -651,7 +680,24 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(nBorrow, 1, "one borrow");
         assertEq(nTransfer, 1, "one transfer");
         assertEq(nBalance, 2, "two balance reads");
-        assertEq(nKeyState, 1, "one RVM key read");
+        assertEq(nReads, 3, "one RVM key read, one getReserveData, one debt totalSupply");
+    }
+
+    /// @dev CAP-ACL-16 read-only calls, with their exact calldata: POOL.getReserveData and the debt token's
+    ///      totalSupply for the debt, RVM.getKeyState for the maxCap bound. Any other call to those accounts is
+    ///      left to the caller's checks.
+    function _isExpectedRead(Vm.AccountAccess memory a) internal view returns (bool) {
+        bytes32 data = keccak256(a.data);
+        if (a.account == address(pool)) {
+            return data == keccak256(abi.encodeCall(MockPoolV3.getReserveData, (address(usdc))));
+        }
+        if (a.account == address(_debtToken(address(usdc)))) {
+            return data == keccak256(abi.encodeCall(IERC20.totalSupply, ()));
+        }
+        if (a.account == address(capsRvm)) {
+            return data == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)));
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

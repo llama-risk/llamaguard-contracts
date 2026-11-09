@@ -64,6 +64,8 @@ interface ICapsBorrowForwarder {
     /**
      * @notice Raise the borrow cap, borrow `amount` with the debt on `onBehalfOf`, and send the tokens to it.
      * @dev Delegatecall from the Risk Council Safe only. The borrower must have delegated credit to the Safe.
+     *      The new cap is max(live cap, debt) + amount + extraCapTokens in whole tokens, the debt and the amount
+     *      rounded up, so accrued interest above the cap cannot make the borrow fail.
      *      The new cap stays within the asset's RVM borrow `maxCap` when the asset has a rate limit entry,
      *      so a later cut never sets the cap below the debt.
      *      Also reverts on a failed token transfer and on any Risk Steward or Pool revert.
