@@ -11,9 +11,10 @@ import { ICapsRangeValidationModule } from "./interfaces/ICapsRangeValidationMod
 ///         triggerBps, the raise margin and the `enabled` switch per (market, asset, kind) with a market-wide
 ///         default. Nothing onchain reads this contract for a cap decision: the RVM has no
 ///         pointer to it, and the hold lives in the RVM.
-/// @dev Access model of PTParameterRegistry: `Ownable2Step` owner (LlamaRisk Safe) appoints the updater, and the
-///      updater (Risk Council Safe at deploy) writes every parameter. `kind` uses the RVM
-///      numbering (0 = BORROW, 1 = SUPPLY). Any non-zero asset address can be added.
+/// @dev Access model of PTParameterRegistry, with the same roles as the live PT registries: `Ownable2Step`
+///      owner (Aave governance executor) appoints the updater, and the updater (LlamaRisk Safe) writes every
+///      parameter. `kind` uses the RVM numbering (0 = BORROW, 1 = SUPPLY). Any non-zero asset address can be
+///      added.
 ///      The RVM interface is imported for the ABI of the RVM reads in `getReservesRaiseData`, which reads the
 ///      market's `MarketParams.rvm` (one RVM per Pool) through the keyed raise preview. The
 ///      registry does not read AgentHub. The asset-list mismatch check runs in the monitoring stack.
@@ -40,8 +41,8 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
         _;
     }
 
-    /// @param owner_ registry owner (LlamaRisk Safe), `Ownable2Step`
-    /// @param updater_ parameter writer (Risk Council Safe at deploy)
+    /// @param owner_ registry owner (Aave governance executor), `Ownable2Step`
+    /// @param updater_ parameter writer (LlamaRisk Safe)
     constructor(address owner_, address updater_) Ownable(owner_) {
         if (updater_ == address(0)) revert ZeroAddress();
         updater = updater_;

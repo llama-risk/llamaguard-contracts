@@ -11,8 +11,8 @@ import { CapsReducerOracle } from "../../src/caps-oracle/CapsReducerOracle.sol";
 import { ICapsParameterRegistry as IReg } from "../../src/caps-oracle/interfaces/ICapsParameterRegistry.sol";
 import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
-/// @notice Shared registry setup: owner LlamaRisk Safe, updater Risk Council Safe, one market
-///         (the mock Core Pool) with the default parameters.
+/// @notice Shared registry setup: owner Aave governance executor, updater LlamaRisk Safe (as on the
+///         PT registries), one market (the mock Core Pool) with the default parameters.
 abstract contract RegistryTestBase is CapsTestBase {
     uint8 internal constant BORROW = 0;
     uint8 internal constant SUPPLY = 1;
@@ -23,8 +23,8 @@ abstract contract RegistryTestBase is CapsTestBase {
     function setUp() public virtual override {
         super.setUp();
         market = address(pool);
-        registry = new CapsParameterRegistry(llamaRiskSafe, riskCouncil);
-        vm.prank(riskCouncil);
+        registry = new CapsParameterRegistry(governance, llamaRiskSafe);
+        vm.prank(llamaRiskSafe);
         registry.addMarket(market, _marketParams());
     }
 
@@ -50,7 +50,7 @@ abstract contract RegistryTestBase is CapsTestBase {
     }
 
     function _add(address asset, uint8 kind, IReg.ReserveOverride memory o) internal {
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.addReserve(market, asset, kind, o);
     }
 }
@@ -83,7 +83,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
         o.minMarginTokens = 5;
         o.marginBps = 0;
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setReserveOverride(market, address(weth), BORROW, o);
         p = registry.getEffectiveParams(market, address(weth), BORROW);
         assertEq(p.marginBps, MARGIN_BPS, "margin back to default");
@@ -93,7 +93,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
     function test_CAP_ST_32_enabledOverride_onOffDefault() public {
         _add(address(weth), BORROW, _noOverride());
 
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.setEnabled(market, address(weth), BORROW, IReg.EnabledOverride.OFF);
         assertFalse(registry.getEffectiveParams(market, address(weth), BORROW).enabled, "OFF");
 
@@ -114,7 +114,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
         IReg.MarketParams memory mp = _marketParams();
         mp.defaultParams.triggerBps = 2500;
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setMarketParams(market, mp);
 
         assertEq(registry.getEffectiveParams(market, address(weth), BORROW).triggerBps, 1500, "override kept");
@@ -153,7 +153,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         _add(address(weth), BORROW, _noOverride());
         _add(address(weth), SUPPLY, _noOverride());
 
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setReserveOverride(market, address(weth), BORROW, _override(1500));
 
         assertEq(registry.getEffectiveParams(market, address(weth), BORROW).triggerBps, 1500);
@@ -165,7 +165,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         _add(address(weth), SUPPLY, _override(1200));
         _add(address(usdc), BORROW, _override(1100));
 
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.setEnabled(market, address(weth), SUPPLY, IReg.EnabledOverride.OFF);
         registry.removeReserve(market, address(weth), BORROW);
         vm.stopPrank();
@@ -181,7 +181,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_CAP_ST_33_sameAssetTwoMarkets_isolated() public {
         address prime = makeAddr("primePool");
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.addMarket(prime, _marketParams());
         registry.addReserve(market, address(weth), BORROW, _noOverride());
         registry.addReserve(prime, address(weth), BORROW, _noOverride());
@@ -194,7 +194,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_CAP_ST_33_removeThenReAdd_startsClean() public {
         _add(address(weth), BORROW, _override(1500));
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.setEnabled(market, address(weth), BORROW, IReg.EnabledOverride.OFF);
         registry.removeReserve(market, address(weth), BORROW);
         registry.addReserve(market, address(weth), BORROW, _noOverride());
@@ -211,7 +211,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_CAP_ACL_14_registry_unauthorised_reverts() public {
         _add(address(weth), BORROW, _noOverride());
-        address[2] memory callers = [attacker, llamaRiskSafe]; // the owner is not the updater either
+        address[2] memory callers = [attacker, governance]; // the owner is not the updater either
         for (uint256 i = 0; i < callers.length; i++) {
             vm.startPrank(callers[i]);
             vm.expectRevert(IReg.OnlyUpdater.selector);
@@ -235,20 +235,20 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
         registry.setUpdater(attacker);
-        vm.prank(riskCouncil);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, riskCouncil));
-        registry.setUpdater(riskCouncil);
+        vm.prank(llamaRiskSafe);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, llamaRiskSafe));
+        registry.setUpdater(llamaRiskSafe);
     }
 
     function test_CAP_ACL_14_ownerSetsUpdater_succeeds() public {
         vm.expectEmit(address(registry));
-        emit IReg.UpdaterChanged(riskCouncil, updater);
-        vm.prank(llamaRiskSafe);
+        emit IReg.UpdaterChanged(llamaRiskSafe, updater);
+        vm.prank(governance);
         registry.setUpdater(updater);
         assertEq(registry.updater(), updater);
 
         // The old updater lost the role, the new one has it.
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         vm.expectRevert(IReg.OnlyUpdater.selector);
         registry.setEnabled(market, address(weth), BORROW, IReg.EnabledOverride.OFF);
         vm.prank(updater);
@@ -257,33 +257,34 @@ contract CapsParameterRegistryTest is RegistryTestBase {
     }
 
     function test_CAP_ACL_14_setUpdater_zero_reverts() public {
-        vm.prank(llamaRiskSafe);
+        vm.prank(governance);
         vm.expectRevert(IReg.ZeroAddress.selector);
         registry.setUpdater(address(0));
     }
 
     function test_CAP_ACL_14_constructor_rolesSet() public {
-        assertEq(registry.owner(), llamaRiskSafe);
-        assertEq(registry.updater(), riskCouncil, "updater = Risk Council Safe at deploy");
+        assertEq(registry.owner(), governance);
+        assertEq(registry.updater(), llamaRiskSafe, "updater = LlamaRisk Safe");
         vm.expectRevert(IReg.ZeroAddress.selector);
-        new CapsParameterRegistry(llamaRiskSafe, address(0));
+        new CapsParameterRegistry(governance, address(0));
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
-        new CapsParameterRegistry(address(0), riskCouncil);
+        new CapsParameterRegistry(address(0), llamaRiskSafe);
     }
 
     function test_CAP_ACL_14_ownership_twoStep() public {
-        vm.prank(llamaRiskSafe);
-        registry.transferOwnership(governance);
-        assertEq(registry.owner(), llamaRiskSafe, "pending only");
+        address newOwner = makeAddr("newOwner");
+        vm.prank(governance);
+        registry.transferOwnership(newOwner);
+        assertEq(registry.owner(), governance, "pending only");
 
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
         registry.acceptOwnership();
 
-        vm.prank(governance);
+        vm.prank(newOwner);
         registry.acceptOwnership();
-        assertEq(registry.owner(), governance);
-        vm.prank(governance);
+        assertEq(registry.owner(), newOwner);
+        vm.prank(newOwner);
         registry.setUpdater(updater);
         assertEq(registry.updater(), updater);
     }
@@ -299,7 +300,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         mp.rvm = primeRvm;
         vm.expectEmit(address(registry));
         emit IReg.MarketAdded(prime, mp);
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.addMarket(prime, mp);
 
         address[] memory markets = registry.getMarkets();
@@ -314,7 +315,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_Registry_addMarket_invalid_reverts() public {
         IReg.MarketParams memory mp = _marketParams();
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
 
         vm.expectRevert(IReg.ZeroAddress.selector);
         registry.addMarket(address(0), mp);
@@ -344,7 +345,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_Registry_setMarketParams_unknownOrInvalid_reverts() public {
         address prime = makeAddr("primePool");
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectRevert(abi.encodeWithSelector(IReg.MarketNotFound.selector, prime));
         registry.setMarketParams(prime, _marketParams());
 
@@ -373,7 +374,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         IReg.MarketParams memory mp = _marketParams();
         mp.rvm = _rvmFor(market); // serves the other market
         vm.expectRevert(abi.encodeWithSelector(IReg.InvalidRvm.selector, mp.rvm));
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.addMarket(prime, mp);
     }
 
@@ -381,14 +382,14 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         IReg.MarketParams memory mp = _marketParams();
         mp.rvm = _rvmFor(makeAddr("primePool"));
         vm.expectRevert(abi.encodeWithSelector(IReg.InvalidRvm.selector, mp.rvm));
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setMarketParams(market, mp);
     }
 
     function test_Registry_marketParams_rvmEoa_reverts() public {
         IReg.MarketParams memory mp = _marketParams();
         mp.rvm = makeAddr("eoaRvm"); // no code: the POOL() call fails to decode
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectRevert();
         registry.addMarket(makeAddr("primePool"), mp);
         vm.expectRevert();
@@ -400,14 +401,14 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         address prime = makeAddr("primePool");
         IReg.MarketParams memory mp = _marketParams();
         mp.rvm = address(0);
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.addMarket(prime, mp);
         assertEq(registry.getMarketParams(prime).rvm, address(0));
     }
 
     function test_Registry_removeMarket_needsEmptyWorkList() public {
         _add(address(weth), BORROW, _noOverride());
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectRevert(abi.encodeWithSelector(IReg.MarketNotEmpty.selector, market));
         registry.removeMarket(market);
 
@@ -453,7 +454,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_Registry_addReserve_invalid_reverts() public {
         address prime = makeAddr("primePool");
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectRevert(abi.encodeWithSelector(IReg.MarketNotFound.selector, prime));
         registry.addReserve(prime, address(weth), BORROW, _noOverride());
 
@@ -478,7 +479,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
     }
 
     function test_Registry_keyWrites_unlistedOrBadKind_revert() public {
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectRevert(abi.encodeWithSelector(IReg.ReserveNotFound.selector, market, address(weth), BORROW));
         registry.setReserveOverride(market, address(weth), BORROW, _override(1500));
         vm.expectRevert(abi.encodeWithSelector(IReg.ReserveNotFound.selector, market, address(weth), BORROW));
@@ -496,7 +497,7 @@ contract CapsParameterRegistryTest is RegistryTestBase {
 
     function test_Registry_keyWrites_emit() public {
         _add(address(weth), BORROW, _noOverride());
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         vm.expectEmit(address(registry));
         emit IReg.ReserveOverrideSet(market, address(weth), BORROW, _override(1500));
         registry.setReserveOverride(market, address(weth), BORROW, _override(1500));
@@ -712,7 +713,7 @@ contract CapsParameterRegistryInvariantTest is RegistryTestBase {
         assets[0] = address(weth);
         assets[1] = address(usdc);
         assets[2] = address(wbtc);
-        handler = new RegistryHandler(registry, riskCouncil, market, assets, _marketParams().defaultParams);
+        handler = new RegistryHandler(registry, llamaRiskSafe, market, assets, _marketParams().defaultParams);
 
         rvm = new MockCapsRvm();
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, 1200, F1_CUT_FLOOR);
@@ -769,7 +770,7 @@ contract CapsParameterRegistryIndependenceTest is RegistryTestBase {
         rvm.setRateLimitConfig(address(weth), IRvm.CapKind.BORROW, _rateLimitConfigOf(_f1()));
 
         vm.record();
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.addReserve(market, address(weth), BORROW, _noOverride());
         registry.setEnabled(market, address(weth), BORROW, IReg.EnabledOverride.OFF); // enabled false
         IReg.MarketParams memory mp = _marketParams();
