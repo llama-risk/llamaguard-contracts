@@ -62,8 +62,9 @@ abstract contract CapsTestBase is Test {
     uint64 internal constant MIN_MARGIN_TOKENS = 1;
     /// TODO(params): tau, raise agentId `minimumDelay`, seconds. Placeholder: 1800.
     uint256 internal constant TAU = 1800;
-    /// TODO(params): `expirationPeriod` of the raise agentId, seconds. Placeholder: 86400.
-    uint256 internal constant EXPIRATION_PERIOD = 86_400;
+    /// `expirationPeriod` of the raise agentId, seconds: 600, the most the CRE workflow accepts
+    /// (`MAX_RAISE_EXPIRY_SECONDS`; above it the run stops).
+    uint256 internal constant EXPIRATION_PERIOD = 600;
     /// Longest hold, equals the RVM `MAX_HOLD_DURATION` (24 h). Fixed by the interface, not a placeholder.
     uint256 internal constant MAX_HOLD_DURATION = 86_400;
     /// Largest cap value Aave stores (36 bits). CAP-UNIT-03.
