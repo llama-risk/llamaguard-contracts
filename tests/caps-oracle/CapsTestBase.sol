@@ -19,7 +19,7 @@ abstract contract CapsTestBase is Test {
     // ROLES
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @dev RVM owner and AgentHub owner on Ethereum (the Aave Executor).
+    /// @dev RVM, AgentHub and CapsParameterRegistry owner on Ethereum (the Aave Executor).
     address internal governance = makeAddr("governanceExecutor");
     /// @dev Risk Council Safe: RVM `riskCouncil`, Steward `RISK_COUNCIL`, forwarder `RISK_COUNCIL`.
     ///      Tests that need it to act as a Safe call `_etchSafeAtRiskCouncil()`.
@@ -32,7 +32,7 @@ abstract contract CapsTestBase is Test {
     address internal attacker = makeAddr("attacker");
     /// @dev Large borrower for the forwarder tests.
     address internal borrower = makeAddr("borrower");
-    /// @dev LlamaRisk Safe: owner of CapsParameterRegistry .
+    /// @dev LlamaRisk Safe: updater of CapsParameterRegistry.
     address internal llamaRiskSafe = makeAddr("llamaRiskSafe");
     /// @dev AgentHub address. A plain address; tests that need AgentHub behaviour use the real contract.
     address internal agentHub = makeAddr("agentHub");
