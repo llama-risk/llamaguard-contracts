@@ -51,8 +51,8 @@ interface ICapsParameterRegistry {
     /**
      * @notice One row of `getReservesRaiseData`: the raise inputs of one (market, asset, kind).
      * @dev `found` false means the key is not listed, the market RVM is not set, the kind is invalid,
-     *      the RVM has no config for the key, or the RVM state read reverts. Every field other than
-     *      `asset` is then 0.
+     *      or the RVM has no config for the key (`RateLimitConfigNotFound`). Every field other than `asset` is
+     *      then 0.
      */
     struct ReserveRaiseData {
         address asset; // token address, as passed in
@@ -169,7 +169,8 @@ interface ICapsParameterRegistry {
     /**
      * @notice Raise inputs for a page of assets, one row per asset in input order.
      * @dev View. Never reverts on a missing key: the row has `found` false. Reverts if the market RVM
-     *      reverts on `previewRaise` or returns data that does not decode.
+     *      reverts on `getReserveState` with anything other than `RateLimitConfigNotFound`, reverts on
+     *      `previewRaise`, or returns data that does not decode.
      * @param market the Aave Pool
      * @param kind 0 = BORROW, 1 = SUPPLY
      * @param assets token addresses, one page of the work list

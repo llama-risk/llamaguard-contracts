@@ -788,3 +788,79 @@ contract CapsParameterRegistryIndependenceTest is RegistryTestBase {
         assertEq(rvm.getRateLimitConfig(address(weth), IRvm.CapKind.BORROW).maxCap, F1_MAX_CAP);
     }
 }
+
+/// @notice RVM stand-in whose `getReserveState` reverts with a set reason.
+contract RevertingStateRvm {
+    address public POOL;
+    bytes internal _reason;
+
+    constructor(address pool_) {
+        POOL = pool_;
+    }
+
+    function setReason(bytes calldata reason) external {
+        _reason = reason;
+    }
+
+    function getReserveState(address, IRvm.CapKind) external view returns (IRvm.ReserveState memory) {
+        bytes memory reason = _reason;
+        // solhint-disable-next-line no-inline-assembly
+        assembly ("memory-safe") {
+            revert(add(reason, 32), mload(reason))
+        }
+    }
+}
+
+/// @notice getReservesRaiseData skips only a key the RVM has no config for; any other state-read revert
+///         propagates, so a failed read is not reported as a missing key.
+contract CapsParameterRegistryRaiseDataRevertTest is RegistryTestBase {
+    RevertingStateRvm internal rvm;
+
+    function setUp() public virtual override {
+        super.setUp();
+        rvm = new RevertingStateRvm(market);
+        IReg.MarketParams memory mp = _marketParams();
+        mp.rvm = address(rvm);
+        vm.prank(llamaRiskSafe);
+        registry.setMarketParams(market, mp);
+        _add(address(weth), BORROW, _noOverride());
+    }
+
+    function _wethPage() internal view returns (address[] memory assets) {
+        assets = new address[](1);
+        assets[0] = address(weth);
+    }
+
+    function test_raiseData_configNotFound_rowNotFound() public {
+        rvm.setReason(abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, address(weth), IRvm.CapKind.BORROW));
+        IReg.ReserveRaiseData[] memory rows = registry.getReservesRaiseData(market, BORROW, _wethPage());
+        assertEq(rows[0].asset, address(weth));
+        assertFalse(rows[0].found, "missing config skips the key");
+    }
+
+    function test_raiseData_otherCustomError_propagates() public {
+        bytes memory reason = abi.encodeWithSelector(IRvm.OnlyRiskCouncil.selector);
+        rvm.setReason(reason);
+        vm.expectRevert(reason);
+        registry.getReservesRaiseData(market, BORROW, _wethPage());
+    }
+
+    function test_raiseData_errorString_propagates() public {
+        rvm.setReason(abi.encodeWithSignature("Error(string)", "aave read failed"));
+        vm.expectRevert(bytes("aave read failed"));
+        registry.getReservesRaiseData(market, BORROW, _wethPage());
+    }
+
+    function test_raiseData_emptyRevert_propagates() public {
+        rvm.setReason("");
+        vm.expectRevert(bytes(""));
+        registry.getReservesRaiseData(market, BORROW, _wethPage());
+    }
+
+    function test_raiseData_shortReason_propagates() public {
+        bytes memory reason = hex"0102";
+        rvm.setReason(reason);
+        vm.expectRevert(reason);
+        registry.getReservesRaiseData(market, BORROW, _wethPage());
+    }
+}

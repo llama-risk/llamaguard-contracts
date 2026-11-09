@@ -280,7 +280,8 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
 
     /// @dev Fills one listed row of getReservesRaiseData with two RVM reads keyed by (asset, kind):
     ///      `getReserveState` and `previewRaise`. The market's RVM serves that market's Pool. Leaves `found`
-    ///      false if the state read reverts, which covers a key with no rate limit config.
+    ///      false only when the RVM has no rate limit config for the key (`RateLimitConfigNotFound`). Any other
+    ///      revert of the state read propagates, so an RVM or Aave read failure is not reported as a missing key.
     function _fillRaiseRow(
         ReserveRaiseData memory row,
         ICapsRangeValidationModule rvm,
@@ -300,8 +301,14 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
             row.headroomTarget = reserveState.headroomTarget;
             row.raiseBlocked = reserveState.raiseBlocked;
             row.maxCap = reserveState.maxCap;
-        } catch {
-            return;
+        } catch (bytes memory reason) {
+            if (reason.length >= 4 && bytes4(reason) == ICapsRangeValidationModule.RateLimitConfigNotFound.selector) {
+                return;
+            }
+            // solhint-disable-next-line no-inline-assembly
+            assembly ("memory-safe") {
+                revert(add(reason, 32), mload(reason))
+            }
         }
         row.found = true;
         row.params = _effectiveParams(market, row.asset, kind);
