@@ -56,7 +56,7 @@ contract CapsReducerOracleTest is CapsTestBase {
         assertEq(abi.decode(u.previousValue, (uint256)), F1_CUT_FROM, "previousValue = previewCut.currentCap");
         assertEq(u.newValue.length, 32, "agent _decodeToUint needs <= 32 bytes");
         assertEq(u.timestamp, 1_800_000_000, "timestamp = block.timestamp");
-        assertEq(u.updateId, 100, "updateId = block.number");
+        assertEq(u.updateId, 1_800_000_000, "updateId = block.timestamp");
         assertEq(u.market, address(weth), "market = asset");
         assertEq(u.updateType, BORROW_UPDATE_TYPE, "updateType echoed");
         assertEq(bytes(u.referenceId).length, 0, "referenceId empty");
@@ -192,11 +192,11 @@ contract CapsReducerOracleTest is CapsTestBase {
         uint256 currentCap,
         uint256 newCap,
         address asset,
-        uint64 blockNumber
+        uint64 timestamp
     )
         public
     {
-        vm.roll(blockNumber);
+        vm.warp(timestamp);
         rvm.setCut(asset, IRvm.CapKind.BORROW, due, currentCap, newCap);
         (bool pDue, uint256 pCur, uint256 pNew) = rvm.previewCut(asset, IRvm.CapKind.BORROW);
 
@@ -208,7 +208,7 @@ contract CapsReducerOracleTest is CapsTestBase {
         IRiskOracle.RiskParameterUpdate memory u = _read(BORROW_UPDATE_TYPE, asset);
         assertEq(abi.decode(u.newValue, (uint256)), pNew);
         assertEq(abi.decode(u.previousValue, (uint256)), pCur);
-        assertEq(u.updateId, blockNumber);
+        assertEq(u.updateId, timestamp);
         assertEq(u.market, asset);
     }
 
@@ -315,29 +315,50 @@ contract CapsReducerOracleAgentHubTest is CapsTestBase {
         ids[0] = cutId;
     }
 
-    function test_CAP_ST_16_cut_twiceSameBlock_reverts() public {
+    function test_CAP_ST_16_cut_twiceSameSecond_reverts() public {
         vm.roll(100);
+        vm.warp(1_800_000_000);
         (bool ok, IAgentHub.ActionData[] memory actions) = hub.check(_ids());
-        assertTrue(ok, "cut due at block 100");
+        assertTrue(ok, "cut due");
 
         vm.prank(attacker); // permissionless keeper
         hub.execute(actions);
         assertEq(agent.injectCount(), 1);
         assertEq(agent.lastNewCap(), F1_CUT_FLOOR);
-        assertEq(agent.lastUpdateId(), 100);
+        assertEq(agent.lastUpdateId(), 1_800_000_000);
 
-        // Same block: the oracle serves updateId 100 again and AgentHub rejects id <= last injected id.
+        // Same second: the oracle serves the same updateId and AgentHub rejects id <= last injected id.
         (ok,) = hub.check(_ids());
-        assertFalse(ok, "check reports nothing in the same block");
+        assertFalse(ok, "check reports nothing in the same second");
+        vm.expectRevert(IAgentHub.NoActionCanBePerformed.selector);
+        hub.execute(actions);
+
+        // A later block in the same second (sub-second blocks: Base, Avalanche, BNB, Monad) is rejected too.
+        vm.roll(101);
         vm.expectRevert(IAgentHub.NoActionCanBePerformed.selector);
         hub.execute(actions);
         assertEq(agent.injectCount(), 1);
 
-        // Next block: a new updateId, so a further cut can land.
-        vm.roll(101);
+        // Next second: a new updateId, so a further cut can land.
+        vm.warp(1_800_000_001);
         hub.execute(actions);
         assertEq(agent.injectCount(), 2);
-        assertEq(agent.lastUpdateId(), 101);
+        assertEq(agent.lastUpdateId(), 1_800_000_001);
+    }
+
+    /// @dev Arbitrum: block.number is the L1 block number, shared by about 12 seconds of L2 blocks. With
+    ///      updateId = block.number a second cut would wait for the next L1 block; with the timestamp it lands
+    ///      the next second.
+    function test_CAP_ST_16_cut_sameBlockNumberNextSecond_lands() public {
+        vm.roll(21_000_000);
+        vm.warp(1_800_000_000);
+        (, IAgentHub.ActionData[] memory actions) = hub.check(_ids());
+        hub.execute(actions);
+
+        vm.warp(1_800_000_001); // block.number unchanged
+        hub.execute(actions);
+        assertEq(agent.injectCount(), 2);
+        assertEq(agent.lastUpdateId(), 1_800_000_001);
     }
 
     function test_CAP_ST_16_noCutDue_hubSkipsAsset() public {
@@ -410,7 +431,7 @@ contract CapsReducerOracleInvariantTest is CapsTestBase {
                 assertTrue(due, "oracle returned while previewCut is not due");
                 assertEq(abi.decode(u.newValue, (uint256)), newCap, "newValue != previewCut.newCap");
                 assertEq(abi.decode(u.previousValue, (uint256)), cur, "previousValue != previewCut.currentCap");
-                assertEq(u.updateId, block.number, "updateId != block.number");
+                assertEq(u.updateId, block.timestamp, "updateId != block.timestamp");
                 assertEq(u.timestamp, block.timestamp, "timestamp != block.timestamp");
                 assertEq(u.market, asset, "market != asset");
             } catch (bytes memory err) {

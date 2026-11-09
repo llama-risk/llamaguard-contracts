@@ -56,13 +56,15 @@ contract CapsReducerOracle is ICapsReducerOracle {
         (bool due, uint256 currentCap, uint256 newCap) = RVM.previewCut(asset, kind);
         if (!due) revert NoCutDue(asset);
 
-        // timestamp = now passes the AgentHub expiration check. updateId = block.number lets at most one cut
-        // per asset and agentId land per block.
+        // timestamp = now passes the AgentHub expiration check. updateId = block.timestamp lets at most one cut
+        // per asset and agentId land per second, on every chain: on Arbitrum block.number is the L1 block number,
+        // shared by about 12 seconds of L2 blocks. A live deployment must never move back to block.number: it is
+        // lower than the stored timestamps, so AgentHub would reject every cut.
         update.timestamp = block.timestamp;
         update.newValue = abi.encode(newCap);
         update.previousValue = abi.encode(currentCap);
         update.updateType = updateType;
-        update.updateId = block.number;
+        update.updateId = block.timestamp;
         update.market = asset;
     }
 }
