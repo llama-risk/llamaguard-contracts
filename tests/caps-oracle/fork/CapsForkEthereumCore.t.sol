@@ -14,6 +14,7 @@ import {
 import { WadRayMath } from "aave-v3-origin/src/contracts/protocol/libraries/math/WadRayMath.sol";
 import { IRiskSteward } from "aave-v3-risk-stewards/interfaces/IRiskSteward.sol";
 import { CapsBorrowForwarder } from "../../../src/caps-oracle/CapsBorrowForwarder.sol";
+import { ICapsBorrowForwarder } from "../../../src/caps-oracle/interfaces/ICapsBorrowForwarder.sol";
 import { CapsRangeValidationModuleV3 } from "../../../src/caps-oracle/CapsRangeValidationModuleV3.sol";
 import { ICapsRangeValidationModule as IRvm } from "../../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
@@ -52,6 +53,8 @@ contract CapsForkEthereumCore is Test {
     bool internal forked;
     address internal riskCouncil;
     CapsBorrowForwarder internal forwarder;
+    CapsRangeValidationModuleV3 internal forwarderRvm;
+    address internal rvmOwner = makeAddr("rvmOwner");
     address internal borrower = makeAddr("borrower");
 
     function setUp() public {
@@ -62,7 +65,10 @@ contract CapsForkEthereumCore is Test {
         forked = true;
 
         riskCouncil = IRiskSteward(STEWARD).RISK_COUNCIL();
-        forwarder = new CapsBorrowForwarder(address(POOL), STEWARD, riskCouncil);
+        forwarderRvm = new CapsRangeValidationModuleV3(
+            rvmOwner, makeAddr("agentHub"), address(POOL), riskCouncil, "BorrowCapUpdate_Core", "SupplyCapUpdate_Core"
+        );
+        forwarder = new CapsBorrowForwarder(address(POOL), STEWARD, riskCouncil, address(forwarderRvm));
         vm.etch(riskCouncil, address(new DelegatecallShim()).code);
 
         // Past any running cap debounce of the Steward.
@@ -124,6 +130,32 @@ contract CapsForkEthereumCore is Test {
         assertEq(_borrowCap(USDC), capAfterFirst, "cap unchanged");
         assertEq(IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower), debtAfterFirst, "debt unchanged");
         assertEq(IERC20(USDC).balanceOf(borrower), 10_000e6, "no second transfer");
+    }
+
+    /// The live RVM borrow maxCap bounds the forwarder: 1 token below the new cap reverts, at it passes.
+    function test_fork_raiseCapAndBorrow_aboveRvmMaxCap_reverts() public onlyForked {
+        uint256 oldCap = _borrowCap(USDC);
+        IRvm.Bounds memory b =
+            IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 days });
+        IRvm.RateLimitConfig memory c = IRvm.RateLimitConfig({
+            maxCap: uint64(oldCap + 10_000 - 1), maxHeadroom: 1e9, alphaBps: 1000, cutBandBps: 1000
+        });
+        vm.startPrank(rvmOwner);
+        forwarderRvm.setBounds(IRvm.CapKind.BORROW, b);
+        forwarderRvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);
+        vm.stopPrank();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, oldCap + 10_000, oldCap + 9999)
+        );
+        _raise(10_000e6, 0);
+        assertEq(_borrowCap(USDC), oldCap, "cap unchanged");
+
+        c.maxCap = uint64(oldCap + 10_000);
+        vm.prank(rvmOwner);
+        forwarderRvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);
+        _raise(10_000e6, 0);
+        assertEq(_borrowCap(USDC), oldCap + 10_000, "at maxCap passes");
     }
 
     function test_fork_rvm_getReserveState_matchesPool() public onlyForked {

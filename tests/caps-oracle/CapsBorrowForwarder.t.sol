@@ -13,8 +13,10 @@ import { MockERC20 } from "./mocks/MockERC20.sol";
 import { MockSafe } from "./mocks/MockSafe.sol";
 import { MockPoolV3, MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
 import { MockRiskSteward } from "./mocks/MockRiskSteward.sol";
+import { MockCapsRvm } from "./mocks/MockCapsRvm.sol";
 import { CapsBorrowForwarder } from "../../src/caps-oracle/CapsBorrowForwarder.sol";
 import { ICapsBorrowForwarder } from "../../src/caps-oracle/interfaces/ICapsBorrowForwarder.sol";
+import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
 /// @title QuirkyERC20
 /// @notice ERC20 whose `transfer` misbehaves when sent by one chosen account, to drive the forwarder's
@@ -81,6 +83,7 @@ contract QuirkyERC20 is MockERC20 {
 contract CapsBorrowForwarderTest is CapsTestBase {
     CapsBorrowForwarder internal fwd;
     MockSafe internal safe;
+    MockCapsRvm internal capsRvm;
 
     uint256 internal constant LIVE_CAP = 1_000_000; // whole USDC
     uint256 internal constant LIVE_DEBT = 900_000; // whole USDC
@@ -92,7 +95,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         vm.warp(1_700_000_000);
         _etchSafeAtRiskCouncil();
         safe = MockSafe(riskCouncil);
-        fwd = new CapsBorrowForwarder(address(pool), address(steward), riskCouncil);
+        capsRvm = new MockCapsRvm();
+        capsRvm.setPool(address(pool));
+        fwd = new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(capsRvm));
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
         weth.mint(address(pool), _wei(address(weth), LIQUIDITY));
@@ -134,6 +139,12 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         safe.execDelegatecall(address(fwd), _call(asset, amount, borrower, extraCapTokens, maxNewCap));
     }
 
+    function _setRvmMaxCap(address asset, uint64 maxCap) internal {
+        IRvm.RateLimitConfig memory c =
+            IRvm.RateLimitConfig({ maxCap: maxCap, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
+        capsRvm.setRateLimitConfig(asset, IRvm.CapKind.BORROW, c);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR AND IMMUTABLES
     // ═══════════════════════════════════════════════════════════════════════════
@@ -142,15 +153,18 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(fwd.POOL(), address(pool));
         assertEq(fwd.RISK_STEWARD(), address(steward));
         assertEq(fwd.RISK_COUNCIL(), riskCouncil);
+        assertEq(fwd.RVM(), address(capsRvm));
     }
 
     function test_CapsBorrowForwarder_constructor_zeroAddress_reverts() public {
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(0), address(steward), riskCouncil);
+        new CapsBorrowForwarder(address(0), address(steward), riskCouncil, address(capsRvm));
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(0), riskCouncil);
+        new CapsBorrowForwarder(address(pool), address(0), riskCouncil, address(capsRvm));
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(steward), address(0));
+        new CapsBorrowForwarder(address(pool), address(steward), address(0), address(capsRvm));
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(0));
     }
 
     /// A Steward on another Pool, or with another Risk Council, is refused at deploy: the forwarder would
@@ -158,11 +172,17 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     function test_CapsBorrowForwarder_constructor_stewardMismatch_reverts() public {
         MockPoolV3 otherPool = new MockPoolV3();
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(otherPool), address(steward), riskCouncil);
+        new CapsBorrowForwarder(address(otherPool), address(steward), riskCouncil, address(capsRvm));
 
         MockRiskSteward otherCouncil = new MockRiskSteward(makeAddr("otherCouncil"), pool);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(otherCouncil), riskCouncil);
+        new CapsBorrowForwarder(address(pool), address(otherCouncil), riskCouncil, address(capsRvm));
+
+        // An RVM of another Pool: its maxCap would not bound this Pool's caps.
+        MockCapsRvm otherRvm = new MockCapsRvm();
+        otherRvm.setPool(address(otherPool));
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(otherRvm));
     }
 
     function test_CapsBorrowForwarder_invalidInput_reverts() public {
@@ -289,6 +309,38 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
         // Exactly at the limit passes.
         _run(address(usdc), 5000e6, 10, 1_005_010);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+    }
+
+    /// The new cap stays within the RVM borrow maxCap, so the reducer never cuts the cap below the debt:
+    /// maxCap 1,005,009 refuses 1,005,010; maxCap 1,005,010 passes. No cap change and no borrow on refusal.
+    function test_raiseCapAndBorrow_aboveRvmMaxCap_reverts() public {
+        _delegate(address(usdc), 5000e6);
+        _setRvmMaxCap(address(usdc), 1_005_009);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_010, 1_005_009));
+        _run(address(usdc), 5000e6, 10, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+
+        _setRvmMaxCap(address(usdc), 1_005_010);
+        _run(address(usdc), 5000e6, 10, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+    }
+
+    /// An asset with no rate limit entry (maxCap 0) has no RVM bound.
+    function test_raiseCapAndBorrow_noRvmEntry_noMaxCapBound() public {
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6, 10, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+    }
+
+    /// Only the borrow entry bounds the forwarder: a supply maxCap below the new cap does not.
+    function test_raiseCapAndBorrow_supplyMaxCap_ignored() public {
+        _delegate(address(usdc), 5000e6);
+        IRvm.RateLimitConfig memory c = IRvm.RateLimitConfig({ maxCap: 1, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
+        capsRvm.setRateLimitConfig(address(usdc), IRvm.CapKind.SUPPLY, c);
+        _run(address(usdc), 5000e6, 10, 2_000_000);
         assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
     }
 
@@ -518,8 +570,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// CAP-ACL-16: in the Safe's context raiseCapAndBorrow calls only POOL.getConfiguration, RISK_STEWARD.updateCaps
     /// for the given asset, POOL.borrow with onBehalfOf = borrower and asset.transfer(borrower, amount).
-    /// The interface step 6 also needs asset.balanceOf(Safe) (twice) and the transfer helper checks
-    /// the asset has code; CAP-ACL-16 lists four calls. These read-only calls are allowed here.
+    /// The interface step 7 also needs asset.balanceOf(Safe) (twice), the transfer helper checks the asset has
+    /// code, and the maxCap bound reads RVM.getKeyState(asset, BORROW); CAP-ACL-16 lists four calls. These
+    /// read-only calls are allowed here.
     function test_CAP_ACL_16_raiseCapAndBorrow_onlyExpectedCalls() public {
         uint256 amount = 5000e6;
         _delegate(address(usdc), amount);
@@ -534,6 +587,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         uint256 nBorrow;
         uint256 nTransfer;
         uint256 nBalance;
+        uint256 nKeyState;
         for (uint256 i = 0; i < acc.length; i++) {
             Vm.AccountAccess memory a = acc[i];
             bytes4 sel = a.data.length >= 4 ? bytes4(a.data) : bytes4(0);
@@ -552,7 +606,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
                 // The transfer helper checks the asset; solc checks the Pool and Steward before calls with no
                 // return data.
                 assertTrue(
-                    a.account == address(usdc) || a.account == address(pool) || a.account == address(steward),
+                    a.account == address(usdc) || a.account == address(pool) || a.account == address(steward)
+                        || a.account == address(capsRvm),
                     "code-size check on an expected account only"
                 );
             } else if (a.account == address(pool)) {
@@ -565,6 +620,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
                 } else {
                     revert("unexpected Pool call");
                 }
+            } else if (a.account == address(capsRvm)) {
+                assertEq(a.data, abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)));
+                nKeyState++;
             } else if (a.account == address(steward)) {
                 assertEq(sel, MockRiskSteward.updateCaps.selector, "unexpected Steward call");
                 IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
@@ -593,6 +651,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(nBorrow, 1, "one borrow");
         assertEq(nTransfer, 1, "one transfer");
         assertEq(nBalance, 2, "two balance reads");
+        assertEq(nKeyState, 1, "one RVM key read");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

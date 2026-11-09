@@ -34,6 +34,10 @@ interface ICapsBorrowForwarder {
     /// @notice The computed new cap is above `maxNewCap`.
     error NewCapAboveMax(uint256 newCap, uint256 maxNewCap);
 
+    /// @notice The computed new cap is above the RVM borrow `maxCap` of the asset. The Risk Council raises
+    ///         `maxCap` first.
+    error NewCapAboveMaxCap(uint256 newCap, uint256 maxCap);
+
     /// @notice The Safe's token balance changed across the call.
     error SafeBalanceChanged(uint256 before, uint256 afterCall);
 
@@ -50,6 +54,9 @@ interface ICapsBorrowForwarder {
     /// @notice The Risk Council Safe, the only context in which `raiseCapAndBorrow` runs.
     function RISK_COUNCIL() external view returns (address);
 
+    /// @notice The rate-limiter RVM of the Pool. Its borrow `maxCap` bounds the new cap.
+    function RVM() external view returns (address);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ACTION (DELEGATECALL FROM THE RISK COUNCIL SAFE ONLY)
     // ═══════════════════════════════════════════════════════════════════════════
@@ -57,6 +64,8 @@ interface ICapsBorrowForwarder {
     /**
      * @notice Raise the borrow cap, borrow `amount` with the debt on `onBehalfOf`, and send the tokens to it.
      * @dev Delegatecall from the Risk Council Safe only. The borrower must have delegated credit to the Safe.
+     *      The new cap stays within the asset's RVM borrow `maxCap` when the asset has a rate limit entry,
+     *      so a later cut never sets the cap below the debt.
      *      Also reverts on a failed token transfer and on any Risk Steward or Pool revert.
      * @param asset the token to borrow
      * @param amount token smallest units
