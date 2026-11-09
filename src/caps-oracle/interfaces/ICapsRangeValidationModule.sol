@@ -220,7 +220,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
      * @dev A live entry needs a non-zero maxHeadroom and a maxCap of at most 2^36 - 1, for both callers.
      *      Within that, the owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing
      *      entry, and a raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once
-     *      per cooldown shared by both fields. Lowering is free.
+     *      per cooldown shared by both fields. Lowering is free, including retiring the key; only the owner
+     *      adds a key back, so the Risk Council Safe can tighten but never loosen beyond the owner's entries.
      *      Reverts OnlyRiskCouncilOrOwner, RateLimitConfigOutOfBounds, RateLimitConfigNotFound,
      *      IncreaseTooLarge, CooldownActive.
      * @param asset the token address
@@ -234,7 +235,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Write the hold of a key. Cuts are rejected while block.timestamp < until. `until` 0 clears it.
-    /// @dev Reverts OnlyRiskCouncil, HoldTooLong, RateLimitConfigNotFound.
+    /// @dev The hold also blocks the cut down to maxCap. Raises are not held.
+    ///      Reverts OnlyRiskCouncil, HoldTooLong, RateLimitConfigNotFound.
     function setHold(address asset, CapKind kind, uint40 until) external;
 
     // ═══════════════════════════════════════════════════════════════════════════

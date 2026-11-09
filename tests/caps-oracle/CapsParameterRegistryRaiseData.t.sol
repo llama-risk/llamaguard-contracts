@@ -29,10 +29,10 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
     function setUp() public override {
         super.setUp();
         market = address(pool);
-        registry = new CapsParameterRegistry(llamaRiskSafe, riskCouncil);
+        registry = new CapsParameterRegistry(governance, llamaRiskSafe);
 
         IReg.MarketParams memory p = _defaultMarketParams(address(rvm));
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.addMarket(market, p);
         IReg.ReserveOverride memory none;
         registry.addReserve(market, address(weth), BORROW, none);
@@ -129,7 +129,7 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         assertTrue(registry.getReservesRaiseData(market, BORROW, _page(address(weth), address(usdc)))[0].found);
 
         // address(0) means "not set": every row is found = false, and the view does not revert.
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setMarketParams(market, _defaultMarketParams(address(0)));
 
         IReg.ReserveRaiseData[] memory rows =
@@ -138,8 +138,8 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         _assertEmpty(rows[1], address(usdc), "no RVM set");
 
         // A market added with no RVM gives the same.
-        CapsParameterRegistry fresh = new CapsParameterRegistry(llamaRiskSafe, riskCouncil);
-        vm.startPrank(riskCouncil);
+        CapsParameterRegistry fresh = new CapsParameterRegistry(governance, llamaRiskSafe);
+        vm.startPrank(llamaRiskSafe);
         fresh.addMarket(market, _defaultMarketParams(address(0)));
         IReg.ReserveOverride memory none;
         fresh.addReserve(market, address(weth), BORROW, none);
@@ -172,7 +172,7 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         vm.stopPrank();
 
         address market2 = address(pool2);
-        vm.startPrank(riskCouncil);
+        vm.startPrank(llamaRiskSafe);
         registry.addMarket(market2, _defaultMarketParams(address(rvm2)));
         IReg.ReserveOverride memory none;
         registry.addReserve(market2, address(weth), BORROW, none);
@@ -202,7 +202,7 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         assertEq(r2.newCap, newCap2);
 
         // Each market holds its own RVM: unsetting one leaves the other found.
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setMarketParams(market2, _defaultMarketParams(address(0)));
         assertFalse(registry.getReservesRaiseData(market2, BORROW, _page(address(weth), address(usdc)))[0].found);
         assertTrue(registry.getReservesRaiseData(market, BORROW, _page(address(weth), address(usdc)))[0].found);
@@ -248,7 +248,7 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         IReg.ReserveOverride memory o;
         o.enabled = IReg.EnabledOverride.OFF;
         o.marginBps = 300;
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setReserveOverride(market, address(weth), BORROW, o);
 
         IReg.ReserveRaiseData memory r =
@@ -290,13 +290,13 @@ contract CapsParameterRegistryRaiseDataTest is CapsSystemBase {
         vm.expectRevert(IReg.OnlyUpdater.selector);
         registry.setMarketParams(market, p);
 
-        vm.prank(llamaRiskSafe);
+        vm.prank(governance); // the owner is not the updater
         vm.expectRevert(IReg.OnlyUpdater.selector);
         registry.setMarketParams(market, p);
 
         vm.expectEmit(address(registry));
         emit IReg.MarketParamsSet(market, p);
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.setMarketParams(market, p);
         assertEq(registry.getMarketParams(market).rvm, newRvm);
     }
