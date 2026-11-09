@@ -164,11 +164,16 @@ contract CapsOracleIntegrationTest is CapsSystemBase {
         pool.setBorrowCap(w, 1200);
         vm.expectRevert(IAgentHub.NoActionCanBePerformed.selector);
         _execute(borrowCutId);
-        assertEq(_liveCap(w, IRvm.CapKind.BORROW), 1200, "one cut per block");
+        assertEq(_liveCap(w, IRvm.CapKind.BORROW), 1200, "one cut per second");
 
         vm.roll(block.number + 1);
+        vm.expectRevert(IAgentHub.NoActionCanBePerformed.selector);
         _execute(borrowCutId);
-        assertEq(_liveCap(w, IRvm.CapKind.BORROW), F1_CUT_FLOOR, "next block cuts again");
+        assertEq(_liveCap(w, IRvm.CapKind.BORROW), 1200, "a new block in the same second does not cut");
+
+        vm.warp(block.timestamp + 1);
+        _execute(borrowCutId);
+        assertEq(_liveCap(w, IRvm.CapKind.BORROW), F1_CUT_FLOOR, "next second cuts again");
     }
 
     /// @dev CAP-ST-17 through AgentHub: while the hold is active, check reports nothing and execute performs no

@@ -199,7 +199,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
             assertEq(abi.decode(u.newValue, (uint256)), to, "newValue = previewCut");
             assertEq(abi.decode(u.previousValue, (uint256)), cur, "previousValue = live cap");
             assertEq(u.market, a);
-            assertEq(u.updateId, block.number);
+            assertEq(u.updateId, block.timestamp);
             assertEq(u.timestamp, block.timestamp);
             assertEq(u.updateType, handler.updateType(k));
         } catch {
@@ -440,7 +440,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         assertEq(handler.griefs(), 1, "grief");
         assertEq(handler.liveCap(address(weth), IRvm.CapKind.BORROW), 1045);
         handler.manualCapWrite(0, 0, 1200);
-        handler.warp(0);
+        handler.warp(1); // a new second: the reducer updateId is block.timestamp
         handler.cutViaHub(0, 0);
         assertEq(handler.agentCuts(), 2, "cut");
         handler.setHold(0, 0, 2, 3600, false); // updater: no role
