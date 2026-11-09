@@ -183,7 +183,7 @@ contract CapsForkEthereumCore is Test {
         IRvm.RateLimitConfig memory c =
             IRvm.RateLimitConfig({ maxCap: 1e10, maxHeadroom: 1e9, alphaBps: 1000, cutBandBps: 1000 });
         IRvm.Bounds memory b =
-            IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 0 });
+            IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 days });
         vm.startPrank(owner);
         rvm.setBounds(IRvm.CapKind.BORROW, b);
         rvm.setBounds(IRvm.CapKind.SUPPLY, b);
