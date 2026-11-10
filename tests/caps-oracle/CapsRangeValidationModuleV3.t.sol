@@ -774,6 +774,14 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         assertFalse(_raise(w, 1100), "unregistered agentId rejected");
     }
 
+    function test_setAgent_none_unregistered_noop() public {
+        vm.recordLogs();
+        vm.prank(governance);
+        rvm.setAgent(99, IRvm.Direction.NONE);
+        assertEq(vm.getRecordedLogs().length, 0, "no event");
+        assertEq(uint8(rvm.getAgent(99).direction), uint8(IRvm.Direction.NONE));
+    }
+
     /// Max cap 0 retires the key: the whole slot clears, both directions are rejected, the previews return
     /// (false, 0, 0) and the reducer reverts NoCutDue. The Risk Council Safe may retire.
     function test_CAP_ACL_20_retire_clearsSlot() public {

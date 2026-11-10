@@ -199,7 +199,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // OWNER
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE.
+    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE (a no-op if not registered).
     /// @dev The kind comes from an exact match of the agentId's AgentHub update type. Reverts InvalidAgent.
     function setAgent(uint256 agentId, Direction direction) external;
 

@@ -216,9 +216,10 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
     /// @inheritdoc ICapsRangeValidationModule
     function setAgent(uint256 agentId, Direction direction) external onlyOwner {
         if (direction == Direction.NONE) {
-            CapKind oldKind = _agents[agentId].kind;
+            AgentConfig memory old = _agents[agentId];
+            if (old.direction == Direction.NONE) return;
             delete _agents[agentId];
-            emit AgentSet(agentId, Direction.NONE, oldKind);
+            emit AgentSet(agentId, Direction.NONE, old.kind);
             return;
         }
 
