@@ -199,7 +199,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // OWNER
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE.
+    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE (a no-op if not registered).
     /// @dev The kind comes from an exact match of the agentId's AgentHub update type. Reverts InvalidAgent.
     function setAgent(uint256 agentId, Direction direction) external;
 
@@ -220,8 +220,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
      * @dev A live entry needs a non-zero maxHeadroom and a maxCap of at most 2^36 - 1, for both callers.
      *      Within that, the owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing
      *      entry, and a raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once
-     *      per cooldown shared by both fields. Lowering is free, including retiring the key; only the owner
-     *      adds a key back, so the Risk Council Safe can tighten but never loosen beyond the owner's entries.
+     *      per cooldown shared by both fields. alphaBps and cutBandBps have no cooldown: either caller may set
+     *      them up to the kind's alphaBpsLimit and cutBandBpsLimit. Lowering is free, including retiring the key;
+     *      only the owner adds a key back.
      *      Reverts OnlyRiskCouncilOrOwner, RateLimitConfigOutOfBounds, RateLimitConfigNotFound,
      *      IncreaseTooLarge, CooldownActive.
      * @param asset the token address

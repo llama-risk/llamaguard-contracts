@@ -369,7 +369,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         uint256 l = _max(_min(e.maxHeadroom, (d * e.alphaBps) / 10_000), (uint256(e.maxHeadroom) + 24) / 25);
         assertEq(s.headroomTarget, l, "L from clamped maxHeadroom and alpha");
         assertEq(s.raiseCap, _min(_min(d + l, e.maxCap), s.supplyBound), "raise target from clamped maxCap");
-        uint256 lo = _min(_max(_min(d + l, s.supplyBound), d), e.maxCap);
+        uint256 lo = _min(_max(_max(_min(d + l, s.supplyBound), d), 2), e.maxCap);
         uint256 hi = _max(_min(_min(d + l + (l * e.cutBandBps) / 10_000, e.maxCap), s.supplyBound), lo);
         assertEq(s.cutFloor, lo, "lo");
         assertEq(s.cutTrigger, hi, "hi from clamped band");

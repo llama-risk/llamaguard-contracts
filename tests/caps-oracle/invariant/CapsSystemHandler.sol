@@ -573,6 +573,7 @@ contract CapsSystemHandler is Test {
         r.raiseMax = _min3(d + l, cBar, s);
         uint256 dl = d + l < s ? d + l : s;
         if (dl < d) dl = d;
+        if (dl < 2) dl = 2;
         r.lo = dl < cBar ? dl : cBar;
         r.hi = _min3(d + l + (l * e.cutBandBps) / BPS, cBar, s);
         if (r.hi < r.lo) r.hi = r.lo;

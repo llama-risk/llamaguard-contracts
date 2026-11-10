@@ -367,7 +367,7 @@ contract CapsRangeValidationModuleV3InvariantTest is RvmTestBase {
         assertEq(s.headroomTarget, l, "L from maxHeadroom and clamped alpha");
         assertEq(s.maxCap, maxCap, "maxCap the rule uses");
         assertEq(s.raiseCap, _min3(d + l, maxCap, s.supplyBound), "raise target");
-        uint256 lo = _min3(_max(_min3(d + l, s.supplyBound, type(uint256).max), d), maxCap, type(uint256).max);
+        uint256 lo = _min3(_max(_max(_min3(d + l, s.supplyBound, type(uint256).max), d), 2), maxCap, type(uint256).max);
         uint256 hi = _max(_min3(d + l + (l * band) / 10_000, maxCap, s.supplyBound), lo);
         assertEq(s.cutFloor, lo, "lo");
         assertEq(s.cutTrigger, hi, "hi from clamped band");

@@ -23,8 +23,8 @@ import { IAaveCapAgent } from "./interfaces/IAaveCapAgent.sol";
  * @notice Rate-limiter RVM for the borrow and supply caps of one Aave V3 Pool.
  * @dev Rule, in whole tokens, with alpha and band clamped to the global limits of the kind:
  *        L     = max(ceil(maxHeadroom / 25), min(maxHeadroom, alpha * D))
- *        raise : not frozen or paused, cap < to <= min(D + L, C-bar, S)
- *        lo    = min(max(min(D + L, S), D), C-bar)
+ *        raise : not frozen or paused, cap > 1, cap < to <= min(D + L, C-bar, S)
+ *        lo    = min(max(min(D + L, S), D, 2), C-bar)
  *        hi    = max(min(D + (1 + band) * L, C-bar, S), lo)
  *        cut   : cap > hi, lo <= to <= hi, no active hold
  *      L = headroomTarget, D = usage, S = supplyBound, C-bar = maxCap, to = the new cap.
@@ -49,6 +49,9 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
 
     /// @dev Floor of L = ceilDiv(maxHeadroom, MIN_HEADROOM_DIVISOR). A live entry has maxHeadroom > 0, so L >= 1.
     uint256 internal constant MIN_HEADROOM_DIVISOR = 25;
+
+    /// @dev A cap of 1 is Aave's manual freeze: never raised, and cut to only when maxCap is 1.
+    uint256 internal constant MIN_AGENT_CAP = 2;
 
     /// @dev Largest cap Aave stores, 36 bits. The borrow and supply limits are equal.
     uint256 internal constant MAX_VALID_CAP = ReserveConfiguration.MAX_VALID_BORROW_CAP;
@@ -213,9 +216,10 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
     /// @inheritdoc ICapsRangeValidationModule
     function setAgent(uint256 agentId, Direction direction) external onlyOwner {
         if (direction == Direction.NONE) {
-            CapKind oldKind = _agents[agentId].kind;
+            AgentConfig memory old = _agents[agentId];
+            if (old.direction == Direction.NONE) return;
             delete _agents[agentId];
-            emit AgentSet(agentId, Direction.NONE, oldKind);
+            emit AgentSet(agentId, Direction.NONE, old.kind);
             return;
         }
 
@@ -354,7 +358,7 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
 
     /// @dev Raise: not frozen or paused, up only, at most the raise cap. The hold does not apply.
     function _raiseOk(ReserveState memory state, uint256 newCap) internal pure returns (bool) {
-        return state.cap != 0 && !state.raiseBlocked && newCap > state.cap && newCap <= state.raiseCap;
+        return state.cap >= MIN_AGENT_CAP && !state.raiseBlocked && newCap > state.cap && newCap <= state.raiseCap;
     }
 
     /// @dev Cut: cap above the band, lands inside [cutFloor, cutTrigger], no active hold.
@@ -390,7 +394,8 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
         state.holdUntil = key.holdUntil;
         state.headroomTarget = headroom;
         state.raiseCap = Math.min(Math.min(usagePlusHeadroom, maxCap), supplyBound);
-        state.cutFloor = Math.min(Math.max(Math.min(usagePlusHeadroom, supplyBound), usage), maxCap);
+        state.cutFloor =
+            Math.min(Math.max(Math.max(Math.min(usagePlusHeadroom, supplyBound), usage), MIN_AGENT_CAP), maxCap);
         state.cutTrigger = Math.max(Math.min(Math.min(bandTop, maxCap), supplyBound), state.cutFloor);
         ok = true;
     }
