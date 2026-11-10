@@ -108,7 +108,7 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
             assertLe(to, bound_, "raise above min(D + L, C-bar, S)");
             assertGt(to, cap, "raise not up");
         }
-        assertEq(ok, to > cap && to <= bound_, "raise iff cap < to <= bound");
+        assertEq(ok, cap > 1 && to > cap && to <= bound_, "raise iff cap > 1 and cap < to <= bound");
     }
 
     function test_CAP_ST_03_raise_aboveMaxCap_rejected() public {
@@ -183,7 +183,7 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
         if (l > MAX_HEADROOM) l = MAX_HEADROOM;
         l = _max(l, (uint256(MAX_HEADROOM) + 24) / 25);
         uint256 s = supply == 0 ? MAX_AAVE_CAP : supply;
-        uint256 lo = _min(_max(_min(debt + l, s), debt), maxCap);
+        uint256 lo = _min(_max(_max(_min(debt + l, s), debt), 2), maxCap);
         uint256 hi = _max(_min(_min(debt + l + (l * cutBandBps) / 10_000, maxCap), s), lo);
 
         assertEq(_cut(w, to), cap > hi && lo != 0 && to >= lo && to <= hi, "cut iff cap > hi and lo <= to <= hi");
@@ -344,6 +344,22 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
         assertFalse(allowed);
         assertEq(newCap, 0);
         assertTrue(_state(w).raiseBlocked);
+    }
+
+    function test_raise_capOne_rejected() public {
+        _useF1(1);
+        assertFalse(_raise(w, 2));
+        assertFalse(_raise(w, 1100));
+        (bool allowed,, uint256 newCap) = _previewRaise(w);
+        assertFalse(allowed);
+        assertEq(newCap, 0);
+    }
+
+    function test_raise_capTwo_accepted() public {
+        _useF1(2);
+        (bool allowed,, uint256 newCap) = _previewRaise(w);
+        assertTrue(allowed);
+        assertTrue(_raise(w, newCap));
     }
 
     function test_CAP_ST_23_cut_frozenOrPaused_accepted() public {
@@ -1399,18 +1415,30 @@ contract CapsRangeValidationModuleV3UnitsTest is RvmTestBase {
         _useFixture(w, f, 1200);
         IRvm.ReserveState memory s = _state(w);
         assertEq(s.headroomTarget, 1, "Lmin = 1");
-        assertEq(s.cutFloor, 1);
+        // The cut floors at 2, not the manual freeze value 1.
+        assertEq(s.cutFloor, 2);
         (bool due,, uint256 newCap) = _previewCut(w);
         assertTrue(due, "cut possible");
-        assertEq(newCap, 1);
-        assertTrue(_cut(w, 1));
+        assertEq(newCap, 2);
+        assertFalse(_cut(w, 1));
+        assertTrue(_cut(w, 2));
 
-        // Raise needs cap < raiseCap = 1, so check the bound and a raise from a reserve with D = 1.
+        // At cap 2 with D = 0 nothing moves; once D grows to 2, the raise opens.
         assertEq(_state(w).raiseCap, 1);
-        f.debt = 1;
-        _useFixture(w, f, 1);
-        assertEq(_state(w).raiseCap, 2);
-        assertTrue(_raise(w, 2), "raise possible");
+        f.debt = 2;
+        _useFixture(w, f, 2);
+        assertEq(_state(w).raiseCap, 3);
+        assertTrue(_raise(w, 3), "raise possible");
+    }
+
+    function test_capOne_untouched() public {
+        _useF1(1);
+        (bool allowed,,) = _previewRaise(w);
+        (bool due,,) = _previewCut(w);
+        assertFalse(allowed);
+        assertFalse(due);
+        assertFalse(_raise(w, 2));
+        assertFalse(_cut(w, 2));
     }
 
     /// maxHeadroom 0 would pin L to 0 and the cap to D, so a live entry rejects it.
