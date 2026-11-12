@@ -118,7 +118,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     function _delegate(address asset, uint256 amount) internal {
         MockVariableDebtToken vdt = _debtToken(asset);
         vm.prank(borrower);
-        vdt.approveDelegation(riskCouncil, amount);
+        vdt.approveDelegation(address(fwd), amount);
     }
 
     function _call(
@@ -154,6 +154,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(fwd.RISK_STEWARD(), address(steward));
         assertEq(fwd.RISK_COUNCIL(), riskCouncil);
         assertEq(fwd.RVM(), address(capsRvm));
+        assertEq(fwd.SELF(), address(fwd));
     }
 
     function test_CapsBorrowForwarder_constructor_zeroAddress_reverts() public {
@@ -221,7 +222,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(usdc.balanceOf(address(fwd)), 0, "forwarder keeps nothing");
         assertEq(poolBefore - usdc.balanceOf(address(pool)), amount, "pool paid out exactly amount");
         assertEq(vdt.balanceOf(riskCouncil), 0, "safe carries no debt");
-        assertEq(vdt.borrowAllowance(borrower, riskCouncil), 0, "delegation used up");
+        assertEq(vdt.balanceOf(address(fwd)), 0, "forwarder carries no debt");
+        assertEq(vdt.borrowAllowance(borrower, address(fwd)), 0, "delegation used up");
     }
 
     /// CAP-ST-26 fuzzed over amount and the three decimals.
@@ -237,6 +239,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_debtToken(asset).balanceOf(borrower), amount);
         assertEq(IERC20(asset).balanceOf(borrower), amount);
         assertEq(IERC20(asset).balanceOf(riskCouncil), 0);
+        assertEq(IERC20(asset).balanceOf(address(fwd)), 0);
+        assertEq(_debtToken(asset).borrowAllowance(borrower, address(fwd)), 0, "delegation used up");
     }
 
     /// CAP-ST-27: the Safe's token balance is the same before and after raiseCapAndBorrow, also when it already
@@ -382,7 +386,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
         uint256 capAfterFirst = _liveBorrowCap(address(usdc));
         uint256 debtAfterFirst = _debtToken(address(usdc)).balanceOf(borrower);
-        uint256 allowanceAfterFirst = _debtToken(address(usdc)).borrowAllowance(borrower, riskCouncil);
+        uint256 allowanceAfterFirst = _debtToken(address(usdc)).borrowAllowance(borrower, address(fwd));
 
         vm.warp(block.timestamp + 36 hours - 1);
         vm.expectRevert(MockRiskSteward.DebounceNotRespected.selector);
@@ -390,7 +394,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
         assertEq(_liveBorrowCap(address(usdc)), capAfterFirst, "cap unchanged");
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), debtAfterFirst, "debt unchanged");
-        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, riskCouncil), allowanceAfterFirst);
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), allowanceAfterFirst);
         assertEq(usdc.balanceOf(borrower), 5000e6, "borrower tokens unchanged");
 
         // After the debounce the same call goes through.
@@ -437,7 +441,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(usdc), 4999e6);
         vm.expectRevert(
             abi.encodeWithSelector(
-                MockVariableDebtToken.InsufficientBorrowAllowance.selector, riskCouncil, 4999e6, 5000e6
+                MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 4999e6, 5000e6
             )
         );
         _run(address(usdc), 5000e6, 10, 2_000_000);
@@ -476,12 +480,14 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_liveBorrowCap(address(q)), LIVE_CAP);
         assertEq(_debtToken(address(q)).balanceOf(borrower), 0);
         assertEq(q.balanceOf(riskCouncil), 0);
+        assertEq(q.balanceOf(address(fwd)), 0);
+        assertEq(_debtToken(address(q)).borrowAllowance(borrower, address(fwd)), 5000e6, "delegation unused");
     }
 
     /// The token's transfer reverts: the revert bubbles up and nothing changes.
     function test_CapsBorrowForwarder_transferReverts_revertsAll() public {
         QuirkyERC20 q = _listQuirky();
-        q.setRevertFrom(riskCouncil);
+        q.setRevertFrom(address(fwd));
         _delegate(address(q), 5000e6);
 
         vm.expectRevert("QuirkyERC20: transfer reverted");
@@ -493,20 +499,20 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     /// The asset has no code (and no return data) when the transfer runs: reverts SafeERC20FailedOperation.
     function test_CapsBorrowForwarder_assetWithNoCode_reverts() public {
         QuirkyERC20 q = _listQuirky();
-        q.setSelfEtchFrom(riskCouncil);
+        q.setSelfEtchFrom(address(fwd));
         _delegate(address(q), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(q)));
         _run(address(q), 5000e6, 10, 2_000_000);
     }
 
-    /// CAP-ST-31: the Safe balance differs after the transfer (token moved only half): reverts.
+    /// CAP-ST-31: the forwarder balance differs after the transfer (token moved only half): reverts.
     function test_CAP_ST_31_raiseCapAndBorrow_balanceChanged_revertsAll() public {
         QuirkyERC20 q = _listQuirky();
-        q.setHalfFrom(riskCouncil);
+        q.setHalfFrom(address(fwd));
         _delegate(address(q), 5000e6);
 
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.SafeBalanceChanged.selector, 0, 2500e6));
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.ForwarderBalanceChanged.selector, 0, 2500e6));
         _run(address(q), 5000e6, 10, 2_000_000);
         assertEq(_liveBorrowCap(address(q)), LIVE_CAP);
         assertEq(_debtToken(address(q)).balanceOf(borrower), 0);
@@ -516,12 +522,13 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     /// A token with no return value on `transfer` (USDT style) is accepted.
     function test_CapsBorrowForwarder_noReturnValueToken_succeeds() public {
         QuirkyERC20 q = _listQuirky();
-        q.setNoReturnFrom(riskCouncil);
+        q.setNoReturnFrom(address(fwd));
         _delegate(address(q), 5000e6);
 
         _run(address(q), 5000e6, 10, 2_000_000);
         assertEq(q.balanceOf(borrower), 5000e6);
         assertEq(q.balanceOf(riskCouncil), 0);
+        assertEq(q.balanceOf(address(fwd)), 0);
     }
 
     function _listQuirky() internal returns (QuirkyERC20 q) {
@@ -568,6 +575,77 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         MockSafe(context).execDelegatecall(address(fwd), _call(address(usdc), 5000e6, borrower, 10, 2_000_000));
     }
 
+    /// borrowFor: any caller other than the Risk Council Safe reverts, also the borrower itself, and the borrower's
+    /// delegation stays unused.
+    function test_borrowFor_notRiskCouncil_reverts() public {
+        _delegate(address(usdc), 5000e6);
+        address[3] memory callers = [borrower, makeAddr("anyone"), address(fwd)];
+        for (uint256 i = 0; i < callers.length; i++) {
+            vm.prank(callers[i]);
+            vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncil.selector, callers[i]));
+            fwd.borrowFor(address(usdc), 5000e6, borrower);
+        }
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 5000e6, "delegation unused");
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+    }
+
+    /// borrowFor fuzzed over the caller.
+    function testFuzz_borrowFor_notRiskCouncil_reverts(address caller) public {
+        vm.assume(caller != riskCouncil);
+        _delegate(address(usdc), 5000e6);
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncil.selector, caller));
+        fwd.borrowFor(address(usdc), 5000e6, borrower);
+    }
+
+    /// borrowFor by delegatecall from the Safe reverts: it only runs in the deployed forwarder.
+    function test_borrowFor_delegatecall_reverts() public {
+        _delegate(address(usdc), 5000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotDirectCall.selector, riskCouncil));
+        safe.execDelegatecall(
+            address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), 5000e6, borrower))
+        );
+    }
+
+    /// borrowFor alone from the Safe, within the live cap: the debt and the tokens go to the borrower, the cap
+    /// does not move.
+    function test_borrowFor_fromSafe_withinCap_tokensOnlyToBorrower() public {
+        _delegate(address(usdc), 5000e6);
+        vm.expectEmit(true, true, false, true, address(fwd));
+        emit ICapsBorrowForwarder.BorrowedFor(address(usdc), borrower, 5000e6);
+        safe.execCall(address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), 5000e6, borrower)));
+
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 5000e6);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+        assertEq(usdc.balanceOf(riskCouncil), 0);
+        assertEq(usdc.balanceOf(address(fwd)), 0);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap unchanged");
+    }
+
+    /// borrowFor input checks: zero amount, zero borrower, the Safe or the forwarder as borrower.
+    function test_borrowFor_invalidInput_reverts() public {
+        address[3] memory bad = [address(0), riskCouncil, address(fwd)];
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.prank(riskCouncil);
+            vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+            fwd.borrowFor(address(usdc), 5000e6, bad[i]);
+        }
+        vm.prank(riskCouncil);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.borrowFor(address(usdc), 0, borrower);
+    }
+
+    /// A delegation to the Safe no longer lets the forwarder path borrow: the Pool sees the forwarder as caller.
+    function test_raiseCapAndBorrow_delegationToSafe_reverts() public {
+        vm.prank(borrower);
+        _debtToken(address(usdc)).approveDelegation(riskCouncil, 5000e6);
+        vm.expectRevert(
+            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 5000e6)
+        );
+        _run(address(usdc), 5000e6, 10, 2_000_000);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
+    }
+
     /// CAP-ACL-13: the runtime bytecode has no SSTORE and no DELEGATECALL (nor CALLCODE or SELFDESTRUCT), and
     /// a run writes no Safe storage slot except the nonce that MockSafe itself bumps.
     function test_CAP_ACL_13_forwarder_noStorageNoDelegatecall() public {
@@ -596,11 +674,11 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     }
 
     /// CAP-ACL-16: in the Safe's context raiseCapAndBorrow calls only POOL.getConfiguration, RISK_STEWARD.updateCaps
-    /// for the given asset, POOL.borrow with onBehalfOf = borrower and asset.transfer(borrower, amount).
-    /// The interface step 7 also needs asset.balanceOf(Safe) (twice), the transfer helper checks the asset has
-    /// code, the maxCap bound reads RVM.getKeyState(asset, BORROW), and the debt is read with
-    /// POOL.getReserveData(asset) and the debt token's totalSupply; CAP-ACL-16 lists four calls. These read-only
-    /// calls are allowed here.
+    /// for the given asset and SELF.borrowFor(asset, amount, borrower). The forwarder, in borrowFor, calls only
+    /// POOL.borrow with onBehalfOf = borrower and asset.transfer(borrower, amount).
+    /// Read-only calls also allowed: asset.balanceOf of the forwarder (twice), the transfer
+    /// helper's code check, RVM.getKeyState(asset, BORROW) for the maxCap bound, and POOL.getReserveData(asset)
+    /// with the debt token's totalSupply for the debt.
     function test_CAP_ACL_16_raiseCapAndBorrow_onlyExpectedCalls() public {
         uint256 amount = 5000e6;
         _delegate(address(usdc), amount);
@@ -609,13 +687,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _run(address(usdc), amount, 10, 2_000_000);
         Vm.AccountAccess[] memory acc = vm.stopAndReturnStateDiff();
 
-        uint256 nDelegate;
-        uint256 nConfig;
-        uint256 nUpdate;
-        uint256 nBorrow;
-        uint256 nTransfer;
-        uint256 nBalance;
-        uint256 nReads; // RVM.getKeyState, POOL.getReserveData, debt token totalSupply
+        // Counts: 0 delegatecall, 1 getConfiguration, 2 updateCaps, 3 borrowFor, 4 borrow, 5 transfer,
+        // 6 Safe balanceOf, 7 forwarder balanceOf, 8 reads (RVM.getKeyState, POOL.getReserveData, debt totalSupply)
+        uint256[9] memory n;
         for (uint256 i = 0; i < acc.length; i++) {
             Vm.AccountAccess memory a = acc[i];
             bytes4 sel = a.data.length >= 4 ? bytes4(a.data) : bytes4(0);
@@ -624,63 +698,76 @@ contract CapsBorrowForwarderTest is CapsTestBase {
             if (a.kind == Vm.AccountAccessKind.DelegateCall) {
                 assertEq(a.account, address(fwd), "only delegatecall is the Safe into the forwarder");
                 assertEq(sel, ICapsBorrowForwarder.raiseCapAndBorrow.selector);
-                nDelegate++;
+                n[0]++;
                 continue;
             }
-            if (a.accessor != riskCouncil) continue;
             if (a.kind == Vm.AccountAccessKind.Resume) continue;
-            if (_isExpectedRead(a)) {
-                nReads++;
-                continue;
-            }
 
-            if (a.kind == Vm.AccountAccessKind.Extcodesize) {
-                // The transfer helper checks the asset; solc checks the Pool and Steward before calls with no
-                // return data.
-                assertTrue(
-                    a.account == address(usdc) || a.account == address(pool) || a.account == address(steward)
-                        || a.account == address(capsRvm),
-                    "code-size check on an expected account only"
-                );
-            } else if (a.account == address(pool)) {
-                if (sel == MockPoolV3.getConfiguration.selector) {
-                    assertEq(a.data, abi.encodeCall(MockPoolV3.getConfiguration, (address(usdc))));
-                    nConfig++;
-                } else if (sel == MockPoolV3.borrow.selector) {
+            if (a.accessor == riskCouncil) {
+                if (_isExpectedRead(a)) {
+                    n[8]++;
+                } else if (a.kind == Vm.AccountAccessKind.Extcodesize) {
+                    // solc checks the Pool, Steward, RVM and forwarder before calls; the asset for balanceOf.
+                    assertTrue(
+                        a.account == address(usdc) || a.account == address(pool) || a.account == address(steward)
+                            || a.account == address(capsRvm) || a.account == address(fwd),
+                        "code-size check on an expected account only"
+                    );
+                } else if (a.account == address(pool)) {
+                    assertEq(a.data, abi.encodeCall(MockPoolV3.getConfiguration, (address(usdc))), "Pool call");
+                    n[1]++;
+                } else if (a.account == address(steward)) {
+                    assertEq(sel, MockRiskSteward.updateCaps.selector, "unexpected Steward call");
+                    IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
+                    u[0] = IEngine.CapsUpdate({
+                        asset: address(usdc), supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: LIVE_CAP + 5000 + 10
+                    });
+                    assertEq(a.data, abi.encodeCall(MockRiskSteward.updateCaps, (u)));
+                    n[2]++;
+                } else if (a.account == address(fwd)) {
+                    assertEq(
+                        a.data,
+                        abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), amount, borrower)),
+                        "forwarder call"
+                    );
+                    n[3]++;
+                } else if (a.account == address(usdc)) {
+                    assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (riskCouncil)), "Safe asset call");
+                    n[6]++;
+                } else {
+                    revert("unexpected account called from the Safe context");
+                }
+            } else if (a.accessor == address(fwd)) {
+                if (a.kind == Vm.AccountAccessKind.Extcodesize) {
+                    assertTrue(
+                        a.account == address(usdc) || a.account == address(pool),
+                        "code-size check on an expected account only"
+                    );
+                } else if (a.account == address(pool)) {
                     assertEq(a.data, abi.encodeCall(MockPoolV3.borrow, (address(usdc), amount, 2, 0, borrower)));
-                    nBorrow++;
+                    n[4]++;
+                } else if (a.account == address(usdc)) {
+                    if (sel == IERC20.transfer.selector) {
+                        assertEq(a.data, abi.encodeCall(IERC20.transfer, (borrower, amount)));
+                        n[5]++;
+                    } else {
+                        assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (address(fwd))), "forwarder asset call");
+                        n[7]++;
+                    }
                 } else {
-                    revert("unexpected Pool call");
+                    revert("unexpected account called from the forwarder");
                 }
-            } else if (a.account == address(steward)) {
-                assertEq(sel, MockRiskSteward.updateCaps.selector, "unexpected Steward call");
-                IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
-                u[0] = IEngine.CapsUpdate({
-                    asset: address(usdc), supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: LIVE_CAP + 5000 + 10
-                });
-                assertEq(a.data, abi.encodeCall(MockRiskSteward.updateCaps, (u)));
-                nUpdate++;
-            } else if (a.account == address(usdc)) {
-                if (sel == IERC20.transfer.selector) {
-                    assertEq(a.data, abi.encodeCall(IERC20.transfer, (borrower, amount)));
-                    nTransfer++;
-                } else if (sel == IERC20.balanceOf.selector) {
-                    assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (riskCouncil)));
-                    nBalance++;
-                } else {
-                    revert("unexpected asset call");
-                }
-            } else {
-                revert("unexpected account called from the Safe context");
             }
         }
-        assertEq(nDelegate, 1, "one delegatecall");
-        assertEq(nConfig, 1, "one getConfiguration");
-        assertEq(nUpdate, 1, "one updateCaps");
-        assertEq(nBorrow, 1, "one borrow");
-        assertEq(nTransfer, 1, "one transfer");
-        assertEq(nBalance, 2, "two balance reads");
-        assertEq(nReads, 3, "one RVM key read, one getReserveData, one debt totalSupply");
+        assertEq(n[0], 1, "one delegatecall");
+        assertEq(n[1], 1, "one getConfiguration");
+        assertEq(n[2], 1, "one updateCaps");
+        assertEq(n[3], 1, "one borrowFor");
+        assertEq(n[4], 1, "one borrow");
+        assertEq(n[5], 1, "one transfer");
+        assertEq(n[6], 0, "no Safe balance read");
+        assertEq(n[7], 2, "two forwarder balance reads");
+        assertEq(n[8], 3, "one RVM key read, one getReserveData, one debt totalSupply");
     }
 
     /// @dev CAP-ACL-16 read-only calls, with their exact calldata: POOL.getReserveData and the debt token's

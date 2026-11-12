@@ -80,7 +80,7 @@ contract CapsForkEthereumCore is Test {
         vm.startPrank(borrower);
         IERC20(WETH).approve(address(POOL), 100 ether);
         POOL.supply(WETH, 100 ether, borrower, 0);
-        ICreditDelegationToken(AaveV3EthereumAssets.USDC_V_TOKEN).approveDelegation(riskCouncil, 100_000e6);
+        ICreditDelegationToken(AaveV3EthereumAssets.USDC_V_TOKEN).approveDelegation(address(forwarder), 100_000e6);
         vm.stopPrank();
     }
 

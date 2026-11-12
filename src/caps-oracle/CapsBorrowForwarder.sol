@@ -19,7 +19,9 @@ import { IRiskSteward } from "aave-v3-risk-stewards/interfaces/IRiskSteward.sol"
 
 /// @title CapsBorrowForwarder
 /// @notice Raises an Aave V3 borrow cap through the Risk Steward and borrows in one transaction, with the
-///         debt on the borrower. The Risk Council Safe calls `raiseCapAndBorrow` by delegatecall.
+///         debt on the borrower. The Risk Council Safe calls `raiseCapAndBorrow` by delegatecall, which raises
+///         the cap as the Safe and then calls `borrowFor` on this deployed contract. The borrower delegates credit
+///         to this contract, so the borrowed tokens can only reach the borrower.
 /// @dev No storage. The immutables are read from code, so they resolve inside the delegatecall.
 contract CapsBorrowForwarder is ICapsBorrowForwarder {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
@@ -39,6 +41,9 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
 
     /// @inheritdoc ICapsBorrowForwarder
     address public immutable RVM;
+
+    /// @inheritdoc ICapsBorrowForwarder
+    address public immutable SELF;
 
     /// @param pool the Aave V3 Pool
     /// @param riskSteward the Risk Steward whose `RISK_COUNCIL` is `riskCouncil`
@@ -60,6 +65,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
         RISK_STEWARD = riskSteward;
         RISK_COUNCIL = riskCouncil;
         RVM = rvm;
+        SELF = address(this);
     }
 
     /// @inheritdoc ICapsBorrowForwarder
@@ -97,18 +103,34 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
         updates[0] = IEngine.CapsUpdate({ asset: asset, supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: newCap });
         IRiskSteward(RISK_STEWARD).updateCaps(updates);
 
-        // 6. Borrow with the debt on the borrower. The Pool sends the tokens to the Safe.
-        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
-        // The balance check around the borrow is the point: any balance change, re-entrant or not, reverts.
-        // slither-disable-next-line reentrancy-balance
-        IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
-
-        // 7. Send the tokens to the borrower and require the Safe to keep nothing.
-        IERC20(asset).safeTransfer(onBehalfOf, amount);
-        uint256 balanceAfter = IERC20(asset).balanceOf(address(this));
-        if (balanceAfter != balanceBefore) revert SafeBalanceChanged(balanceBefore, balanceAfter);
+        // 6. Borrow through the deployed forwarder, which holds the borrower's credit delegation and sends the
+        //    tokens to the borrower. No token passes through the Safe.
+        ICapsBorrowForwarder(SELF).borrowFor(asset, amount, onBehalfOf);
 
         emit CapRaisedAndBorrowed(asset, onBehalfOf, amount, oldCap, newCap);
+    }
+
+    /// @inheritdoc ICapsBorrowForwarder
+    function borrowFor(address asset, uint256 amount, address onBehalfOf) external {
+        // 1. Only a plain call from the Risk Council Safe, with valid inputs.
+        if (address(this) != SELF) revert NotDirectCall(address(this));
+        if (msg.sender != RISK_COUNCIL) revert NotRiskCouncil(msg.sender);
+        if (amount == 0 || onBehalfOf == address(0) || onBehalfOf == RISK_COUNCIL || onBehalfOf == SELF) {
+            revert InvalidInput();
+        }
+
+        // 2. Borrow with the debt on the borrower, under its credit delegation to this contract. The Pool sends
+        //    the tokens here.
+        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        // The balance check around the borrow is the point: any balance change, re-entrant or not, reverts.
+        IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
+
+        // 3. Send the tokens to the borrower and require this contract to keep nothing.
+        IERC20(asset).safeTransfer(onBehalfOf, amount);
+        uint256 balanceAfter = IERC20(asset).balanceOf(address(this));
+        if (balanceAfter != balanceBefore) revert ForwarderBalanceChanged(balanceBefore, balanceAfter);
+
+        emit BorrowedFor(asset, onBehalfOf, amount);
     }
 
     /// @dev max(live cap, debt) + amount + extraCapTokens, in whole tokens. The debt and the amount round up.
