@@ -19,6 +19,7 @@ library PlasmaCoreDeployed {
     uint256 internal constant DISCOUNT_AGENT_ID = 2;
     uint256 internal constant EMODE_AGENT_ID = 3;
 
-    // PT-sUSDE-28JAN2027, phase 2.
-    address internal constant EMA_ORACLE_PT_sUSDE_28JAN2027 = address(0);
+    // PT-sUSDE-28JAN2027, phase 2, broadcast 2026-11-16 at block 37902605, roles read back onchain.
+    // Runtime identical to the PT-sUSDe-22OCT2026 EMA oracle 0xfA3187E63d5eEc6189702E24dEAbC82b80853809.
+    address internal constant EMA_ORACLE_PT_sUSDE_28JAN2027 = 0x3A8Fdb0F21d932937C8e50AF8827fA5C413D6787;
 }
