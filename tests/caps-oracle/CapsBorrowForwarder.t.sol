@@ -738,25 +738,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
                     revert("unexpected account called from the Safe context");
                 }
             } else if (a.accessor == address(fwd)) {
-                if (a.kind == Vm.AccountAccessKind.Extcodesize) {
-                    assertTrue(
-                        a.account == address(usdc) || a.account == address(pool),
-                        "code-size check on an expected account only"
-                    );
-                } else if (a.account == address(pool)) {
-                    assertEq(a.data, abi.encodeCall(MockPoolV3.borrow, (address(usdc), amount, 2, 0, borrower)));
-                    n[4]++;
-                } else if (a.account == address(usdc)) {
-                    if (sel == IERC20.transfer.selector) {
-                        assertEq(a.data, abi.encodeCall(IERC20.transfer, (borrower, amount)));
-                        n[5]++;
-                    } else {
-                        assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (address(fwd))), "forwarder asset call");
-                        n[7]++;
-                    }
-                } else {
-                    revert("unexpected account called from the forwarder");
-                }
+                _countForwarderCall(a, sel, amount, n);
             }
         }
         assertEq(n[0], 1, "one delegatecall");
@@ -768,6 +750,29 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(n[6], 0, "no Safe balance read");
         assertEq(n[7], 2, "two forwarder balance reads");
         assertEq(n[8], 3, "one RVM key read, one getReserveData, one debt totalSupply");
+    }
+
+    /// @dev CAP-ACL-16, a call made by the forwarder in borrowFor: POOL.borrow, asset.transfer to the borrower, or
+    ///      asset.balanceOf of the forwarder. Counts into `n` (4 borrow, 5 transfer, 7 forwarder balanceOf).
+    function _countForwarderCall(Vm.AccountAccess memory a, bytes4 sel, uint256 amount, uint256[9] memory n) private {
+        if (a.kind == Vm.AccountAccessKind.Extcodesize) {
+            assertTrue(
+                a.account == address(usdc) || a.account == address(pool), "code-size check on an expected account only"
+            );
+        } else if (a.account == address(pool)) {
+            assertEq(a.data, abi.encodeCall(MockPoolV3.borrow, (address(usdc), amount, 2, 0, borrower)));
+            n[4]++;
+        } else if (a.account == address(usdc)) {
+            if (sel == IERC20.transfer.selector) {
+                assertEq(a.data, abi.encodeCall(IERC20.transfer, (borrower, amount)));
+                n[5]++;
+            } else {
+                assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (address(fwd))), "forwarder asset call");
+                n[7]++;
+            }
+        } else {
+            revert("unexpected account called from the forwarder");
+        }
     }
 
     /// @dev CAP-ACL-16 read-only calls, with their exact calldata: POOL.getReserveData and the debt token's

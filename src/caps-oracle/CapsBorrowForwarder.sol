@@ -123,6 +123,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder {
         //    the tokens here.
         uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
         // The balance check around the borrow is the point: any balance change, re-entrant or not, reverts.
+        // slither-disable-next-line reentrancy-balance
         IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
 
         // 3. Send the tokens to the borrower and require this contract to keep nothing.
