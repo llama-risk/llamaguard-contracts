@@ -166,7 +166,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
     }
 
     function _setLimits(uint256 maxRaiseBps_, uint256 minRaiseDelay_) internal {
-        if (maxRaiseBps_ == 0) revert InvalidInput();
+        if (maxRaiseBps_ == 0 || minRaiseDelay_ == 0) revert InvalidInput();
         maxRaiseBps = maxRaiseBps_;
         minRaiseDelay = minRaiseDelay_;
         emit LimitsSet(maxRaiseBps_, minRaiseDelay_);
@@ -192,14 +192,15 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
 
     /// @dev Borrows under the borrower's delegation, forwards the tokens, then renounces the rest of the delegation.
     function _borrowFor(address asset, uint256 amount, address onBehalfOf) internal {
-        address debtToken = IPool(POOL).getReserveData(asset).variableDebtTokenAddress;
+        ICreditDelegationToken debtToken =
+            ICreditDelegationToken(IPool(POOL).getReserveData(asset).variableDebtTokenAddress);
         uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
         IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
         IERC20(asset).safeTransfer(onBehalfOf, amount);
         uint256 balanceAfter = IERC20(asset).balanceOf(address(this));
         if (balanceAfter != balanceBefore) revert ForwarderBalanceChanged(balanceBefore, balanceAfter);
 
-        ICreditDelegationToken(debtToken).renounceDelegation(onBehalfOf);
+        debtToken.renounceDelegation(onBehalfOf);
     }
 
     /// @dev max(live cap, debt) + amount + 1, whole tokens, debt and amount rounded up.

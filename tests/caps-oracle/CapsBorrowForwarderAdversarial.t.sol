@@ -118,7 +118,7 @@ abstract contract AdversarialBase is CapsTestBase {
         capsRvm.setPool(address(pool));
         engine = new MockCapsEngine(pool);
         fwd = new CapsBorrowForwarder(
-            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 10_000, 0
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 10_000, 1
         );
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
@@ -374,6 +374,7 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
         assertEq(t.balanceOf(address(fwd)) + t.balanceOf(riskCouncil), 0);
 
         // Bubbled, from the transfer to the borrower: the whole call reverts.
+        skip(1);
         uint256 cap = _liveBorrowCap(address(t));
         _delegate(borrower, address(t), 5000e6);
         t.arm(address(fwd), borrower, address(fwd), _raiseCall(address(t), 5000e6, borrower), true);
@@ -441,6 +442,7 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
 
         vm.prank(governance);
         fwd.setCaller(attacker, true);
+        skip(1);
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 1e6)

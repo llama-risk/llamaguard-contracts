@@ -131,6 +131,6 @@ interface ICapsBorrowForwarder {
     /// @notice Set the per-raise limit and the per-period delay.
     /// @dev Reverts InvalidInput when `maxRaiseBps_` is 0.
     /// @param maxRaiseBps_ max cap increase in one raise, in bps of the live cap
-    /// @param minRaiseDelay_ min seconds between two raises of the same asset, 0 for no delay
+    /// @param minRaiseDelay_ min seconds between two raises of the same asset, above 0
     function setLimits(uint256 maxRaiseBps_, uint256 minRaiseDelay_) external;
 }
