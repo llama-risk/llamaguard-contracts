@@ -9,7 +9,7 @@ import { MockPoolV3 } from "./MockPoolV3.sol";
 
 /// @title MockRiskSteward
 /// @notice Stand-in for Aave's `RiskSteward.updateCaps` (aave-v3-risk-stewards RiskSteward.sol:81), for the
-///         CapsBorrowForwarder tests. Same behaviour on the points the forwarder depends on:
+///         RVM and scaffold tests. Same behaviour on the points those tests depend on:
 ///         - `onlyRiskCouncil`: reverts `InvalidCaller` unless `msg.sender == RISK_COUNCIL` (line 55-58).
 ///         - Validates every update before any write (`_validateCapsUpdate`, line 181), then sets the
 ///           timelocks and writes the caps (`_updateCaps`, line 508).
@@ -47,7 +47,7 @@ contract MockRiskSteward {
     mapping(address asset => uint40) public supplyCapLastUpdated;
     mapping(address asset => bool) public isAddressRestricted;
 
-    /// @notice Last call arguments, for assertions on what the forwarder sent.
+    /// @notice Last call arguments, for assertions on what the caller sent.
     uint256 public updateCapsCalls;
     address public lastAsset;
     uint256 public lastSupplyCap;

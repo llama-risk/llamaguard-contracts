@@ -30,13 +30,13 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         super.setUp();
         assets = [address(weth), address(usdc)];
 
-        registry = new CapsParameterRegistry(llamaRiskSafe, riskCouncil);
+        registry = new CapsParameterRegistry(governance, llamaRiskSafe);
         IReg.MarketParams memory p;
         // TODO(params): theta, margin and margin floor are placeholders.
         p.defaultParams = IReg.WorkflowParams({
             enabled: true, triggerBps: THETA_BPS, marginBps: MARGIN_BPS, minMarginTokens: MIN_MARGIN_TOKENS
         });
-        vm.prank(riskCouncil);
+        vm.prank(llamaRiskSafe);
         registry.addMarket(address(pool), p);
 
         for (uint256 i = 0; i < 2; i++) {
@@ -55,7 +55,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
             _setRvmRateLimitConfig(a, IRvm.CapKind.SUPPLY, supplyRateLimitConfig);
 
             IReg.ReserveOverride memory none;
-            vm.startPrank(riskCouncil);
+            vm.startPrank(llamaRiskSafe);
             registry.addReserve(address(pool), a, 0, none);
             registry.addReserve(address(pool), a, 1, none);
             vm.stopPrank();
@@ -71,6 +71,7 @@ contract CapsSystemInvariantTest is CapsSystemBase {
         d.aTokens = [aTokenOf[assets[0]], aTokenOf[assets[1]]];
         d.ids = [borrowRaiseId, borrowCutId, supplyRaiseId, supplyCutId];
         d.roles = [governance, riskCouncil, updater, agentAdmin, attacker, borrower];
+        d.registryUpdater = llamaRiskSafe;
         handler = new CapsSystemHandler(d);
 
         // The handler's supply and withdraw act on the aTokens it holds. Move the start supply to it.

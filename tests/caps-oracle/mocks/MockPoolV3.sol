@@ -12,7 +12,7 @@ import { WadRayMath } from "aave-v3-origin/src/contracts/protocol/libraries/math
 /// @notice Variable debt token of one MockPoolV3 reserve. Mirrors the parts of Aave's VariableDebtToken
 ///         that the caps oracle reads: `totalSupply()` is live debt, `scaledTotal.rayMulCeil(index)`
 ///         (VariableDebtToken.sol:150-153, TokenMath.sol:108-113 in aave-v3-origin 3.6.0), and credit
-///         delegation (`approveDelegation`, `borrowAllowance`).
+///         delegation (`approveDelegation`, `borrowAllowance`, `renounceDelegation`).
 contract MockVariableDebtToken {
     using WadRayMath for uint256;
 
@@ -48,6 +48,12 @@ contract MockVariableDebtToken {
 
     function approveDelegation(address delegatee, uint256 amount) external {
         borrowAllowance[msg.sender][delegatee] = amount;
+    }
+
+    /// @notice ICreditDelegationToken.renounceDelegation (aave-v3-origin 3.6.0): the delegatee (`msg.sender`)
+    ///         drops the whole allowance `delegator` gave it.
+    function renounceDelegation(address delegator) external {
+        borrowAllowance[delegator][msg.sender] = 0;
     }
 
     /// @dev Pool only: use `amount` of the allowance that `from` gave to `to`.
@@ -149,6 +155,15 @@ contract MockPoolV3 {
 
     /// @notice Set the borrow cap directly, as `PoolConfigurator.setBorrowCap` does: no check against
     ///         debt and no frozen or paused check (PoolConfigurator.sol:345-355).
+    /// @notice The mock Pool is its own addresses provider and configurator.
+    function ADDRESSES_PROVIDER() external view returns (address) {
+        return address(this);
+    }
+
+    function getPoolConfigurator() external view returns (address) {
+        return address(this);
+    }
+
     function setBorrowCap(address asset, uint256 cap) external {
         DataTypes.ReserveConfigurationMap memory c = _reserves[asset].configuration;
         c.setBorrowCap(cap);

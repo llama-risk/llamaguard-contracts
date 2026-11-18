@@ -6,7 +6,6 @@ import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interf
 import { MockERC20 } from "./mocks/MockERC20.sol";
 import { MockPoolV3, MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
 import { MockRiskSteward } from "./mocks/MockRiskSteward.sol";
-import { MockSafe } from "./mocks/MockSafe.sol";
 
 /// @title CapsTestBase
 /// @notice Shared fixtures for the Caps Oracle Stage 1 tests: role addresses, a mock Aave V3 Pool with three
@@ -21,8 +20,7 @@ abstract contract CapsTestBase is Test {
 
     /// @dev RVM, AgentHub and CapsParameterRegistry owner on Ethereum (the Aave Executor).
     address internal governance = makeAddr("governanceExecutor");
-    /// @dev Risk Council Safe: RVM `riskCouncil`, Steward `RISK_COUNCIL`, forwarder `RISK_COUNCIL`.
-    ///      Tests that need it to act as a Safe call `_etchSafeAtRiskCouncil()`.
+    /// @dev Risk Council Safe: RVM `riskCouncil`, Steward `RISK_COUNCIL`, the forwarder's allowlisted caller.
     address internal riskCouncil = makeAddr("riskCouncilSafe");
     /// @dev Has no RVM role. Kept as a distinct caller for the access tests.
     address internal updater = makeAddr("updater");
@@ -184,11 +182,5 @@ abstract contract CapsTestBase is Test {
 
     function _liveBorrowCap(address asset) internal view returns (uint256 borrowCap) {
         (borrowCap,) = pool.getReserveCaps(asset);
-    }
-
-    /// @notice Run the test as a Safe: put MockSafe's code at `riskCouncil`, so it can delegatecall and call.
-    ///         Storage of the address is empty (nonce 0).
-    function _etchSafeAtRiskCouncil() internal {
-        vm.etch(riskCouncil, address(new MockSafe()).code);
     }
 }

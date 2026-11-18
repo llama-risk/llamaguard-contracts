@@ -69,6 +69,22 @@ contract MockCapsRvm {
         _rateLimitConfigs[asset][kind] = rateLimitConfig;
     }
 
+    /// @dev The stored entry as a KeyState, with no hold and no increase time.
+    function getKeyState(
+        address asset,
+        ICapsRangeValidationModule.CapKind kind
+    )
+        external
+        view
+        returns (ICapsRangeValidationModule.KeyState memory s)
+    {
+        ICapsRangeValidationModule.RateLimitConfig memory c = _rateLimitConfigs[asset][kind];
+        s.maxCap = c.maxCap;
+        s.maxHeadroom = c.maxHeadroom;
+        s.alphaBps = c.alphaBps;
+        s.cutBandBps = c.cutBandBps;
+    }
+
     function getRateLimitConfig(
         address asset,
         ICapsRangeValidationModule.CapKind kind

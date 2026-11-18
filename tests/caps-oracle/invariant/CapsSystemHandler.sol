@@ -40,6 +40,7 @@ contract CapsSystemHandler is Test {
         MockAToken[2] aTokens;
         uint256[4] ids; // borrow raise, borrow cut, supply raise, supply cut
         address[6] roles; // governance, riskCouncil, updater, agentAdmin, attacker, borrower
+        address registryUpdater; // LlamaRisk Safe
     }
 
     AgentHub public hub;
@@ -56,6 +57,7 @@ contract CapsSystemHandler is Test {
     address internal agentAdmin;
     address internal attacker;
     address internal borrower;
+    address internal registryUpdater;
 
     // ─── Ghosts
     // ───────────────────────────────────────────────────────────────
@@ -98,6 +100,7 @@ contract CapsSystemHandler is Test {
         riskCouncil = d.roles[1];
         updater = d.roles[2];
         agentAdmin = d.roles[3];
+        registryUpdater = d.registryUpdater;
         attacker = d.roles[4];
         borrower = d.roles[5];
         for (uint256 i = 0; i < NUM_ASSETS; i++) {
@@ -374,7 +377,7 @@ contract CapsSystemHandler is Test {
         address a = _asset(assetSeed);
         uint8 k = uint8(_kind(kindSeed));
         bytes32 before = fullDigest();
-        vm.startPrank(riskCouncil); // registry updater
+        vm.startPrank(registryUpdater);
         op = op % 4;
         if (op == 0) {
             try registry.setEnabled(address(pool), a, k, IReg.EnabledOverride(v1 % 3)) {
