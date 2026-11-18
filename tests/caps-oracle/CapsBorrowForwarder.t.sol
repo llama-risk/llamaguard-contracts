@@ -4,15 +4,15 @@ pragma solidity ^0.8.26;
 import { Vm as VmFull, VmSafe as Vm } from "forge-std/Vm.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import {
     IAaveV3ConfigEngine as IEngine
 } from "aave-v3-origin/src/contracts/extensions/v3-config-engine/IAaveV3ConfigEngine.sol";
 import { EngineFlags } from "aave-v3-origin/src/contracts/extensions/v3-config-engine/EngineFlags.sol";
 import { CapsTestBase } from "./CapsTestBase.sol";
 import { MockERC20 } from "./mocks/MockERC20.sol";
-import { MockSafe } from "./mocks/MockSafe.sol";
 import { MockPoolV3, MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
-import { MockRiskSteward } from "./mocks/MockRiskSteward.sol";
+import { MockCapsEngine } from "./mocks/MockCapsEngine.sol";
 import { MockCapsRvm } from "./mocks/MockCapsRvm.sol";
 import { CapsBorrowForwarder } from "../../src/caps-oracle/CapsBorrowForwarder.sol";
 import { ICapsBorrowForwarder } from "../../src/caps-oracle/interfaces/ICapsBorrowForwarder.sol";
@@ -76,32 +76,40 @@ contract QuirkyERC20 is MockERC20 {
 }
 
 /// @title CapsBorrowForwarderTest
-/// @notice Unit tests of CapsBorrowForwarder against MockPoolV3, MockRiskSteward and MockSafe at the Risk Council
-///         address. Covers CAP-ST-26, CAP-ST-27, CAP-ST-29, CAP-ST-30, CAP-ST-31, CAP-ACL-12, CAP-ACL-13,
-///         CAP-ACL-16 and CAP-UNIT-13. The fork versions of the (fork) entries run
-///         against the real Pool and Risk Steward elsewhere.
+/// @notice Unit tests of the standalone CapsBorrowForwarder against MockPoolV3, MockCapsEngine (delegatecall
+///         target) and MockCapsRvm. The allowlisted caller is the Risk Council address, by plain call. Covers
+///         CAP-ST-26, CAP-ST-27, CAP-ST-29, CAP-ST-30, CAP-ST-31, CAP-ACL-12, CAP-ACL-16 and CAP-UNIT-13, plus
+///         the caller allowlist, the per-raise and per-period limits, and the delegation renounce.
 contract CapsBorrowForwarderTest is CapsTestBase {
     CapsBorrowForwarder internal fwd;
-    MockSafe internal safe;
     MockCapsRvm internal capsRvm;
+    MockCapsEngine internal engine;
 
     uint256 internal constant LIVE_CAP = 1_000_000; // whole USDC
     uint256 internal constant LIVE_DEBT = 900_000; // whole USDC
     uint256 internal constant LIQUIDITY = 100_000_000; // whole tokens per asset in the pool
+    /// Default per-raise limit: +100% of the live cap, as the Aave Risk Steward cap rule.
+    uint256 internal constant MAX_RAISE_BPS = 10_000;
+    /// Default per-period limit: no delay. The limit tests set their own.
+    uint256 internal constant MIN_RAISE_DELAY = 0;
+    /// RVM borrow maxCap of every asset unless a test sets another.
+    uint64 internal constant RVM_MAX_CAP = 100_000_000_000;
 
     function setUp() public override {
         super.setUp();
-        // The Steward debounce compares against lastUpdated = 0, so start well past 36 h.
         vm.warp(1_700_000_000);
-        _etchSafeAtRiskCouncil();
-        safe = MockSafe(riskCouncil);
         capsRvm = new MockCapsRvm();
         capsRvm.setPool(address(pool));
-        fwd = new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(capsRvm));
+        engine = new MockCapsEngine(pool);
+        fwd = _deploy(MAX_RAISE_BPS, MIN_RAISE_DELAY);
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
         weth.mint(address(pool), _wei(address(weth), LIQUIDITY));
         wbtc.mint(address(pool), _wei(address(wbtc), LIQUIDITY));
+
+        _setRvmMaxCap(address(usdc), RVM_MAX_CAP);
+        _setRvmMaxCap(address(weth), RVM_MAX_CAP);
+        _setRvmMaxCap(address(wbtc), RVM_MAX_CAP);
 
         pool.setBorrowCap(address(usdc), LIVE_CAP);
         _setDebt(address(usdc), LIVE_DEBT, 0);
@@ -110,6 +118,12 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     // ═══════════════════════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    function _deploy(uint256 bps, uint256 delay) internal returns (CapsBorrowForwarder) {
+        return new CapsBorrowForwarder(
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, bps, delay
+        );
+    }
 
     function _debtToken(address asset) internal view returns (MockVariableDebtToken) {
         return MockVariableDebtToken(pool.getReserveVariableDebtToken(asset));
@@ -121,22 +135,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         vdt.approveDelegation(address(fwd), amount);
     }
 
-    function _call(
-        address asset,
-        uint256 amount,
-        address to,
-        uint256 extraCapTokens,
-        uint256 maxNewCap
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (asset, amount, to, extraCapTokens, maxNewCap));
-    }
-
-    function _run(address asset, uint256 amount, uint256 extraCapTokens, uint256 maxNewCap) internal {
-        safe.execDelegatecall(address(fwd), _call(asset, amount, borrower, extraCapTokens, maxNewCap));
+    function _run(address asset, uint256 amount) internal {
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrow(asset, amount, borrower);
     }
 
     function _setRvmMaxCap(address asset, uint64 maxCap) internal {
@@ -145,63 +146,398 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         capsRvm.setRateLimitConfig(asset, IRvm.CapKind.BORROW, c);
     }
 
+    function _setLimits(uint256 bps, uint256 delay) internal {
+        vm.prank(governance);
+        fwd.setLimits(bps, delay);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
-    // CONSTRUCTOR AND IMMUTABLES
+    // CONSTRUCTOR, IMMUTABLES AND OWNERSHIP
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_CapsBorrowForwarder_immutables() public view {
         assertEq(fwd.POOL(), address(pool));
-        assertEq(fwd.RISK_STEWARD(), address(steward));
-        assertEq(fwd.RISK_COUNCIL(), riskCouncil);
+        assertEq(fwd.CONFIG_ENGINE(), address(engine));
         assertEq(fwd.RVM(), address(capsRvm));
-        assertEq(fwd.SELF(), address(fwd));
+        assertEq(fwd.owner(), governance, "owner is the AgentHub owner");
+        assertTrue(fwd.isCaller(riskCouncil), "Risk Council allowlisted");
+        assertFalse(fwd.isCaller(borrower));
+        assertEq(fwd.maxRaiseBps(), MAX_RAISE_BPS);
+        assertEq(fwd.minRaiseDelay(), MIN_RAISE_DELAY);
+        assertEq(fwd.lastRaiseAt(address(usdc)), 0);
+    }
+
+    /// The constructor emits CallerSet for the initial caller and one LimitsSet.
+    function test_CapsBorrowForwarder_constructor_emitsEvents() public {
+        vm.expectEmit(true, false, false, true);
+        emit ICapsBorrowForwarder.CallerSet(riskCouncil, true);
+        vm.expectEmit(false, false, false, true);
+        emit ICapsBorrowForwarder.LimitsSet(2500, 1 days);
+        CapsBorrowForwarder f = new CapsBorrowForwarder(
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 2500, 1 days
+        );
+        assertTrue(f.isCaller(riskCouncil));
+        assertFalse(f.isCaller(updater));
+        assertEq(f.maxRaiseBps(), 2500);
+        assertEq(f.minRaiseDelay(), 1 days);
     }
 
     function test_CapsBorrowForwarder_constructor_zeroAddress_reverts() public {
+        address c = riskCouncil;
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
+        new CapsBorrowForwarder(address(0), address(pool), address(engine), address(capsRvm), c, 1, 0);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(0), address(steward), riskCouncil, address(capsRvm));
+        new CapsBorrowForwarder(governance, address(0), address(engine), address(capsRvm), c, 1, 0);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(0), riskCouncil, address(capsRvm));
+        new CapsBorrowForwarder(governance, address(pool), address(0), address(capsRvm), c, 1, 0);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(steward), address(0), address(capsRvm));
+        new CapsBorrowForwarder(governance, address(pool), address(engine), address(0), c, 1, 0);
+
+        // A zero initial caller.
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(0));
+        new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), address(0), 1, 0);
     }
 
-    /// A Steward on another Pool, or with another Risk Council, is refused at deploy: the forwarder would
-    /// otherwise raise the cap on one Pool and borrow on another.
-    function test_CapsBorrowForwarder_constructor_stewardMismatch_reverts() public {
-        MockPoolV3 otherPool = new MockPoolV3();
+    /// maxRaiseBps 0 would block every raise: refused at deploy.
+    function test_CapsBorrowForwarder_constructor_zeroMaxRaiseBps_reverts() public {
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(otherPool), address(steward), riskCouncil, address(capsRvm));
+        new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), riskCouncil, 0, 1 days);
+    }
 
-        MockRiskSteward otherCouncil = new MockRiskSteward(makeAddr("otherCouncil"), pool);
-        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(otherCouncil), riskCouncil, address(capsRvm));
-
-        // An RVM of another Pool: its maxCap would not bound this Pool's caps.
+    /// An RVM of another Pool is refused: its maxCap would not bound this Pool's caps.
+    function test_CapsBorrowForwarder_constructor_rvmPoolMismatch_reverts() public {
         MockCapsRvm otherRvm = new MockCapsRvm();
-        otherRvm.setPool(address(otherPool));
+        otherRvm.setPool(address(new MockPoolV3()));
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(otherRvm));
+        new CapsBorrowForwarder(governance, address(pool), address(engine), address(otherRvm), riskCouncil, 1, 0);
     }
 
+    /// A config engine of another Pool is refused: it would write caps on a Pool the bounds are not read from.
+    function test_CapsBorrowForwarder_constructor_enginePoolMismatch_reverts() public {
+        MockCapsEngine otherEngine = new MockCapsEngine(new MockPoolV3());
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        new CapsBorrowForwarder(governance, address(pool), address(otherEngine), address(capsRvm), riskCouncil, 1, 0);
+    }
+
+    /// Cap 1 is a manual freeze of borrowing: the forwarder does not lift it, whatever the limits allow.
+    function test_CapsBorrowForwarder_raiseCapAndBorrow_frozenCap_reverts() public {
+        pool.setBorrowCap(address(usdc), 1);
+        _delegate(address(usdc), 5000e6);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.BorrowCapFrozen.selector, address(usdc)));
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), 1);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+    }
+
+    /// An engine with the right Pool but another PoolConfigurator is refused.
+    function test_CapsBorrowForwarder_constructor_engineConfiguratorMismatch_reverts() public {
+        vm.mockCall(address(engine), abi.encodeWithSignature("POOL_CONFIGURATOR()"), abi.encode(address(0xBEEF)));
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), riskCouncil, 1, 0);
+    }
+
+    function test_CapsBorrowForwarder_renounceOwnership_reverts() public {
+        vm.prank(governance);
+        vm.expectRevert(ICapsBorrowForwarder.NotSupported.selector);
+        fwd.renounceOwnership();
+        assertEq(fwd.owner(), governance);
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        fwd.renounceOwnership();
+    }
+
+    /// Two-step ownership transfer: the new owner holds the admin functions only after accepting.
+    function test_CapsBorrowForwarder_transferOwnership_twoStep() public {
+        address newOwner = makeAddr("newOwner");
+        vm.prank(governance);
+        fwd.transferOwnership(newOwner);
+        assertEq(fwd.owner(), governance);
+        assertEq(fwd.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, newOwner));
+        fwd.setCaller(attacker, true);
+
+        vm.prank(newOwner);
+        fwd.acceptOwnership();
+        assertEq(fwd.owner(), newOwner);
+        vm.prank(newOwner);
+        fwd.setCaller(updater, true);
+        assertTrue(fwd.isCaller(updater));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALLER ALLOWLIST (CAP-ACL-12)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// CAP-ACL-12: a borrower, an attacker, the owner or the forwarder itself calls raiseCapAndBorrow: NotCaller.
+    /// No cap change and no borrow, the delegation stays unused.
+    function test_CAP_ACL_12_raiseCapAndBorrow_notCaller_reverts() public {
+        _delegate(address(usdc), 5000e6);
+        address[4] memory who = [borrower, attacker, governance, address(fwd)];
+        for (uint256 i = 0; i < who.length; i++) {
+            vm.prank(who[i]);
+            vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotCaller.selector, who[i]));
+            fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower);
+        }
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 5000e6, "delegation unused");
+    }
+
+    /// CAP-ACL-12 fuzzed over the caller.
+    function testFuzz_CAP_ACL_12_raiseCapAndBorrow_notCaller_reverts(address caller) public {
+        vm.assume(caller != riskCouncil);
+        _delegate(address(usdc), 5000e6);
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotCaller.selector, caller));
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower);
+    }
+
+    /// setCaller is owner only; it adds and removes callers and emits CallerSet.
+    function test_setCaller_ownerOnly_addsAndRemoves() public {
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        fwd.setCaller(attacker, true);
+        // An allowlisted caller is not an admin either.
+        vm.prank(riskCouncil);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, riskCouncil));
+        fwd.setCaller(updater, true);
+
+        vm.expectEmit(true, false, false, true, address(fwd));
+        emit ICapsBorrowForwarder.CallerSet(updater, true);
+        vm.prank(governance);
+        fwd.setCaller(updater, true);
+        assertTrue(fwd.isCaller(updater));
+
+        // The new caller can raise.
+        _delegate(address(usdc), 5000e6);
+        vm.prank(updater);
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+
+        // Removed: the Risk Council can no longer raise.
+        vm.expectEmit(true, false, false, true, address(fwd));
+        emit ICapsBorrowForwarder.CallerSet(riskCouncil, false);
+        vm.prank(governance);
+        fwd.setCaller(riskCouncil, false);
+        assertFalse(fwd.isCaller(riskCouncil));
+        _delegate(address(usdc), 5000e6);
+        vm.prank(riskCouncil);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotCaller.selector, riskCouncil));
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower);
+    }
+
+    function test_setCaller_zeroAddress_reverts() public {
+        vm.prank(governance);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.setCaller(address(0), true);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INPUT CHECKS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Zero amount, and a borrower that is the zero address, the forwarder or the caller itself: InvalidInput.
     function test_CapsBorrowForwarder_invalidInput_reverts() public {
         _delegate(address(usdc), type(uint256).max);
+        vm.startPrank(riskCouncil);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        safe.execDelegatecall(address(fwd), _call(address(usdc), 0, borrower, 10, 2_000_000));
+        fwd.raiseCapAndBorrow(address(usdc), 0, borrower);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        safe.execDelegatecall(address(fwd), _call(address(usdc), 5000e6, address(0), 10, 2_000_000));
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, address(0));
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        safe.execDelegatecall(address(fwd), _call(address(usdc), 5000e6, riskCouncil, 10, 2_000_000));
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, address(fwd));
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, riskCouncil);
+        vm.stopPrank();
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+    }
+
+    /// A caller that is the borrower of its own raise is refused even when it delegated credit to the forwarder.
+    function test_raiseCapAndBorrow_callerAsBorrower_reverts() public {
+        vm.prank(riskCouncil);
+        _debtToken(address(usdc)).approveDelegation(address(fwd), 5000e6);
+        vm.prank(riskCouncil);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrow(address(usdc), 5000e6, riskCouncil);
+        assertEq(_debtToken(address(usdc)).balanceOf(riskCouncil), 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BATCH
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function _delegateFrom(address who, address asset, uint256 amount) internal {
+        MockVariableDebtToken vdt = _debtToken(asset);
+        vm.prank(who);
+        vdt.approveDelegation(address(fwd), amount);
+    }
+
+    function _requests(uint256 a, uint256 b) internal view returns (ICapsBorrowForwarder.BorrowRequest[] memory r) {
+        r = new ICapsBorrowForwarder.BorrowRequest[](2);
+        r[0] = ICapsBorrowForwarder.BorrowRequest({ onBehalfOf: borrower, amount: a });
+        r[1] = ICapsBorrowForwarder.BorrowRequest({ onBehalfOf: updater, amount: b });
+    }
+
+    /// Two borrowers in one call: one cap raise for the sum (+1 buffer), each gets its own tokens and debt.
+    function test_raiseCapAndBorrowBatch_oneRaise_eachBorrowerPaid() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        _delegateFrom(borrower, address(usdc), 5000e6);
+        _delegateFrom(updater, address(usdc), 3000e6);
+        MockVariableDebtToken vdt = _debtToken(address(usdc));
+
+        vm.expectEmit(true, true, false, true, address(fwd));
+        emit ICapsBorrowForwarder.CapRaisedAndBorrowed(address(usdc), borrower, 5000e6, LIVE_CAP, LIVE_CAP + 8001);
+        vm.expectEmit(true, true, false, true, address(fwd));
+        emit ICapsBorrowForwarder.CapRaisedAndBorrowed(address(usdc), updater, 3000e6, LIVE_CAP, LIVE_CAP + 8001);
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 3000e6));
+
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 8001, "one raise for the sum");
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+        assertEq(usdc.balanceOf(updater), 3000e6);
+        assertEq(vdt.balanceOf(borrower), 5000e6);
+        assertEq(vdt.balanceOf(updater), 3000e6);
+        assertEq(vdt.borrowAllowance(borrower, address(fwd)), 0);
+        assertEq(vdt.borrowAllowance(updater, address(fwd)), 0);
+        assertEq(usdc.balanceOf(address(fwd)), 0, "forwarder keeps nothing");
+        assertEq(usdc.balanceOf(riskCouncil), 0, "caller keeps nothing");
+        assertEq(fwd.lastRaiseAt(address(usdc)), block.timestamp, "one raise recorded");
+    }
+
+    /// The cap rounds the sum up once: 0.5 + 0.5 USDC adds 1 token, plus the buffer.
+    function test_raiseCapAndBorrowBatch_roundsTheSum() public {
+        _delegateFrom(borrower, address(usdc), 500_000);
+        _delegateFrom(updater, address(usdc), 500_000);
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(500_000, 500_000));
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 2);
+    }
+
+    /// One failed borrow (second delegation 1 USDC short) reverts the whole batch: no cap change, no borrow.
+    function test_raiseCapAndBorrowBatch_oneFails_revertsAll() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        _delegateFrom(borrower, address(usdc), 5000e6);
+        _delegateFrom(updater, address(usdc), 2999e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 2999e6, 3000e6
+            )
+        );
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 3000e6));
+
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
+        assertEq(usdc.balanceOf(borrower), 0, "first borrow rolled back");
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 5000e6, "delegation kept");
+        assertEq(fwd.lastRaiseAt(address(usdc)), 0, "timer rolled back");
+    }
+
+    /// The per-raise limit applies to the sum: each request fits 1% of the cap, the sum does not.
+    function test_raiseCapAndBorrowBatch_limitOnSum() public {
+        _setLimits(100, 0); // max +10,000
+        _delegateFrom(borrower, address(usdc), 6000e6);
+        _delegateFrom(updater, address(usdc), 6000e6);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 12_001, 10_000));
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(6000e6, 6000e6));
+
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(6000e6, 3999e6));
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 10_000, "sum exactly at the limit passes");
+    }
+
+    /// The RVM maxCap bounds the sum.
+    function test_raiseCapAndBorrowBatch_aboveRvmMaxCap_reverts() public {
+        _delegateFrom(borrower, address(usdc), 5000e6);
+        _delegateFrom(updater, address(usdc), 3000e6);
+        _setRvmMaxCap(address(usdc), 1_008_000);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_008_001, 1_008_000));
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 3000e6));
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+    }
+
+    /// A batch counts as one raise for the delay.
+    function test_raiseCapAndBorrowBatch_sharesTheDelay() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        _delegateFrom(borrower, address(usdc), 5000e6);
+        _delegateFrom(updater, address(usdc), 3000e6);
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 3000e6));
+
+        _delegateFrom(borrower, address(usdc), 1000e6);
+        vm.expectRevert(
+            abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), block.timestamp + 1 days)
+        );
+        _run(address(usdc), 1000e6);
+    }
+
+    /// Only an allowlisted caller; 1 to 20 requests; every request is checked like a single borrow.
+    function test_raiseCapAndBorrowBatch_inputChecks() public {
+        _delegateFrom(borrower, address(usdc), 5000e6);
+        _delegateFrom(updater, address(usdc), 3000e6);
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotCaller.selector, attacker));
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 3000e6));
+
+        vm.startPrank(riskCouncil);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), new ICapsBorrowForwarder.BorrowRequest[](0));
+
+        ICapsBorrowForwarder.BorrowRequest[] memory tooMany = new ICapsBorrowForwarder.BorrowRequest[](21);
+        for (uint256 i; i < 21; ++i) {
+            tooMany[i] = ICapsBorrowForwarder.BorrowRequest({ onBehalfOf: borrower, amount: 1 });
+        }
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), tooMany);
+
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), _requests(5000e6, 0));
+
+        ICapsBorrowForwarder.BorrowRequest[] memory bad = _requests(5000e6, 3000e6);
+        bad[1].onBehalfOf = riskCouncil;
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), bad);
+        bad[1].onBehalfOf = address(fwd);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), bad);
+        bad[1].onBehalfOf = address(0);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.raiseCapAndBorrowBatch(address(usdc), bad);
+        vm.stopPrank();
+
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+    }
+
+    /// The same borrower twice: the first borrow renounces the delegation, so the second fails and all reverts.
+    function test_raiseCapAndBorrowBatch_duplicateBorrower_reverts() public {
+        _delegateFrom(borrower, address(usdc), 8000e6);
+        ICapsBorrowForwarder.BorrowRequest[] memory r = _requests(5000e6, 3000e6);
+        r[1].onBehalfOf = borrower;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 3000e6)
+        );
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrowBatch(address(usdc), r);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+        assertEq(usdc.balanceOf(borrower), 0);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // STATE TRANSITIONS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// CAP-ST-26: raiseCapAndBorrow(USDC, 5,000e6, borrower, 10, 2,000,000): borrower debt +5,000, borrower USDC
-    /// +5,000, Risk Council Safe USDC +0, no other account keeps tokens.
+    /// CAP-ST-26: raiseCapAndBorrow(USDC, 5,000e6, borrower): borrower debt +5,000, borrower USDC
+    /// +5,000, caller and forwarder USDC +0, no other account keeps tokens. The event carries old and new cap.
     function test_CAP_ST_26_raiseCapAndBorrow_tokensOnlyToBorrower() public {
         uint256 amount = 5000e6;
         _delegate(address(usdc), amount);
@@ -211,19 +547,20 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         uint256 totalDebtBefore = vdt.totalSupply();
         uint256 poolBefore = usdc.balanceOf(address(pool));
 
-        vm.expectEmit(true, true, false, true, riskCouncil);
-        emit ICapsBorrowForwarder.CapRaisedAndBorrowed(address(usdc), borrower, amount, LIVE_CAP, LIVE_CAP + 5000 + 10);
-        _run(address(usdc), amount, 10, 2_000_000);
+        vm.expectEmit(true, true, false, true, address(fwd));
+        emit ICapsBorrowForwarder.CapRaisedAndBorrowed(address(usdc), borrower, amount, LIVE_CAP, LIVE_CAP + 5001);
+        _run(address(usdc), amount);
 
         assertEq(vdt.balanceOf(borrower) - debtBefore, amount, "borrower debt +amount");
         assertEq(vdt.totalSupply() - totalDebtBefore, amount, "total debt +amount");
         assertEq(usdc.balanceOf(borrower), amount, "borrower tokens +amount");
-        assertEq(usdc.balanceOf(riskCouncil), 0, "safe keeps nothing");
+        assertEq(usdc.balanceOf(riskCouncil), 0, "caller keeps nothing");
         assertEq(usdc.balanceOf(address(fwd)), 0, "forwarder keeps nothing");
         assertEq(poolBefore - usdc.balanceOf(address(pool)), amount, "pool paid out exactly amount");
-        assertEq(vdt.balanceOf(riskCouncil), 0, "safe carries no debt");
+        assertEq(vdt.balanceOf(riskCouncil), 0, "caller carries no debt");
         assertEq(vdt.balanceOf(address(fwd)), 0, "forwarder carries no debt");
         assertEq(vdt.borrowAllowance(borrower, address(fwd)), 0, "delegation used up");
+        assertEq(fwd.lastRaiseAt(address(usdc)), block.timestamp, "raise recorded");
     }
 
     /// CAP-ST-26 fuzzed over amount and the three decimals.
@@ -234,7 +571,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         amount = bound(amount, 1, _wei(asset, LIVE_CAP / 2));
         _delegate(asset, amount);
 
-        _run(asset, amount, 1, type(uint256).max);
+        _run(asset, amount);
 
         assertEq(_debtToken(asset).balanceOf(borrower), amount);
         assertEq(IERC20(asset).balanceOf(borrower), amount);
@@ -243,118 +580,83 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_debtToken(asset).borrowAllowance(borrower, address(fwd)), 0, "delegation used up");
     }
 
-    /// CAP-ST-27: the Safe's token balance is the same before and after raiseCapAndBorrow, also when it already
-    /// holds some of the asset.
+    /// CAP-ST-27: the forwarder's and the caller's token balances are the same before and after
+    /// raiseCapAndBorrow, also when they already hold some of the asset.
     function test_CAP_ST_27_raiseCapAndBorrow_noResidualBalance() public {
         usdc.mint(riskCouncil, 777e6);
-        uint256 safeBefore = usdc.balanceOf(riskCouncil);
+        usdc.mint(address(fwd), 55e6);
         _delegate(address(usdc), 5000e6);
 
-        _run(address(usdc), 5000e6, 10, 2_000_000);
+        _run(address(usdc), 5000e6);
 
-        assertEq(usdc.balanceOf(riskCouncil), safeBefore, "safe balance unchanged");
+        assertEq(usdc.balanceOf(riskCouncil), 777e6, "caller balance unchanged");
+        assertEq(usdc.balanceOf(address(fwd)), 55e6, "forwarder balance unchanged");
         assertEq(usdc.balanceOf(borrower), 5000e6);
     }
 
-    /// CAP-ST-29: live cap 1,000,000 USDC at execution (1,000,050 at signing is ignored). amount 5,000.5 USDC,
-    /// extraCapTokens 10: new cap 1,005,011.
-    function test_CAP_ST_29_raiseCapAndBorrow_raisesExactlyAmountPlusExtra() public {
-        // The signers saw 1,000,050 when they signed; the cap moved back to 1,000,000 before execution.
-        pool.setBorrowCap(address(usdc), 1_000_050);
-        pool.setBorrowCap(address(usdc), LIVE_CAP);
+    /// CAP-ST-29: live cap 1,000,000 USDC, amount 5,000.5 USDC: new cap 1,005,002, written by the engine with
+    /// the supply cap kept.
+    function test_CAP_ST_29_raiseCapAndBorrow_raisesAmountPlusBuffer() public {
+        pool.setSupplyCap(address(usdc), 3_000_000);
 
         uint256 amount = 5_000_500_000; // 5,000.5 USDC
         _delegate(address(usdc), amount);
-        _run(address(usdc), amount, 10, 2_000_000);
+        _run(address(usdc), amount);
 
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_011, "live cap + ceil(5,000.5) + 10");
-        assertEq(steward.updateCapsCalls(), 1);
-        assertEq(steward.lastAsset(), address(usdc));
-        assertEq(steward.lastBorrowCap(), 1_005_011);
-        assertEq(steward.lastSupplyCap(), EngineFlags.KEEP_CURRENT, "supply cap kept");
+        (uint256 borrowCap, uint256 supplyCap) = pool.getReserveCaps(address(usdc));
+        assertEq(borrowCap, 1_005_002, "live cap + ceil(5,000.5) + 1");
+        assertEq(supplyCap, 3_000_000, "supply cap kept");
     }
 
-    /// CAP-ST-29 fuzzed: new cap = live cap + ceil(amount / 10^dec) + extraCapTokens, read at execution.
-    function testFuzz_CAP_ST_29_raiseCapAndBorrow_raisesExactlyAmountPlusExtra(
+    /// CAP-ST-29 fuzzed: new cap = live cap + ceil(amount / 10^dec) + 1, read at execution.
+    function testFuzz_CAP_ST_29_raiseCapAndBorrow_raisesAmountPlusBuffer(
         uint256 seed,
         uint256 liveCap,
-        uint256 amount,
-        uint256 extra
+        uint256 amount
     )
         public
     {
         MockERC20[3] memory assets = [weth, usdc, wbtc];
         address asset = address(assets[seed % 3]);
         liveCap = bound(liveCap, 10, 1_000_000);
-        // Stay inside the Steward's +100% range: ceil(amount) + extra <= liveCap.
+        // Stay inside the default +100% per-raise limit: ceil(amount) + 1 <= liveCap.
         amount = bound(amount, 1, _wei(asset, liveCap / 2));
-        extra = bound(extra, 0, liveCap / 2 - 1);
         pool.setBorrowCap(asset, liveCap);
         _setDebt(asset, 0, 0);
         _delegate(asset, amount);
 
         uint256 unit = 10 ** MockERC20(asset).decimals();
-        uint256 expected = liveCap + (amount + unit - 1) / unit + extra;
+        uint256 expected = liveCap + (amount + unit - 1) / unit + 1;
 
-        _run(asset, amount, extra, expected);
+        _run(asset, amount);
 
         assertEq(_liveBorrowCap(asset), expected);
     }
 
-    /// CAP-ST-30: live cap 1,000,000, amount 5,000 USDC, extraCapTokens 10, maxNewCap 1,005,000: reverts.
-    /// Live cap 0: reverts. No cap change and no borrow in either case.
-    function test_CAP_ST_30_raiseCapAndBorrow_aboveMaxNewCap_reverts() public {
-        _delegate(address(usdc), 5000e6);
-
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMax.selector, 1_005_010, 1_005_000));
-        _run(address(usdc), 5000e6, 10, 1_005_000);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-
-        // Exactly at the limit passes.
-        _run(address(usdc), 5000e6, 10, 1_005_010);
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
-    }
-
     /// The new cap stays within the RVM borrow maxCap, so the reducer never cuts the cap below the debt:
-    /// maxCap 1,005,009 refuses 1,005,010; maxCap 1,005,010 passes. No cap change and no borrow on refusal.
+    /// maxCap 1,005,000 refuses 1,005,001; maxCap 1,005,001 passes. No cap change and no borrow on refusal.
     function test_raiseCapAndBorrow_aboveRvmMaxCap_reverts() public {
         _delegate(address(usdc), 5000e6);
-        _setRvmMaxCap(address(usdc), 1_005_009);
+        _setRvmMaxCap(address(usdc), 1_005_000);
 
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_010, 1_005_009));
-        _run(address(usdc), 5000e6, 10, 2_000_000);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_001, 1_005_000));
+        _run(address(usdc), 5000e6);
         assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
 
-        _setRvmMaxCap(address(usdc), 1_005_010);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+        _setRvmMaxCap(address(usdc), 1_005_001);
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_001);
     }
 
-    /// Accrued interest pushed the debt above the cap: 1,000,500.000001 USDC of debt against a 1,000,000 cap.
-    /// The new cap starts from the debt rounded up (1,000,501), so the 5,000 borrow fits:
-    /// 1,000,501 + 5,000 + 10 = 1,005,511. Starting from the cap (1,005,010) the borrow would exceed it.
-    function test_raiseCapAndBorrow_debtAboveCap_startsFromDebt() public {
-        _setDebt(address(usdc), 1_000_500, 1);
+    /// An asset with no RVM borrow entry (maxCap 0) cannot be raised by the forwarder.
+    function test_raiseCapAndBorrow_noRvmEntry_reverts() public {
+        IRvm.RateLimitConfig memory none;
+        capsRvm.setRateLimitConfig(address(usdc), IRvm.CapKind.BORROW, none);
         _delegate(address(usdc), 5000e6);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_511);
-        assertEq(usdc.balanceOf(borrower), 5000e6);
-    }
-
-    /// Debt below the cap: the new cap still starts from the cap.
-    function test_raiseCapAndBorrow_debtBelowCap_startsFromCap() public {
-        _delegate(address(usdc), 5000e6);
-        _run(address(usdc), 5000e6, 0, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5000);
-    }
-
-    /// An asset with no rate limit entry (maxCap 0) has no RVM bound.
-    function test_raiseCapAndBorrow_noRvmEntry_noMaxCapBound() public {
-        _delegate(address(usdc), 5000e6);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_001, 0));
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
     }
 
     /// Only the borrow entry bounds the forwarder: a supply maxCap below the new cap does not.
@@ -362,8 +664,26 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(usdc), 5000e6);
         IRvm.RateLimitConfig memory c = IRvm.RateLimitConfig({ maxCap: 1, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
         capsRvm.setRateLimitConfig(address(usdc), IRvm.CapKind.SUPPLY, c);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), 1_005_010);
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_001);
+    }
+
+    /// Accrued interest pushed the debt above the cap: 1,000,500.000001 USDC of debt against a 1,000,000 cap.
+    /// The new cap starts from the debt rounded up (1,000,501), so the 5,000 borrow fits:
+    /// 1,000,501 + 5,000 + 1 = 1,005,502. Starting from the cap (1,005,001) the borrow would exceed it.
+    function test_raiseCapAndBorrow_debtAboveCap_startsFromDebt() public {
+        _setDebt(address(usdc), 1_000_500, 1);
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), 1_005_502);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+    }
+
+    /// Debt below the cap: the new cap still starts from the cap.
+    function test_raiseCapAndBorrow_debtBelowCap_startsFromCap() public {
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5001);
     }
 
     /// CAP-ST-30: the forwarder does not set a first cap.
@@ -372,101 +692,246 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(usdc), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.BorrowCapNotSet.selector, address(usdc)));
-        _run(address(usdc), 5000e6, 10, type(uint256).max);
+        _run(address(usdc), 5000e6);
         assertEq(_liveBorrowCap(address(usdc)), 0);
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-        assertEq(steward.updateCapsCalls(), 0);
     }
 
-    /// CAP-ST-31: the Risk Steward 36 h timer is still running, so the Steward reverts and raiseCapAndBorrow reverts
-    /// with cap and debt unchanged.
-    function test_CAP_ST_31_raiseCapAndBorrow_stepFails_revertsAll() public {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PER-RAISE LIMIT (maxRaiseBps of the live cap)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// maxRaiseBps 100 (1%) of a 1,000,000 cap: an increase of 10,000 passes, 10,001 reverts with no change.
+    function test_maxRaiseBps_boundary() public {
+        _setLimits(100, 0);
         _delegate(address(usdc), 10_000e6);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
 
-        uint256 capAfterFirst = _liveBorrowCap(address(usdc));
-        uint256 debtAfterFirst = _debtToken(address(usdc)).balanceOf(borrower);
-        uint256 allowanceAfterFirst = _debtToken(address(usdc)).borrowAllowance(borrower, address(fwd));
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10_001, 10_000));
+        _run(address(usdc), 10_000e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
 
-        vm.warp(block.timestamp + 36 hours - 1);
-        vm.expectRevert(MockRiskSteward.DebounceNotRespected.selector);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-
-        assertEq(_liveBorrowCap(address(usdc)), capAfterFirst, "cap unchanged");
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), debtAfterFirst, "debt unchanged");
-        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), allowanceAfterFirst);
-        assertEq(usdc.balanceOf(borrower), 5000e6, "borrower tokens unchanged");
-
-        // After the debounce the same call goes through.
-        vm.warp(block.timestamp + 1);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 10_000e6);
+        _run(address(usdc), 9999e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 10_000, "exactly at the limit passes");
     }
 
-    /// CAP-ST-31: the Steward range (+100%) rejects the raise: nothing changes.
-    function test_CAP_ST_31_raiseCapAndBorrow_stewardRangeFails_revertsAll() public {
-        // ceil(amount) + extra above the live cap gives more than +100%.
-        uint256 amount = _wei(address(usdc), LIVE_CAP);
+    /// The limit floors: 1% of a 999 cap is 9 tokens, so +9 passes and +10 reverts.
+    function test_maxRaiseBps_floors() public {
+        pool.setBorrowCap(address(weth), 999);
+        _setLimits(100, 0);
+        _delegate(address(weth), 10e18);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10, 9));
+        _run(address(weth), 9e18);
+
+        _run(address(weth), 8e18);
+        assertEq(_liveBorrowCap(address(weth)), 1008);
+    }
+
+    /// The increase counts from the live cap, so a debt overshoot above the cap counts toward the limit.
+    function test_maxRaiseBps_countsDebtOvershoot() public {
+        _setDebt(address(usdc), 1_000_500, 1); // ceil = 1,000,501
+        _setLimits(100, 0); // max +10,000
+        _delegate(address(usdc), 9500e6);
+        // 1,000,501 + 9,499 + 1 = 1,010,001: increase 10,001 over the cap.
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10_001, 10_000));
+        _run(address(usdc), 9499e6);
+        _run(address(usdc), 9498e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 10_000);
+    }
+
+    /// Fuzzed: the raise passes iff the increase is at most floor(oldCap * bps / 10,000).
+    function testFuzz_maxRaiseBps(uint256 bps, uint256 amountTokens) public {
+        bps = bound(bps, 1, 20_000);
+        amountTokens = bound(amountTokens, 1, 1_000_000);
+        _setLimits(bps, 0);
+        uint256 amount = _wei(address(usdc), amountTokens);
         _delegate(address(usdc), amount);
-        vm.expectRevert(MockRiskSteward.UpdateNotInRange.selector);
-        _run(address(usdc), amount, 1, type(uint256).max);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+
+        uint256 increase = amountTokens + 1; // the rounding buffer
+        uint256 maxIncrease = LIVE_CAP * bps / 10_000;
+        vm.prank(riskCouncil);
+        (bool ok,) =
+            address(fwd).call(abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (address(usdc), amount, borrower)));
+        assertEq(ok, increase <= maxIncrease, "passes iff within the limit");
+        assertEq(_liveBorrowCap(address(usdc)), ok ? LIVE_CAP + increase : LIVE_CAP);
     }
 
-    /// CAP-ST-31: the Steward owner restricted the asset: nothing changes.
-    function test_CAP_ST_31_raiseCapAndBorrow_assetRestricted_revertsAll() public {
-        _delegate(address(usdc), 10_000e6);
-        steward.setAddressRestricted(address(usdc), true);
-        vm.expectRevert(MockRiskSteward.AssetIsRestricted.selector);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
+    /// setLimits is owner only, emits LimitsSet, refuses maxRaiseBps 0, and the new value applies to the next raise.
+    function test_setLimits_ownerOnly_andApplies() public {
+        vm.prank(riskCouncil);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, riskCouncil));
+        fwd.setLimits(1, 0);
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        fwd.setLimits(20_000, 0);
+
+        vm.prank(governance);
+        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
+        fwd.setLimits(0, 0);
+
+        vm.expectEmit(false, false, false, true, address(fwd));
+        emit ICapsBorrowForwarder.LimitsSet(50, 2 days);
+        _setLimits(50, 2 days);
+        assertEq(fwd.maxRaiseBps(), 50);
+        assertEq(fwd.minRaiseDelay(), 2 days);
+
+        // 0.5% of 1,000,000 = 5,000: 5,000 + 1 is now above it.
+        _delegate(address(usdc), 5000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 5001, 5000));
+        _run(address(usdc), 5000e6);
+        _run(address(usdc), 4999e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5000);
     }
 
-    /// CAP-ST-31: only the borrowCap Steward config applies, as the supplyCap is KEEP_CURRENT.
-    function test_CAP_ST_31_raiseCapAndBorrow_usesBorrowCapStewardConfig() public {
-        _delegate(address(usdc), 10_000e6);
-        steward.setCapConfig(
-            MockRiskSteward.RiskParamConfig({ minDelay: 365 days, maxPercentChange: 0 }),
-            MockRiskSteward.RiskParamConfig({ minDelay: 0, maxPercentChange: 10_000 })
-        );
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        _run(address(usdc), 5000e6, 10, 2_000_000);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PER-PERIOD LIMIT (minRaiseDelay per asset)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// minRaiseDelay 1 day: a second raise of the same asset at +1 day - 1 s reverts RaiseTooSoon with nothing
+    /// changed; at exactly +1 day it passes.
+    function test_minRaiseDelay_boundary() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        uint256 t0 = block.timestamp;
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        uint256 capAfterFirst = _liveBorrowCap(address(usdc));
+
+        vm.warp(t0 + 1 days - 1);
+        _delegate(address(usdc), 5000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), t0 + 1 days));
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), capAfterFirst, "cap unchanged");
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 5000e6, "debt unchanged");
+        assertEq(fwd.lastRaiseAt(address(usdc)), t0, "timer not reset by the failed raise");
+
+        vm.warp(t0 + 1 days);
+        _run(address(usdc), 5000e6);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 10_000e6);
+        assertEq(fwd.lastRaiseAt(address(usdc)), t0 + 1 days);
+    }
+
+    /// The delay is per asset: a raise of USDC does not delay WETH.
+    function test_minRaiseDelay_perAsset() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        pool.setBorrowCap(address(weth), 1000);
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        _delegate(address(weth), 5e18);
+        _run(address(weth), 5e18);
+        assertEq(_liveBorrowCap(address(weth)), 1006);
+    }
+
+    /// A raise that fails after the delay check (here the RVM maxCap) does not start the delay.
+    function test_minRaiseDelay_failedRaiseDoesNotStartTimer() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setRvmMaxCap(address(usdc), 1);
+        _delegate(address(usdc), 5000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_001, 1));
+        _run(address(usdc), 5000e6);
+        assertEq(fwd.lastRaiseAt(address(usdc)), 0);
+
+        _setRvmMaxCap(address(usdc), RVM_MAX_CAP);
+        _run(address(usdc), 5000e6);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
+    }
+
+    /// An owner update of minRaiseDelay applies at once against the stored lastRaiseAt: shortening it lets the
+    /// next raise through, lengthening it pushes the next raise out.
+    function test_minRaiseDelay_ownerUpdateApplies() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
+        uint256 t0 = block.timestamp;
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+
+        vm.warp(t0 + 1 hours);
+        _delegate(address(usdc), 1000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), t0 + 1 days));
+        _run(address(usdc), 1000e6);
+
+        _setLimits(MAX_RAISE_BPS, 1 hours);
+        _run(address(usdc), 1000e6);
+        uint256 t1 = block.timestamp;
+
+        _setLimits(MAX_RAISE_BPS, 3 days);
+        vm.warp(t1 + 1 days);
+        _delegate(address(usdc), 1000e6);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), t1 + 3 days));
+        _run(address(usdc), 1000e6);
+    }
+
+    /// minRaiseDelay 0: back-to-back raises in the same block pass, each within maxRaiseBps.
+    function test_minRaiseDelay_zero_allowsSameBlock() public {
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), 10_000e6);
     }
 
-    /// CAP-ST-31: the borrow fails (no credit delegation): the cap raise is rolled back.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DELEGATION
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// After a raise the borrower's remaining delegation to the forwarder is renounced: a larger delegation is
+    /// not kept, and a second raise needs a fresh approveDelegation.
+    function test_raiseCapAndBorrow_renouncesDelegation() public {
+        _delegate(address(usdc), 20_000e6);
+        _run(address(usdc), 5000e6);
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 0, "rest renounced");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 5000e6)
+        );
+        _run(address(usdc), 5000e6);
+
+        _delegate(address(usdc), 5000e6);
+        _run(address(usdc), 5000e6);
+        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 10_000e6);
+    }
+
+    /// A delegation to the caller does not let the forwarder borrow: the Pool sees the forwarder as delegatee.
+    function test_raiseCapAndBorrow_delegationToCaller_reverts() public {
+        vm.prank(borrower);
+        _debtToken(address(usdc)).approveDelegation(riskCouncil, 5000e6);
+        vm.expectRevert(
+            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 5000e6)
+        );
+        _run(address(usdc), 5000e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ATOMICITY (CAP-ST-31)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// CAP-ST-31: the borrow fails (delegation 1 USDC short): the cap raise and the raise timestamp roll back.
     function test_CAP_ST_31_raiseCapAndBorrow_borrowFails_revertsAll() public {
+        _setLimits(MAX_RAISE_BPS, 1 days);
         _delegate(address(usdc), 4999e6);
         vm.expectRevert(
             abi.encodeWithSelector(
                 MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 4999e6, 5000e6
             )
         );
-        _run(address(usdc), 5000e6, 10, 2_000_000);
+        _run(address(usdc), 5000e6);
         assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-        assertEq(steward.borrowCapLastUpdated(address(usdc)), 0, "steward timer rolled back");
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 4999e6, "delegation kept");
+        assertEq(fwd.lastRaiseAt(address(usdc)), 0, "timer rolled back");
     }
 
-    /// CAP-ST-31: the borrow hits the Aave borrow cap: reverts. The new cap starts from the debt, so this takes
-    /// Aave's own rounding: debt of exactly 1,000,000 USDC at a borrow index other than 1 ray, no extraCapTokens.
-    /// The scaled sum rounds the new debt to 1,005,000.000001 USDC, 1 unit above the new cap of 1,005,000.
-    /// One extra cap token covers it.
-    function test_CAP_ST_31_raiseCapAndBorrow_aaveCapCheckFails_revertsAll() public {
+    /// Aave's own rounding: debt of exactly 1,000,000 USDC at a borrow index other than 1 ray. The scaled sum
+    /// rounds the new debt to 1,005,000.000001 USDC, 1 unit above 1,005,000. The 1-token buffer covers it.
+    function test_raiseCapAndBorrow_aaveDebtRounding_coveredByBuffer() public {
         pool.setIndex(address(usdc), 1_039_061_234_472_907_871_979_912_753);
         pool.setScaledDebt(address(usdc), 962_407_187_202);
         assertEq(_debtToken(address(usdc)).totalSupply(), 1_000_000e6, "debt exactly on whole tokens");
         _delegate(address(usdc), 5000e6);
 
-        vm.expectRevert(MockPoolV3.BorrowCapExceeded.selector);
-        _run(address(usdc), 5000e6, 0, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-
-        _run(address(usdc), 5000e6, 1, 2_000_000);
+        _run(address(usdc), 5000e6);
         assertEq(_liveBorrowCap(address(usdc)), 1_005_001);
+        assertEq(usdc.balanceOf(borrower), 5000e6);
     }
 
     /// CAP-ST-31: the transfer to the borrower fails (returns false, as for a blocklisted borrower).
@@ -476,7 +941,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(q), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(q)));
-        _run(address(q), 5000e6, 10, 2_000_000);
+        _run(address(q), 5000e6);
         assertEq(_liveBorrowCap(address(q)), LIVE_CAP);
         assertEq(_debtToken(address(q)).balanceOf(borrower), 0);
         assertEq(q.balanceOf(riskCouncil), 0);
@@ -491,7 +956,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(q), 5000e6);
 
         vm.expectRevert("QuirkyERC20: transfer reverted");
-        _run(address(q), 5000e6, 10, 2_000_000);
+        _run(address(q), 5000e6);
         assertEq(_liveBorrowCap(address(q)), LIVE_CAP);
         assertEq(_debtToken(address(q)).balanceOf(borrower), 0);
     }
@@ -503,7 +968,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(q), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(q)));
-        _run(address(q), 5000e6, 10, 2_000_000);
+        _run(address(q), 5000e6);
     }
 
     /// CAP-ST-31: the forwarder balance differs after the transfer (token moved only half): reverts.
@@ -513,7 +978,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         _delegate(address(q), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.ForwarderBalanceChanged.selector, 0, 2500e6));
-        _run(address(q), 5000e6, 10, 2_000_000);
+        _run(address(q), 5000e6);
         assertEq(_liveBorrowCap(address(q)), LIVE_CAP);
         assertEq(_debtToken(address(q)).balanceOf(borrower), 0);
         assertEq(q.balanceOf(borrower), 0);
@@ -525,7 +990,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         q.setNoReturnFrom(address(fwd));
         _delegate(address(q), 5000e6);
 
-        _run(address(q), 5000e6, 10, 2_000_000);
+        _run(address(q), 5000e6);
         assertEq(q.balanceOf(borrower), 5000e6);
         assertEq(q.balanceOf(riskCouncil), 0);
         assertEq(q.balanceOf(address(fwd)), 0);
@@ -535,285 +1000,168 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         q = new QuirkyERC20(6);
         pool.listReserve(address(q), 6, LIVE_CAP, 0);
         q.mint(address(pool), _wei(address(q), LIQUIDITY));
+        _setRvmMaxCap(address(q), RVM_MAX_CAP);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ACCESS CONTROL
+    // CALL SURFACE (CAP-ACL-16)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// CAP-ACL-12: a borrower calls raiseCapAndBorrow on the forwarder: reverts. Another Safe delegatecalls it:
-    /// reverts. No borrow in either case.
-    function test_CAP_ACL_12_raiseCapAndBorrow_notRiskCouncilContext_reverts() public {
-        _delegate(address(usdc), 5000e6);
-
-        // Direct call: address(this) is the forwarder.
-        vm.prank(borrower);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncilContext.selector, address(fwd)));
-        fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower, 10, 2_000_000);
-
-        // Direct call from the Risk Council address itself is still not its context.
-        vm.prank(riskCouncil);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncilContext.selector, address(fwd)));
-        fwd.raiseCapAndBorrow(address(usdc), 5000e6, borrower, 10, 2_000_000);
-
-        // Delegatecall from another Safe.
-        MockSafe other = new MockSafe();
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncilContext.selector, address(other)));
-        other.execDelegatecall(address(fwd), _call(address(usdc), 5000e6, borrower, 10, 2_000_000));
-
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-    }
-
-    /// CAP-ACL-12 fuzzed over the context address.
-    function testFuzz_CAP_ACL_12_raiseCapAndBorrow_notRiskCouncilContext_reverts(address context) public {
-        vm.assume(context != riskCouncil);
-        vm.assume(uint160(context) > 0x10000); // skip precompiles and low addresses
-        vm.assume(context.code.length == 0);
-        vm.etch(context, address(new MockSafe()).code);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncilContext.selector, context));
-        MockSafe(context).execDelegatecall(address(fwd), _call(address(usdc), 5000e6, borrower, 10, 2_000_000));
-    }
-
-    /// borrowFor: any caller other than the Risk Council Safe reverts, also the borrower itself, and the borrower's
-    /// delegation stays unused.
-    function test_borrowFor_notRiskCouncil_reverts() public {
-        _delegate(address(usdc), 5000e6);
-        address[3] memory callers = [borrower, makeAddr("anyone"), address(fwd)];
-        for (uint256 i = 0; i < callers.length; i++) {
-            vm.prank(callers[i]);
-            vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncil.selector, callers[i]));
-            fwd.borrowFor(address(usdc), 5000e6, borrower);
-        }
-        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 5000e6, "delegation unused");
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-    }
-
-    /// borrowFor fuzzed over the caller.
-    function testFuzz_borrowFor_notRiskCouncil_reverts(address caller) public {
-        vm.assume(caller != riskCouncil);
-        _delegate(address(usdc), 5000e6);
-        vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncil.selector, caller));
-        fwd.borrowFor(address(usdc), 5000e6, borrower);
-    }
-
-    /// borrowFor by delegatecall from the Safe reverts: it only runs in the deployed forwarder.
-    function test_borrowFor_delegatecall_reverts() public {
-        _delegate(address(usdc), 5000e6);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotDirectCall.selector, riskCouncil));
-        safe.execDelegatecall(
-            address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), 5000e6, borrower))
-        );
-    }
-
-    /// borrowFor alone from the Safe, within the live cap: the debt and the tokens go to the borrower, the cap
-    /// does not move.
-    function test_borrowFor_fromSafe_withinCap_tokensOnlyToBorrower() public {
-        _delegate(address(usdc), 5000e6);
-        vm.expectEmit(true, true, false, true, address(fwd));
-        emit ICapsBorrowForwarder.BorrowedFor(address(usdc), borrower, 5000e6);
-        safe.execCall(address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), 5000e6, borrower)));
-
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 5000e6);
-        assertEq(usdc.balanceOf(borrower), 5000e6);
-        assertEq(usdc.balanceOf(riskCouncil), 0);
-        assertEq(usdc.balanceOf(address(fwd)), 0);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap unchanged");
-    }
-
-    /// borrowFor input checks: zero amount, zero borrower, the Safe or the forwarder as borrower.
-    function test_borrowFor_invalidInput_reverts() public {
-        address[3] memory bad = [address(0), riskCouncil, address(fwd)];
-        for (uint256 i = 0; i < bad.length; i++) {
-            vm.prank(riskCouncil);
-            vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-            fwd.borrowFor(address(usdc), 5000e6, bad[i]);
-        }
-        vm.prank(riskCouncil);
-        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        fwd.borrowFor(address(usdc), 0, borrower);
-    }
-
-    /// A delegation to the Safe no longer lets the forwarder path borrow: the Pool sees the forwarder as caller.
-    function test_raiseCapAndBorrow_delegationToSafe_reverts() public {
-        vm.prank(borrower);
-        _debtToken(address(usdc)).approveDelegation(riskCouncil, 5000e6);
-        vm.expectRevert(
-            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 5000e6)
-        );
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
-    }
-
-    /// CAP-ACL-13: the runtime bytecode has no SSTORE and no DELEGATECALL (nor CALLCODE or SELFDESTRUCT), and
-    /// a run writes no Safe storage slot except the nonce that MockSafe itself bumps.
-    function test_CAP_ACL_13_forwarder_noStorageNoDelegatecall() public {
-        bytes memory code = address(fwd).code;
-        // Skip the CBOR metadata at the end: its length is in the last two bytes.
-        uint256 metaLen = (uint256(uint8(code[code.length - 2])) << 8) | uint256(uint8(code[code.length - 1]));
-        uint256 end = code.length - 2 - metaLen;
-        for (uint256 i = 0; i < end; i++) {
-            uint8 op = uint8(code[i]);
-            assertTrue(op != 0x55, "SSTORE");
-            assertTrue(op != 0xf4, "DELEGATECALL");
-            assertTrue(op != 0xf2, "CALLCODE");
-            assertTrue(op != 0xff, "SELFDESTRUCT");
-            if (op >= 0x60 && op <= 0x7f) i += op - 0x5f; // skip PUSH1..PUSH32 data
-        }
-
-        _delegate(address(usdc), 5000e6);
-        vm.record();
-        _run(address(usdc), 5000e6, 10, 2_000_000);
-        (, bytes32[] memory writes) = vm.accesses(riskCouncil);
-        for (uint256 i = 0; i < writes.length; i++) {
-            assertEq(writes[i], bytes32(0), "only the MockSafe nonce slot");
-        }
-        (, bytes32[] memory fwdWrites) = vm.accesses(address(fwd));
-        assertEq(fwdWrites.length, 0, "forwarder storage untouched");
-    }
-
-    /// CAP-ACL-16: in the Safe's context raiseCapAndBorrow calls only POOL.getConfiguration, RISK_STEWARD.updateCaps
-    /// for the given asset and SELF.borrowFor(asset, amount, borrower). The forwarder, in borrowFor, calls only
-    /// POOL.borrow with onBehalfOf = borrower and asset.transfer(borrower, amount).
-    /// Read-only calls also allowed: asset.balanceOf of the forwarder (twice), the transfer
-    /// helper's code check, RVM.getKeyState(asset, BORROW) for the maxCap bound, and POOL.getReserveData(asset)
-    /// with the debt token's totalSupply for the debt.
+    /// CAP-ACL-16: in raiseCapAndBorrow the forwarder makes only these calls: POOL.getConfiguration(asset),
+    /// POOL.getReserveData(asset) (twice), the debt token's totalSupply, RVM.getKeyState(asset, BORROW), one
+    /// delegatecall CONFIG_ENGINE.updateCaps([{asset, KEEP_CURRENT, newCap}]), and from the engine code
+    /// POOL.setBorrowCap(asset, newCap), then POOL.borrow(asset, amount, 2, 0, borrower),
+    /// asset.balanceOf(forwarder) (twice), asset.transfer(borrower, amount) and
+    /// debtToken.renounceDelegation(borrower).
     function test_CAP_ACL_16_raiseCapAndBorrow_onlyExpectedCalls() public {
         uint256 amount = 5000e6;
+        uint256 newCap = LIVE_CAP + 5001;
         _delegate(address(usdc), amount);
 
         vm.startStateDiffRecording();
-        _run(address(usdc), amount, 10, 2_000_000);
+        _run(address(usdc), amount);
         Vm.AccountAccess[] memory acc = vm.stopAndReturnStateDiff();
 
-        // Counts: 0 delegatecall, 1 getConfiguration, 2 updateCaps, 3 borrowFor, 4 borrow, 5 transfer,
-        // 6 Safe balanceOf, 7 forwarder balanceOf, 8 reads (RVM.getKeyState, POOL.getReserveData, debt totalSupply)
-        uint256[9] memory n;
+        // 0 delegatecall, 1 getConfiguration, 2 getReserveData, 3 setBorrowCap, 4 borrow, 5 totalSupply,
+        // 6 renounceDelegation, 7 getKeyState, 8 balanceOf, 9 transfer
+        uint256[10] memory n;
         for (uint256 i = 0; i < acc.length; i++) {
             Vm.AccountAccess memory a = acc[i];
-            bytes4 sel = a.data.length >= 4 ? bytes4(a.data) : bytes4(0);
-            // Foundry records the delegatecall with the outer caller as accessor, so check it across the whole
-            // trace: the only delegatecall is the Safe into the forwarder (the forwarder makes none).
+            if (a.kind == Vm.AccountAccessKind.Resume) continue;
+            // Checked across the whole trace: the only delegatecall is the forwarder into the engine.
             if (a.kind == Vm.AccountAccessKind.DelegateCall) {
-                assertEq(a.account, address(fwd), "only delegatecall is the Safe into the forwarder");
-                assertEq(sel, ICapsBorrowForwarder.raiseCapAndBorrow.selector);
+                assertEq(a.account, address(engine), "only delegatecall is into the config engine");
+                IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
+                u[0] = IEngine.CapsUpdate({
+                    asset: address(usdc), supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: newCap
+                });
+                assertEq(a.data, abi.encodeCall(MockCapsEngine.updateCaps, (u)), "engine calldata");
                 n[0]++;
                 continue;
             }
-            if (a.kind == Vm.AccountAccessKind.Resume) continue;
-
-            if (a.accessor == riskCouncil) {
-                if (_isExpectedRead(a)) {
-                    n[8]++;
-                } else if (a.kind == Vm.AccountAccessKind.Extcodesize) {
-                    // solc checks the Pool, Steward, RVM and forwarder before calls; the asset for balanceOf.
-                    assertTrue(
-                        a.account == address(usdc) || a.account == address(pool) || a.account == address(steward)
-                            || a.account == address(capsRvm) || a.account == address(fwd),
-                        "code-size check on an expected account only"
-                    );
-                } else if (a.account == address(pool)) {
-                    assertEq(a.data, abi.encodeCall(MockPoolV3.getConfiguration, (address(usdc))), "Pool call");
-                    n[1]++;
-                } else if (a.account == address(steward)) {
-                    assertEq(sel, MockRiskSteward.updateCaps.selector, "unexpected Steward call");
-                    IEngine.CapsUpdate[] memory u = new IEngine.CapsUpdate[](1);
-                    u[0] = IEngine.CapsUpdate({
-                        asset: address(usdc), supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: LIVE_CAP + 5000 + 10
-                    });
-                    assertEq(a.data, abi.encodeCall(MockRiskSteward.updateCaps, (u)));
-                    n[2]++;
-                } else if (a.account == address(fwd)) {
-                    assertEq(
-                        a.data,
-                        abi.encodeCall(ICapsBorrowForwarder.borrowFor, (address(usdc), amount, borrower)),
-                        "forwarder call"
-                    );
-                    n[3]++;
-                } else if (a.account == address(usdc)) {
-                    assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (riskCouncil)), "Safe asset call");
-                    n[6]++;
-                } else {
-                    revert("unexpected account called from the Safe context");
-                }
-            } else if (a.accessor == address(fwd)) {
-                _countForwarderCall(a, sel, amount, n);
-            }
+            if (a.accessor != address(fwd)) continue;
+            _countForwarderCall(a, amount, newCap, n);
         }
         assertEq(n[0], 1, "one delegatecall");
         assertEq(n[1], 1, "one getConfiguration");
-        assertEq(n[2], 1, "one updateCaps");
-        assertEq(n[3], 1, "one borrowFor");
+        assertEq(n[2], 2, "two getReserveData");
+        assertEq(n[3], 1, "one setBorrowCap");
         assertEq(n[4], 1, "one borrow");
-        assertEq(n[5], 1, "one transfer");
-        assertEq(n[6], 0, "no Safe balance read");
-        assertEq(n[7], 2, "two forwarder balance reads");
-        assertEq(n[8], 3, "one RVM key read, one getReserveData, one debt totalSupply");
+        assertEq(n[5], 1, "one debt totalSupply");
+        assertEq(n[6], 1, "one renounceDelegation");
+        assertEq(n[7], 1, "one RVM key read");
+        assertEq(n[8], 2, "two forwarder balance reads");
+        assertEq(n[9], 1, "one transfer");
     }
 
-    /// @dev CAP-ACL-16, a call made by the forwarder in borrowFor: POOL.borrow, asset.transfer to the borrower, or
-    ///      asset.balanceOf of the forwarder. Counts into `n` (4 borrow, 5 transfer, 7 forwarder balanceOf).
-    function _countForwarderCall(Vm.AccountAccess memory a, bytes4 sel, uint256 amount, uint256[9] memory n) private {
+    /// @dev CAP-ACL-16: one access made in the forwarder's context, checked against its exact calldata.
+    function _countForwarderCall(
+        Vm.AccountAccess memory a,
+        uint256 amount,
+        uint256 newCap,
+        uint256[10] memory n
+    )
+        private
+        view
+    {
+        address vdt = address(_debtToken(address(usdc)));
         if (a.kind == Vm.AccountAccessKind.Extcodesize) {
             assertTrue(
-                a.account == address(usdc) || a.account == address(pool), "code-size check on an expected account only"
+                a.account == address(usdc) || a.account == address(pool) || a.account == vdt
+                    || a.account == address(capsRvm) || a.account == address(engine),
+                "code-size check on an expected account only"
             );
-        } else if (a.account == address(pool)) {
-            assertEq(a.data, abi.encodeCall(MockPoolV3.borrow, (address(usdc), amount, 2, 0, borrower)));
-            n[4]++;
+            return;
+        }
+        assertTrue(
+            a.kind == Vm.AccountAccessKind.Call || a.kind == Vm.AccountAccessKind.StaticCall, "call or staticcall"
+        );
+        bytes32 h = keccak256(a.data);
+        if (a.account == address(pool)) {
+            if (h == keccak256(abi.encodeCall(MockPoolV3.getConfiguration, (address(usdc))))) n[1]++;
+            else if (h == keccak256(abi.encodeCall(MockPoolV3.getReserveData, (address(usdc))))) n[2]++;
+            else if (h == keccak256(abi.encodeCall(MockPoolV3.setBorrowCap, (address(usdc), newCap)))) n[3]++;
+            else if (h == keccak256(abi.encodeCall(MockPoolV3.borrow, (address(usdc), amount, 2, 0, borrower)))) n[4]++;
+            else revert("unexpected Pool call");
+        } else if (a.account == vdt) {
+            if (h == keccak256(abi.encodeCall(IERC20.totalSupply, ()))) n[5]++;
+            else if (h == keccak256(abi.encodeCall(MockVariableDebtToken.renounceDelegation, (borrower)))) n[6]++;
+            else revert("unexpected debt token call");
+        } else if (a.account == address(capsRvm)) {
+            if (h == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)))) n[7]++;
+            else revert("unexpected RVM call");
         } else if (a.account == address(usdc)) {
-            if (sel == IERC20.transfer.selector) {
-                assertEq(a.data, abi.encodeCall(IERC20.transfer, (borrower, amount)));
-                n[5]++;
-            } else {
-                assertEq(a.data, abi.encodeCall(IERC20.balanceOf, (address(fwd))), "forwarder asset call");
-                n[7]++;
-            }
+            if (h == keccak256(abi.encodeCall(IERC20.balanceOf, (address(fwd))))) n[8]++;
+            else if (h == keccak256(abi.encodeCall(IERC20.transfer, (borrower, amount)))) n[9]++;
+            else revert("unexpected asset call");
         } else {
             revert("unexpected account called from the forwarder");
         }
     }
 
-    /// @dev CAP-ACL-16 read-only calls, with their exact calldata: POOL.getReserveData and the debt token's
-    ///      totalSupply for the debt, RVM.getKeyState for the maxCap bound. Any other call to those accounts is
-    ///      left to the caller's checks.
-    function _isExpectedRead(Vm.AccountAccess memory a) internal view returns (bool) {
-        bytes32 data = keccak256(a.data);
-        if (a.account == address(pool)) {
-            return data == keccak256(abi.encodeCall(MockPoolV3.getReserveData, (address(usdc))));
+    /// A raise changes exactly one forwarder storage slot, lastRaiseAt[asset] (the reentrancy status returns to
+    /// its value), and no admin state.
+    function test_raiseCapAndBorrow_onlyLastRaiseAtChanges() public {
+        _delegate(address(usdc), 5000e6);
+        vm.startStateDiffRecording();
+        _run(address(usdc), 5000e6);
+        Vm.AccountAccess[] memory acc = vm.stopAndReturnStateDiff();
+
+        bytes32[] memory slots = new bytes32[](64);
+        bytes32[] memory before = new bytes32[](64);
+        uint256 k;
+        for (uint256 i = 0; i < acc.length; i++) {
+            for (uint256 j = 0; j < acc[i].storageAccesses.length; j++) {
+                Vm.StorageAccess memory s = acc[i].storageAccesses[j];
+                if (s.account != address(fwd) || !s.isWrite || s.reverted) continue;
+                bool seen;
+                for (uint256 m = 0; m < k; m++) {
+                    if (slots[m] == s.slot) seen = true;
+                }
+                if (!seen) {
+                    slots[k] = s.slot;
+                    before[k] = s.previousValue;
+                    k++;
+                }
+            }
         }
-        if (a.account == address(_debtToken(address(usdc)))) {
-            return data == keccak256(abi.encodeCall(IERC20.totalSupply, ()));
+        uint256 changed;
+        for (uint256 m = 0; m < k; m++) {
+            bytes32 nowValue = vm.load(address(fwd), slots[m]);
+            if (nowValue != before[m]) {
+                changed++;
+                assertEq(uint256(nowValue), block.timestamp, "the changed slot holds the raise timestamp");
+            }
         }
-        if (a.account == address(capsRvm)) {
-            return data == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)));
-        }
-        return false;
+        assertEq(changed, 1, "only lastRaiseAt changed");
+        assertEq(fwd.lastRaiseAt(address(usdc)), block.timestamp);
+        assertEq(fwd.owner(), governance);
+        assertTrue(fwd.isCaller(riskCouncil));
+        assertEq(fwd.maxRaiseBps(), MAX_RAISE_BPS);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // UNITS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// CAP-UNIT-13: USDC amount 5,000,000,001 units (5,000.000001 USDC) adds 5,001 tokens to the cap; an
-    /// exact 5,000 USDC adds 5,000.
+    /// CAP-UNIT-13: USDC amount 5,000,000,001 units (5,000.000001 USDC) adds 5,001 tokens to the cap, plus
+    /// the 1-token rounding buffer.
     function test_CAP_UNIT_13_raiseCapAndBorrow_amountRoundsUp() public {
         _delegate(address(usdc), type(uint256).max);
-        _run(address(usdc), 5_000_000_001, 0, type(uint256).max);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5001);
+        _run(address(usdc), 5_000_000_001);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 5002);
 
         // WBTC (8 decimals), exact whole amount: no round-up.
         pool.setBorrowCap(address(wbtc), 1000);
         _delegate(address(wbtc), type(uint256).max);
-        _run(address(wbtc), 5e8, 0, type(uint256).max);
-        assertEq(_liveBorrowCap(address(wbtc)), 1005);
+        _run(address(wbtc), 5e8);
+        assertEq(_liveBorrowCap(address(wbtc)), 1006);
 
         // WETH (18 decimals), 1 wei adds a whole token.
         pool.setBorrowCap(address(weth), 1000);
         _delegate(address(weth), type(uint256).max);
-        _run(address(weth), 1, 0, type(uint256).max);
-        assertEq(_liveBorrowCap(address(weth)), 1001);
+        _run(address(weth), 1);
+        assertEq(_liveBorrowCap(address(weth)), 1002);
     }
 
     /// CAP-UNIT-13 fuzzed: cap increase * 10^dec >= amount and the increase is the least such whole number.
@@ -824,10 +1172,11 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         amount = bound(amount, 1, _wei(asset, LIVE_CAP / 2));
         _delegate(asset, amount);
 
-        _run(asset, amount, 0, type(uint256).max);
+        _run(asset, amount);
 
         uint256 unit = 10 ** MockERC20(asset).decimals();
-        uint256 increase = _liveBorrowCap(asset) - LIVE_CAP;
+        // Less the 1-token rounding buffer.
+        uint256 increase = _liveBorrowCap(asset) - LIVE_CAP - 1;
         assertGe(increase * unit, amount, "raise covers the borrow");
         assertLt((increase - 1) * unit, amount, "raise is the least whole-token cover");
     }

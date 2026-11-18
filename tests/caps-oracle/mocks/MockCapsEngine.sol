@@ -20,6 +20,11 @@ contract MockCapsEngine {
         POOL = pool;
     }
 
+    /// @notice The mock Pool is its own configurator: `updateCaps` writes the caps on it.
+    function POOL_CONFIGURATOR() external view returns (address) {
+        return address(POOL);
+    }
+
     function updateCaps(IEngine.CapsUpdate[] calldata updates) external {
         for (uint256 i = 0; i < updates.length; i++) {
             if (updates[i].borrowCap != EngineFlags.KEEP_CURRENT) {

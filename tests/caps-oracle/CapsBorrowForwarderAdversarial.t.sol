@@ -4,14 +4,16 @@ pragma solidity ^0.8.26;
 import { Test } from "forge-std/Test.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { CapsTestBase } from "./CapsTestBase.sol";
 import { MockERC20 } from "./mocks/MockERC20.sol";
-import { MockSafe } from "./mocks/MockSafe.sol";
 import { MockPoolV3, MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
-import { MockRiskSteward } from "./mocks/MockRiskSteward.sol";
+import { MockCapsEngine } from "./mocks/MockCapsEngine.sol";
 import { MockCapsRvm } from "./mocks/MockCapsRvm.sol";
 import { CapsBorrowForwarder } from "../../src/caps-oracle/CapsBorrowForwarder.sol";
 import { ICapsBorrowForwarder } from "../../src/caps-oracle/interfaces/ICapsBorrowForwarder.sol";
+import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
 /// @title ReentrantERC20
 /// @notice ERC20 that, once armed, runs one arbitrary call after a `transfer` sent by `hookFrom` (and to `hookTo`,
@@ -81,31 +83,50 @@ contract FeeOnPoolERC20 is MockERC20 {
     }
 }
 
-/// @title CapsBorrowForwarderAdversarialTest
+/// @title CallerContract
+/// @notice A contract caller (for example a Safe module or a malicious borrower's contract that got allowlisted)
+///         that forwards any call. Used to re-enter the forwarder as an allowlisted caller.
+contract CallerContract {
+    function exec(address target, bytes calldata data) external returns (bytes memory ret) {
+        bool ok;
+        (ok, ret) = target.call(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+    }
+}
+
 /// @notice Adversarial tests of the forwarder borrow path: fuzzed callers, donations, re-entrant tokens and
-///         misbehaving Safe calls. Goal under test: borrowed tokens only ever reach the borrower that carries
-///         the debt, and only a borrower that delegated credit to the forwarder carries debt.
+///         re-entrant callers. Goal under test: borrowed tokens only ever reach the borrower that carries the
+///         debt, and only a borrower that delegated credit to the forwarder carries debt.
 abstract contract AdversarialBase is CapsTestBase {
     CapsBorrowForwarder internal fwd;
-    MockSafe internal safe;
     MockCapsRvm internal capsRvm;
+    MockCapsEngine internal engine;
 
     uint256 internal constant LIVE_CAP = 1_000_000;
     uint256 internal constant LIVE_DEBT = 900_000;
     uint256 internal constant LIQUIDITY = 100_000_000;
+    uint64 internal constant RVM_MAX_CAP = 100_000_000_000;
 
     function setUp() public virtual override {
         super.setUp();
         vm.warp(1_700_000_000);
-        _etchSafeAtRiskCouncil();
-        safe = MockSafe(riskCouncil);
         capsRvm = new MockCapsRvm();
         capsRvm.setPool(address(pool));
-        fwd = new CapsBorrowForwarder(address(pool), address(steward), riskCouncil, address(capsRvm));
+        engine = new MockCapsEngine(pool);
+        fwd = new CapsBorrowForwarder(
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 10_000, 0
+        );
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
         weth.mint(address(pool), _wei(address(weth), LIQUIDITY));
         wbtc.mint(address(pool), _wei(address(wbtc), LIQUIDITY));
+        _setRvmMaxCap(address(usdc));
+        _setRvmMaxCap(address(weth));
+        _setRvmMaxCap(address(wbtc));
 
         pool.setBorrowCap(address(usdc), LIVE_CAP);
         _setDebt(address(usdc), LIVE_DEBT, 0);
@@ -114,6 +135,12 @@ abstract contract AdversarialBase is CapsTestBase {
     // ═══════════════════════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    function _setRvmMaxCap(address asset) internal {
+        IRvm.RateLimitConfig memory c =
+            IRvm.RateLimitConfig({ maxCap: RVM_MAX_CAP, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
+        capsRvm.setRateLimitConfig(asset, IRvm.CapKind.BORROW, c);
+    }
 
     function _debtToken(address asset) internal view returns (MockVariableDebtToken) {
         return MockVariableDebtToken(pool.getReserveVariableDebtToken(asset));
@@ -126,17 +153,23 @@ abstract contract AdversarialBase is CapsTestBase {
     }
 
     function _raiseCall(address asset, uint256 amount, address to) internal pure returns (bytes memory) {
-        return abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (asset, amount, to, 10, type(uint256).max));
+        return abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (asset, amount, to));
     }
 
-    function _borrowForCall(address asset, uint256 amount, address to) internal pure returns (bytes memory) {
-        return abi.encodeCall(ICapsBorrowForwarder.borrowFor, (asset, amount, to));
+    function _raise(address asset, uint256 amount, address to) internal {
+        vm.prank(riskCouncil);
+        fwd.raiseCapAndBorrow(asset, amount, to);
+    }
+
+    function _listToken(MockERC20 t) internal {
+        pool.listReserve(address(t), 6, LIVE_CAP, 0);
+        t.mint(address(pool), _wei(address(t), LIQUIDITY));
+        _setRvmMaxCap(address(t));
     }
 
     function _listReentrant() internal returns (ReentrantERC20 t) {
         t = new ReentrantERC20(6);
-        pool.listReserve(address(t), 6, LIVE_CAP, 0);
-        t.mint(address(pool), _wei(address(t), LIQUIDITY));
+        _listToken(t);
     }
 
     function _selector(bytes memory ret) internal pure returns (bytes4 sel) {
@@ -155,23 +188,21 @@ abstract contract AdversarialBase is CapsTestBase {
     function _setUpInvariant() internal {
         pool.setBorrowCap(address(weth), LIVE_CAP);
         pool.setBorrowCap(address(wbtc), LIVE_CAP);
-        handler = new ForwarderHandler(fwd, safe, pool, [address(weth), address(usdc), address(wbtc)]);
-        address[5] memory accts = handler.accounts();
-        MockERC20[3] memory assets = [weth, usdc, wbtc];
-        for (uint256 i = 0; i < 3; i++) {
-            for (uint256 j = 0; j < 3; j++) {
-                _delegate(accts[i], address(assets[j]), handler.ALLOWANCE(address(assets[j])));
+        handler = new ForwarderHandler(fwd, pool, riskCouncil, [address(weth), address(usdc), address(wbtc)]);
+        // Every delegating account starts with a delegation on every asset; each raise uses it up.
+        for (uint256 w = 0; w < 3; w++) {
+            for (uint256 a = 0; a < 3; a++) {
+                handler.delegate(w, a, type(uint256).max);
             }
         }
         targetContract(address(handler));
-        bytes4[] memory sels = new bytes4[](7);
+        bytes4[] memory sels = new bytes4[](6);
         sels[0] = ForwarderHandler.raiseAndBorrow.selector;
-        sels[1] = ForwarderHandler.borrowForFromSafe.selector;
-        sels[2] = ForwarderHandler.borrowForFromStranger.selector;
-        sels[3] = ForwarderHandler.raiseDirect.selector;
-        sels[4] = ForwarderHandler.safeBadTarget.selector;
-        sels[5] = ForwarderHandler.donate.selector;
-        sels[6] = ForwarderHandler.borrowForDelegatecall.selector;
+        sels[1] = ForwarderHandler.delegate.selector;
+        sels[2] = ForwarderHandler.raiseFromStranger.selector;
+        sels[3] = ForwarderHandler.callerBadTarget.selector;
+        sels[4] = ForwarderHandler.donate.selector;
+        sels[5] = ForwarderHandler.warp.selector;
         targetSelector(StdInvariant.FuzzSelector({ addr: address(handler), selectors: sels }));
     }
 }
@@ -183,9 +214,9 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
     // (1) FUZZED CALLERS NEVER MOVE DEBT OR TOKENS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Any caller other than the Risk Council Safe, any amount, any onBehalfOf: borrowFor reverts and no debt,
+    /// Any caller off the allowlist, any amount, any onBehalfOf: raiseCapAndBorrow reverts and no cap, debt,
     /// allowance or token moves, even though the borrower has an unlimited delegation to the forwarder.
-    function testFuzz_adv_borrowFor_anyCaller_movesNothing(
+    function testFuzz_adv_raise_anyCaller_movesNothing(
         address caller,
         uint256 amount,
         address onBehalfOf,
@@ -205,9 +236,11 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
         uint256 balOf = usdc.balanceOf(onBehalfOf);
 
         vm.prank(caller);
-        (bool ok,) = address(fwd).call(_borrowForCall(address(usdc), amount, onBehalfOf));
-        assertFalse(ok, "non-council caller must revert");
+        (bool ok, bytes memory ret) = address(fwd).call(_raiseCall(address(usdc), amount, onBehalfOf));
+        assertFalse(ok, "non-caller must revert");
+        assertEq(_selector(ret), ICapsBorrowForwarder.NotCaller.selector);
 
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap unchanged");
         assertEq(vdt.totalSupply(), totalDebt, "total debt unchanged");
         assertEq(usdc.balanceOf(address(pool)), poolBal, "pool unchanged");
         assertEq(vdt.balanceOf(onBehalfOf), debtOf, "debt unchanged");
@@ -215,105 +248,88 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
         assertEq(vdt.borrowAllowance(borrower, address(fwd)), type(uint256).max, "allowance unused");
     }
 
-    /// Any direct caller of raiseCapAndBorrow (including the Safe address, by plain call): reverts, no cap,
-    /// debt or token change.
-    function testFuzz_adv_raiseCapAndBorrow_directCall_movesNothing(address caller, uint256 amount) public {
-        amount = bound(amount, 1, _wei(address(usdc), 5000));
-        _delegate(borrower, address(usdc), type(uint256).max);
-        vm.prank(caller);
-        (bool ok,) = address(fwd).call(_raiseCall(address(usdc), amount, borrower));
-        assertFalse(ok);
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
-        assertEq(_debtToken(address(usdc)).balanceOf(borrower), 0);
-        assertEq(usdc.balanceOf(borrower), 0);
-    }
-
-    /// The Safe itself (signers misbehaving) cannot put debt on an account that did not delegate to the
-    /// forwarder: borrowFor for any non-delegator reverts.
-    function testFuzz_adv_safe_borrowFor_nonDelegator_reverts(address victim, uint256 amount) public {
+    /// The allowlisted caller (signers misbehaving) cannot put debt on an account that did not delegate to the
+    /// forwarder: any non-delegator reverts, with the cap unchanged.
+    function testFuzz_adv_caller_nonDelegator_reverts(address victim, uint256 amount) public {
         vm.assume(victim != address(0) && victim != riskCouncil && victim != address(fwd));
         vm.assume(victim != address(pool));
         amount = bound(amount, 1, _wei(address(usdc), 50_000));
         vm.expectRevert(
             abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, amount)
         );
-        safe.execCall(address(fwd), _borrowForCall(address(usdc), amount, victim));
+        _raise(address(usdc), amount, victim);
         assertEq(_debtToken(address(usdc)).balanceOf(victim), 0);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
     }
 
-    /// A delegation to the Safe (the old flow) gives the Safe nothing through the forwarder, and a direct
-    /// Pool.borrow by the Safe under its own old delegation is the only way to reach tokens: out of the
-    /// forwarder's scope. Here: the Safe cannot route its own delegation through borrowFor.
-    function test_adv_safe_cannotBorrowToItselfOrForwarder() public {
+    /// The caller cannot send the tokens to itself, the forwarder or the zero address.
+    function test_adv_caller_cannotBorrowToItselfOrForwarder() public {
         _delegate(borrower, address(usdc), type(uint256).max);
         address[3] memory bad = [riskCouncil, address(fwd), address(0)];
         for (uint256 i = 0; i < bad.length; i++) {
             vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-            safe.execCall(address(fwd), _borrowForCall(address(usdc), 5000e6, bad[i]));
+            _raise(address(usdc), 5000e6, bad[i]);
         }
-        // raiseCapAndBorrow with onBehalfOf = forwarder passes the Safe-side check, then borrowFor refuses it,
-        // so the cap raise rolls back.
-        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        safe.execDelegatecall(address(fwd), _raiseCall(address(usdc), 5000e6, address(fwd)));
-        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP, "cap raise rolled back");
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP);
         assertEq(usdc.balanceOf(riskCouncil) + usdc.balanceOf(address(fwd)), 0);
     }
 
-    /// The Safe can borrow at most the delegated allowance, always to the borrower.
-    function testFuzz_adv_safe_borrowFor_boundedByAllowance(uint256 allowance, uint256 amount) public {
+    /// The caller can borrow at most the delegated allowance, always to the borrower.
+    function testFuzz_adv_caller_boundedByAllowance(uint256 allowance, uint256 amount) public {
         allowance = bound(allowance, 1, _wei(address(usdc), 50_000));
         amount = bound(amount, 1, _wei(address(usdc), 90_000));
         _delegate(borrower, address(usdc), allowance);
-        (bool ok,) = address(safe)
-            .call(abi.encodeCall(MockSafe.execCall, (address(fwd), _borrowForCall(address(usdc), amount, borrower))));
+        vm.prank(riskCouncil);
+        (bool ok,) = address(fwd).call(_raiseCall(address(usdc), amount, borrower));
         assertEq(ok, amount <= allowance, "succeeds iff within the delegation");
         uint256 borrowed = ok ? amount : 0;
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), borrowed);
         assertEq(usdc.balanceOf(borrower), borrowed);
         assertEq(usdc.balanceOf(address(fwd)), 0);
         assertEq(usdc.balanceOf(riskCouncil), 0);
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), ok ? 0 : allowance);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // (2) DONATIONS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Observed behaviour: a donation to the forwarder before the call does NOT make borrowFor revert, since the
+    /// Observed behaviour: a donation to the forwarder before the call does NOT make the raise revert, since the
     /// balance check is relative. The borrow still sends exactly `amount` to the borrower, and the donation stays
     /// at the forwarder (there is no sweep function, so it is stuck).
     function test_adv_donationBefore_raiseCapAndBorrow_passes_donationStuck() public {
         usdc.mint(address(fwd), 123e6);
         _delegate(borrower, address(usdc), 5000e6);
-        safe.execDelegatecall(address(fwd), _raiseCall(address(usdc), 5000e6, borrower));
+        _raise(address(usdc), 5000e6, borrower);
         assertEq(usdc.balanceOf(borrower), 5000e6, "borrower gets exactly amount");
         assertEq(_debtToken(address(usdc)).balanceOf(borrower), 5000e6);
         assertEq(usdc.balanceOf(address(fwd)), 123e6, "donation stays at the forwarder");
         assertEq(usdc.balanceOf(riskCouncil), 0);
     }
 
-    function testFuzz_adv_donationBefore_borrowFor_passes(uint256 donation, uint256 amount) public {
+    function testFuzz_adv_donationBefore_raise_passes(uint256 donation, uint256 amount) public {
         donation = bound(donation, 1, _wei(address(usdc), 1_000_000));
         amount = bound(amount, 1, _wei(address(usdc), 50_000));
         usdc.mint(address(fwd), donation);
         _delegate(borrower, address(usdc), amount);
-        safe.execCall(address(fwd), _borrowForCall(address(usdc), amount, borrower));
+        _raise(address(usdc), amount, borrower);
         assertEq(usdc.balanceOf(borrower), amount);
         assertEq(usdc.balanceOf(address(fwd)), donation);
     }
 
     /// A donation cannot be used to cover a short Pool payout: the Pool pays the forwarder half (a fee), the
-    /// donation covers the transfer to the borrower, the forwarder balance drops, and borrowFor reverts.
+    /// donation covers the transfer to the borrower, the forwarder balance drops, and the raise reverts.
     function test_adv_donationCoversShortPayout_reverts() public {
         FeeOnPoolERC20 f = new FeeOnPoolERC20(6);
-        pool.listReserve(address(f), 6, LIVE_CAP, 0);
-        f.mint(address(pool), _wei(address(f), LIQUIDITY));
+        _listToken(f);
         f.setHalfFrom(address(pool));
         f.mint(address(fwd), 4000e6);
         _delegate(borrower, address(f), 5000e6);
 
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.ForwarderBalanceChanged.selector, 4000e6, 1500e6));
-        safe.execCall(address(fwd), _borrowForCall(address(f), 5000e6, borrower));
+        _raise(address(f), 5000e6, borrower);
         assertEq(_debtToken(address(f)).balanceOf(borrower), 0);
+        assertEq(_liveBorrowCap(address(f)), LIVE_CAP);
     }
 
     /// A donation to the forwarder in the middle of the call (during the Pool payout) reverts.
@@ -322,7 +338,7 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
         t.arm(address(pool), address(fwd), address(t), abi.encodeCall(MockERC20.mint, (address(fwd), 1)), true);
         _delegate(borrower, address(t), 5000e6);
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.ForwarderBalanceChanged.selector, 0, 1));
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
+        _raise(address(t), 5000e6, borrower);
         assertEq(_liveBorrowCap(address(t)), LIVE_CAP);
     }
 
@@ -334,119 +350,107 @@ contract CapsBorrowForwarderAdversarialTest is AdversarialBase {
         t.arm(address(fwd), borrower, address(t), abi.encodeCall(ReentrantERC20.steal, (address(fwd), thief, 1)), true);
         _delegate(borrower, address(t), 5000e6);
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.ForwarderBalanceChanged.selector, 100e6, 100e6 - 1));
-        safe.execCall(address(fwd), _borrowForCall(address(t), 5000e6, borrower));
+        _raise(address(t), 5000e6, borrower);
+        assertEq(_liveBorrowCap(address(t)), LIVE_CAP);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // (3) RE-ENTRANT TOKEN
+    // (3) RE-ENTRANCY
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// During the Pool payout the token calls borrowFor directly: msg.sender is the token, so NotRiskCouncil.
-    /// Swallowed: the outer call completes with exactly one borrow. Bubbled: everything reverts.
-    function test_adv_reentrant_borrowFor_fromToken_reverts() public {
+    /// During the Pool payout the token calls raiseCapAndBorrow directly: the reentrancy guard refuses it.
+    /// Swallowed: the outer call completes with exactly one borrow. Bubbled: everything reverts, cap included.
+    function test_adv_reentrant_raise_fromToken_reverts() public {
         ReentrantERC20 t = _listReentrant();
         _delegate(borrower, address(t), 10_000e6);
-        t.arm(address(pool), address(fwd), address(fwd), _borrowForCall(address(t), 5000e6, borrower), false);
+        t.arm(address(pool), address(fwd), address(fwd), _raiseCall(address(t), 5000e6, borrower), false);
 
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
+        _raise(address(t), 5000e6, borrower);
         assertEq(t.fired(), 1);
         assertFalse(t.lastOk());
-        assertEq(_selector(t.lastRet()), ICapsBorrowForwarder.NotRiskCouncil.selector);
+        assertEq(_selector(t.lastRet()), ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         assertEq(_debtToken(address(t)).balanceOf(borrower), 5000e6, "one borrow only");
         assertEq(t.balanceOf(borrower), 5000e6);
         assertEq(t.balanceOf(address(fwd)) + t.balanceOf(riskCouncil), 0);
 
-        // Bubbled: the whole Safe call reverts, cap included.
-        vm.warp(block.timestamp + 36 hours);
+        // Bubbled, from the transfer to the borrower: the whole call reverts.
         uint256 cap = _liveBorrowCap(address(t));
-        t.arm(address(fwd), borrower, address(fwd), _borrowForCall(address(t), 5000e6, borrower), true);
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NotRiskCouncil.selector, address(t)));
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
+        _delegate(borrower, address(t), 5000e6);
+        t.arm(address(fwd), borrower, address(fwd), _raiseCall(address(t), 5000e6, borrower), true);
+        vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        _raise(address(t), 5000e6, borrower);
         assertEq(_liveBorrowCap(address(t)), cap);
         assertEq(_debtToken(address(t)).balanceOf(borrower), 5000e6);
     }
 
-    /// During the transfer the token (or a hook in the borrower) calls raiseCapAndBorrow on the forwarder:
-    /// NotRiskCouncilContext.
-    function test_adv_reentrant_raiseCapAndBorrow_fromToken_reverts() public {
-        ReentrantERC20 t = _listReentrant();
-        _delegate(borrower, address(t), 10_000e6);
-        t.arm(address(fwd), borrower, address(fwd), _raiseCall(address(t), 5000e6, borrower), false);
+    /// Worst case: the re-entry comes through an allowlisted caller contract, so the allowlist check would pass.
+    /// The token hook (as a borrower-side hook on receipt) calls it during the payout and during the transfer to
+    /// the borrower, for a second delegating borrower: the reentrancy guard refuses both and the whole raise
+    /// reverts.
+    function test_adv_reentrant_viaAllowlistedCaller_reverts() public {
+        CallerContract cc = new CallerContract();
+        vm.prank(governance);
+        fwd.setCaller(address(cc), true);
 
-        safe.execCall(address(fwd), _borrowForCall(address(t), 5000e6, borrower));
-        assertFalse(t.lastOk());
-        assertEq(_selector(t.lastRet()), ICapsBorrowForwarder.NotRiskCouncilContext.selector);
-        assertEq(_debtToken(address(t)).balanceOf(borrower), 5000e6);
-        assertEq(_liveBorrowCap(address(t)), LIVE_CAP);
-    }
-
-    /// Worst case: the re-entry comes from the Safe itself (MockSafe has no signature check, so this models a
-    /// nested Safe transaction). A nested borrowFor during the Pool payout, for a second delegating borrower:
-    /// both borrows succeed, each borrower gets exactly its amount, the forwarder and the Safe keep nothing.
-    function test_adv_reentrant_nestedSafeBorrowFor_tokensStillOnlyToBorrowers() public {
         ReentrantERC20 t = _listReentrant();
         address borrower2 = makeAddr("borrower2");
         _delegate(borrower, address(t), 5000e6);
         _delegate(borrower2, address(t), 3000e6);
-        t.arm(
-            address(pool),
-            address(fwd),
-            address(safe),
-            abi.encodeCall(MockSafe.execCall, (address(fwd), _borrowForCall(address(t), 3000e6, borrower2))),
-            true
-        );
+        bytes memory inner =
+            abi.encodeCall(CallerContract.exec, (address(fwd), _raiseCall(address(t), 3000e6, borrower2)));
 
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
-        assertTrue(t.lastOk());
-        assertEq(t.balanceOf(borrower), 5000e6);
-        assertEq(t.balanceOf(borrower2), 3000e6);
-        assertEq(_debtToken(address(t)).balanceOf(borrower), 5000e6);
-        assertEq(_debtToken(address(t)).balanceOf(borrower2), 3000e6);
-        assertEq(t.balanceOf(address(fwd)), 0);
-        assertEq(t.balanceOf(riskCouncil), 0);
+        t.arm(address(pool), address(fwd), address(cc), inner, true);
+        vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        _raise(address(t), 5000e6, borrower);
+
+        t.arm(address(fwd), borrower, address(cc), inner, true);
+        vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+        _raise(address(t), 5000e6, borrower);
+
+        assertEq(_liveBorrowCap(address(t)), LIVE_CAP);
+        assertEq(_debtToken(address(t)).balanceOf(borrower), 0);
+        assertEq(_debtToken(address(t)).balanceOf(borrower2), 0);
+        assertEq(t.balanceOf(borrower) + t.balanceOf(borrower2), 0);
     }
 
-    /// Nested raiseCapAndBorrow by delegatecall during the transfer to the borrower (Steward delay 0 so the
-    /// inner raise is allowed): both complete, all tokens at the borrower.
-    function test_adv_reentrant_nestedSafeRaise_tokensStillOnlyToBorrower() public {
-        ReentrantERC20 t = _listReentrant();
-        steward.setLimits(0, 10_000);
-        _delegate(borrower, address(t), 8000e6);
-        t.arm(
-            address(fwd),
-            borrower,
-            address(safe),
-            abi.encodeCall(MockSafe.execDelegatecall, (address(fwd), _raiseCall(address(t), 3000e6, borrower))),
-            true
-        );
-
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
-        assertTrue(t.lastOk());
-        assertEq(t.balanceOf(borrower), 8000e6);
-        assertEq(_debtToken(address(t)).balanceOf(borrower), 8000e6);
-        assertEq(t.balanceOf(address(fwd)) + t.balanceOf(riskCouncil), 0);
-        assertEq(_debtToken(address(t)).borrowAllowance(borrower, address(fwd)), 0);
-    }
-
-    /// Nested borrowFor that tries to send the tokens to the Safe or the forwarder: InvalidInput, bubbled.
-    function test_adv_reentrant_nestedSafeBorrowFor_toSafe_reverts() public {
+    /// A re-entrant token cannot reach the admin functions either: setCaller and setLimits from the token
+    /// revert OwnableUnauthorizedAccount, and swallowing the revert changes nothing.
+    function test_adv_reentrant_adminCalls_refused() public {
         ReentrantERC20 t = _listReentrant();
         _delegate(borrower, address(t), 5000e6);
         t.arm(
             address(pool),
             address(fwd),
-            address(safe),
-            abi.encodeCall(MockSafe.execCall, (address(fwd), _borrowForCall(address(t), 1000e6, riskCouncil))),
-            true
+            address(fwd),
+            abi.encodeCall(ICapsBorrowForwarder.setCaller, (attacker, true)),
+            false
         );
-        vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
-        safe.execDelegatecall(address(fwd), _raiseCall(address(t), 5000e6, borrower));
-        assertEq(_debtToken(address(t)).balanceOf(borrower), 0);
+        _raise(address(t), 5000e6, borrower);
+        assertFalse(t.lastOk());
+        assertEq(_selector(t.lastRet()), Ownable.OwnableUnauthorizedAccount.selector);
+        assertFalse(fwd.isCaller(attacker));
+        assertEq(t.balanceOf(borrower), 5000e6);
+    }
+
+    /// The forwarder holds the borrower's delegation only for one raise: after it, a stranger who later gets on
+    /// the allowlist (or a compromised caller) finds no allowance left to use.
+    function test_adv_noStandingDelegationAfterRaise() public {
+        _delegate(borrower, address(usdc), type(uint256).max);
+        _raise(address(usdc), 5000e6, borrower);
+        assertEq(_debtToken(address(usdc)).borrowAllowance(borrower, address(fwd)), 0);
+
+        vm.prank(governance);
+        fwd.setCaller(attacker, true);
+        vm.prank(attacker);
+        vm.expectRevert(
+            abi.encodeWithSelector(MockVariableDebtToken.InsufficientBorrowAllowance.selector, address(fwd), 0, 1e6)
+        );
+        fwd.raiseCapAndBorrow(address(usdc), 1e6, borrower);
     }
 }
 
 /// @title CapsBorrowForwarderAdversarialInvariantTest
-/// @notice Stateful invariant: after any mix of handler calls the forwarder and the Safe hold only donations,
+/// @notice Stateful invariant: after any mix of handler calls the forwarder and the caller hold only donations,
 ///         carry no debt, and only delegating borrowers carry debt, each holding exactly the tokens it borrowed.
 contract CapsBorrowForwarderAdversarialInvariantTest is AdversarialBase {
     function setUp() public override {
@@ -460,61 +464,56 @@ contract CapsBorrowForwarderAdversarialInvariantTest is AdversarialBase {
         handler.checkAll();
     }
 
-    /// The handler's success paths are live: a Safe raise and borrow and a Safe borrowFor for a delegator both
-    /// succeed and are recorded, so the invariant is not vacuous.
+    /// The handler's success path is live: a delegation and a raise succeed and are recorded, a raise for a
+    /// non-delegator reverts and is not, so the invariant is not vacuous.
     function test_adv_handler_successPathsLive() public {
-        handler.raiseAndBorrow(1, 0, 5000e6, 10);
-        handler.borrowForFromSafe(1, 1, 1000e6);
-        handler.borrowForFromSafe(1, 3, 1000e6); // non-delegator: reverts, not recorded
-        assertEq(handler.successes(), 2);
+        handler.delegate(0, 1, 10_000e6);
+        handler.raiseAndBorrow(1, 0, 5000e6);
+        handler.raiseAndBorrow(1, 3, 1000e6); // non-delegator: reverts, not recorded
+        assertEq(handler.successes(), 1);
         handler.checkAll();
-    }
-
-    /// The invariant runner also counts successes across a run: at least one borrow lands.
-    function afterInvariant() public view {
-        require(handler.successes() > 0, "no borrow succeeded in the run");
     }
 
     /// Runs the handler as a plain fuzz sequence too, so the invariant setup is exercised by forge test.
     function testFuzz_adv_sequence(uint256[24] memory ops) public {
         for (uint256 i = 0; i < ops.length; i++) {
-            uint256 op = ops[i] % 7;
+            uint256 op = ops[i] % 6;
             uint256 r = uint256(keccak256(abi.encode(ops[i], i)));
-            if (op == 0) handler.raiseAndBorrow(r, r >> 8, r >> 16, r >> 32);
-            else if (op == 1) handler.borrowForFromSafe(r, r >> 8, r >> 16);
-            else if (op == 2) handler.borrowForFromStranger(address(uint160(r >> 64)), r, r >> 8, r >> 16);
-            else if (op == 3) handler.raiseDirect(address(uint160(r >> 64)), r, r >> 8, r >> 16);
-            else if (op == 4) handler.safeBadTarget(r, r >> 8, r >> 16);
-            else if (op == 5) handler.donate(r, r >> 8, r >> 16);
-            else handler.borrowForDelegatecall(r, r >> 8, r >> 16);
+            if (op == 0) handler.raiseAndBorrow(r, r >> 8, r >> 16);
+            else if (op == 1) handler.delegate(r, r >> 8, r >> 16);
+            else if (op == 2) handler.raiseFromStranger(address(uint160(r >> 64)), r, r >> 8, r >> 16);
+            else if (op == 3) handler.callerBadTarget(r, r >> 8, r >> 16);
+            else if (op == 4) handler.donate(r, r >> 8, r >> 16);
+            else handler.warp(r);
         }
         handler.checkAll();
     }
 }
 
 /// @title ForwarderHandler
-/// @notice Drives a mix of forwarder calls: Safe raise and borrow, Safe borrowFor, stranger calls, Safe calls to
-///         bad targets, donations and delegatecalls of borrowFor. Accounts 0-2 delegate credit to the forwarder;
-///         accounts 3-4 never do.
+/// @notice Drives a mix of forwarder calls: allowlisted raise and borrow, fresh delegations, stranger calls,
+///         caller calls to bad borrowers, donations and time moves. Accounts 0-2 delegate credit to the
+///         forwarder; accounts 3-4 never do.
 contract ForwarderHandler is Test {
     CapsBorrowForwarder internal fwd;
-    MockSafe internal safe;
     MockPoolV3 internal pool;
+    address internal caller;
     address[3] internal assets;
     address[5] internal accts;
 
     mapping(address asset => uint256) public ghostBorrowed;
     mapping(address who => mapping(address asset => uint256)) public ghostBorrowedBy;
+    mapping(address who => mapping(address asset => uint256)) public ghostAllowance;
     mapping(address asset => uint256) public ghostDonatedFwd;
-    mapping(address asset => uint256) public ghostDonatedSafe;
+    mapping(address asset => uint256) public ghostDonatedCaller;
     mapping(address asset => uint256) public poolStart;
     bool public badSucceeded;
     uint256 public successes;
 
-    constructor(CapsBorrowForwarder fwd_, MockSafe safe_, MockPoolV3 pool_, address[3] memory assets_) {
+    constructor(CapsBorrowForwarder fwd_, MockPoolV3 pool_, address caller_, address[3] memory assets_) {
         fwd = fwd_;
-        safe = safe_;
         pool = pool_;
+        caller = caller_;
         assets = assets_;
         accts = [
             makeAddr("delegator0"),
@@ -528,116 +527,86 @@ contract ForwarderHandler is Test {
         }
     }
 
-    function accounts() external view returns (address[5] memory) {
-        return accts;
-    }
-
-    function ALLOWANCE(address asset) public view returns (uint256) {
-        return 200_000 * 10 ** MockERC20(asset).decimals();
-    }
-
     function _unit(address asset) internal view returns (uint256) {
         return 10 ** MockERC20(asset).decimals();
     }
 
-    function raiseAndBorrow(uint256 a, uint256 w, uint256 amount, uint256 extra) external {
-        address asset = assets[a % 3];
-        address who = accts[w % 5];
-        amount = bound(amount, 1, 5000 * _unit(asset));
-        extra = bound(extra, 0, 10);
-        vm.warp(block.timestamp + 36 hours);
-        try safe.execDelegatecall(
-            address(fwd),
-            abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (asset, amount, who, extra, type(uint256).max))
-        ) {
-            _record(asset, who, amount);
-        } catch { }
+    function _vdt(address asset) internal view returns (MockVariableDebtToken) {
+        return MockVariableDebtToken(pool.getReserveVariableDebtToken(asset));
     }
 
-    function borrowForFromSafe(uint256 a, uint256 w, uint256 amount) external {
+    /// A delegating account (0-2) approves a fresh delegation to the forwarder.
+    function delegate(uint256 w, uint256 a, uint256 amount) external {
         address asset = assets[a % 3];
-        address who = accts[w % 5];
-        amount = bound(amount, 1, 5000 * _unit(asset));
-        try safe.execCall(address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (asset, amount, who))) {
-            _record(asset, who, amount);
-        } catch { }
+        address who = accts[w % 3];
+        amount = bound(amount, 0, 10_000 * _unit(asset));
+        MockVariableDebtToken vdt = _vdt(asset);
+        vm.prank(who);
+        vdt.approveDelegation(address(fwd), amount);
+        ghostAllowance[who][asset] = amount;
     }
 
-    function borrowForFromStranger(address caller, uint256 a, uint256 w, uint256 amount) external {
-        if (caller == address(safe)) caller = address(this);
+    function raiseAndBorrow(uint256 a, uint256 w, uint256 amount) external {
         address asset = assets[a % 3];
         address who = accts[w % 5];
         amount = bound(amount, 1, 5000 * _unit(asset));
         vm.prank(caller);
-        try fwd.borrowFor(asset, amount, who) {
-            badSucceeded = true;
+        try fwd.raiseCapAndBorrow(asset, amount, who) {
+            ghostBorrowed[asset] += amount;
+            ghostBorrowedBy[who][asset] += amount;
+            ghostAllowance[who][asset] = 0; // the rest is renounced
+            successes++;
         } catch { }
     }
 
-    function raiseDirect(address caller, uint256 a, uint256 w, uint256 amount) external {
+    function raiseFromStranger(address stranger, uint256 a, uint256 w, uint256 amount) external {
+        if (stranger == caller) stranger = address(this);
         address asset = assets[a % 3];
         address who = accts[w % 5];
         amount = bound(amount, 1, 5000 * _unit(asset));
-        vm.prank(caller);
-        try fwd.raiseCapAndBorrow(asset, amount, who, 10, type(uint256).max) {
+        vm.prank(stranger);
+        try fwd.raiseCapAndBorrow(asset, amount, who) {
             badSucceeded = true;
         } catch { }
     }
 
-    /// The Safe tries to borrow to itself, the forwarder or address(0), by either entry point.
-    function safeBadTarget(uint256 a, uint256 k, uint256 amount) external {
+    /// The caller tries to borrow to itself, the forwarder or address(0).
+    function callerBadTarget(uint256 a, uint256 k, uint256 amount) external {
         address asset = assets[a % 3];
-        address[3] memory bad = [address(safe), address(fwd), address(0)];
+        address[3] memory bad = [caller, address(fwd), address(0)];
         address to = bad[k % 3];
         amount = bound(amount, 1, 5000 * _unit(asset));
-        try safe.execCall(address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (asset, amount, to))) {
-            badSucceeded = true;
-        } catch { }
-        vm.warp(block.timestamp + 36 hours);
-        try safe.execDelegatecall(
-            address(fwd),
-            abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (asset, amount, to, 10, type(uint256).max))
-        ) {
+        vm.prank(caller);
+        try fwd.raiseCapAndBorrow(asset, amount, to) {
             badSucceeded = true;
         } catch { }
     }
 
-    function borrowForDelegatecall(uint256 a, uint256 w, uint256 amount) external {
-        address asset = assets[a % 3];
-        address who = accts[w % 5];
-        amount = bound(amount, 1, 5000 * _unit(asset));
-        try safe.execDelegatecall(address(fwd), abi.encodeCall(ICapsBorrowForwarder.borrowFor, (asset, amount, who))) {
-            badSucceeded = true;
-        } catch { }
-    }
-
-    function donate(uint256 a, uint256 toSafe, uint256 amount) external {
+    function donate(uint256 a, uint256 toCaller, uint256 amount) external {
         address asset = assets[a % 3];
         amount = bound(amount, 1, 1000 * _unit(asset));
-        if (toSafe % 2 == 0) {
-            MockERC20(asset).mint(address(safe), amount);
-            ghostDonatedSafe[asset] += amount;
+        if (toCaller % 2 == 0) {
+            MockERC20(asset).mint(caller, amount);
+            ghostDonatedCaller[asset] += amount;
         } else {
             MockERC20(asset).mint(address(fwd), amount);
             ghostDonatedFwd[asset] += amount;
         }
     }
 
-    function _record(address asset, address who, uint256 amount) internal {
-        ghostBorrowed[asset] += amount;
-        ghostBorrowedBy[who][asset] += amount;
-        successes++;
+    function warp(uint256 dt) external {
+        vm.warp(block.timestamp + bound(dt, 0, 7 days));
     }
 
     function checkAll() external view {
         require(!badSucceeded, "a call that must revert succeeded");
         for (uint256 i = 0; i < 3; i++) {
             address asset = assets[i];
-            MockVariableDebtToken vdt = MockVariableDebtToken(pool.getReserveVariableDebtToken(asset));
+            MockVariableDebtToken vdt = _vdt(asset);
             require(IERC20(asset).balanceOf(address(fwd)) == ghostDonatedFwd[asset], "forwarder holds borrowed tokens");
-            require(IERC20(asset).balanceOf(address(safe)) == ghostDonatedSafe[asset], "safe holds borrowed tokens");
+            require(IERC20(asset).balanceOf(caller) == ghostDonatedCaller[asset], "caller holds borrowed tokens");
             require(vdt.balanceOf(address(fwd)) == 0, "forwarder carries debt");
-            require(vdt.balanceOf(address(safe)) == 0, "safe carries debt");
+            require(vdt.balanceOf(caller) == 0, "caller carries debt");
             require(
                 poolStart[asset] - IERC20(asset).balanceOf(address(pool)) == ghostBorrowed[asset],
                 "pool payout != borrowed"
@@ -647,8 +616,8 @@ contract ForwarderHandler is Test {
                 uint256 debt = vdt.balanceOf(who);
                 require(debt == ghostBorrowedBy[who][asset], "debt != recorded borrows");
                 require(IERC20(asset).balanceOf(who) == debt, "borrower tokens != debt");
+                require(vdt.borrowAllowance(who, address(fwd)) == ghostAllowance[who][asset], "allowance drift");
                 if (j >= 3) require(debt == 0, "non-delegator carries debt");
-                else require(vdt.borrowAllowance(who, address(fwd)) + debt == ALLOWANCE(asset), "allowance drift");
             }
         }
     }
