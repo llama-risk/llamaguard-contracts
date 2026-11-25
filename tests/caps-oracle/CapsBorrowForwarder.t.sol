@@ -88,8 +88,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     uint256 internal constant LIVE_CAP = 1_000_000; // whole USDC
     uint256 internal constant LIVE_DEBT = 900_000; // whole USDC
     uint256 internal constant LIQUIDITY = 100_000_000; // whole tokens per asset in the pool
-    /// Default per-raise limit: +100% of the live cap, as the Aave Risk Steward cap rule.
-    uint256 internal constant MAX_RAISE_BPS = 10_000;
+    /// Default per-raise limit: one buffer, with each asset's buffer at LIVE_CAP (+100% of the USDC cap).
+    uint256 internal constant MAX_RAISE_BUFFERS = 1;
     /// Default per-period limit: the 1 second minimum. The limit tests set their own.
     uint256 internal constant MIN_RAISE_DELAY = 1;
     /// RVM borrow maxCap of every asset unless a test sets another.
@@ -101,7 +101,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         capsRvm = new MockCapsRvm();
         capsRvm.setPool(address(pool));
         engine = new MockCapsEngine(pool);
-        fwd = _deploy(MAX_RAISE_BPS, MIN_RAISE_DELAY);
+        fwd = _deploy(MAX_RAISE_BUFFERS, MIN_RAISE_DELAY);
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
         weth.mint(address(pool), _wei(address(weth), LIQUIDITY));
@@ -119,9 +119,9 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    function _deploy(uint256 bps, uint256 delay) internal returns (CapsBorrowForwarder) {
+    function _deploy(uint256 buffers, uint256 delay) internal returns (CapsBorrowForwarder) {
         return new CapsBorrowForwarder(
-            governance, address(pool), address(engine), address(capsRvm), riskCouncil, bps, delay
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, buffers, delay
         );
     }
 
@@ -144,11 +144,13 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         IRvm.RateLimitConfig memory c =
             IRvm.RateLimitConfig({ maxCap: maxCap, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
         capsRvm.setRateLimitConfig(asset, IRvm.CapKind.BORROW, c);
+        // One buffer of LIVE_CAP: with MAX_RAISE_BUFFERS, +100% of the USDC cap per raise.
+        capsRvm.setHeadroomTarget(asset, LIVE_CAP);
     }
 
-    function _setLimits(uint256 bps, uint256 delay) internal {
+    function _setLimits(uint256 buffers, uint256 delay) internal {
         vm.prank(governance);
-        fwd.setLimits(bps, delay);
+        fwd.setLimits(buffers, delay);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -162,7 +164,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(fwd.owner(), governance, "owner is the AgentHub owner");
         assertTrue(fwd.isCaller(riskCouncil), "Risk Council allowlisted");
         assertFalse(fwd.isCaller(borrower));
-        assertEq(fwd.maxRaiseBps(), MAX_RAISE_BPS);
+        assertEq(fwd.maxRaiseBuffers(), MAX_RAISE_BUFFERS);
         assertEq(fwd.minRaiseDelay(), MIN_RAISE_DELAY);
         assertEq(fwd.lastRaiseAt(address(usdc)), 0);
     }
@@ -172,13 +174,13 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         vm.expectEmit(true, false, false, true);
         emit ICapsBorrowForwarder.CallerSet(riskCouncil, true);
         vm.expectEmit(false, false, false, true);
-        emit ICapsBorrowForwarder.LimitsSet(2500, 1 days);
+        emit ICapsBorrowForwarder.LimitsSet(3, 1 days);
         CapsBorrowForwarder f = new CapsBorrowForwarder(
-            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 2500, 1 days
+            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 3, 1 days
         );
         assertTrue(f.isCaller(riskCouncil));
         assertFalse(f.isCaller(updater));
-        assertEq(f.maxRaiseBps(), 2500);
+        assertEq(f.maxRaiseBuffers(), 3);
         assertEq(f.minRaiseDelay(), 1 days);
     }
 
@@ -198,8 +200,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), address(0), 1, 1);
     }
 
-    /// maxRaiseBps 0 would block every raise: refused at deploy.
-    function test_CapsBorrowForwarder_constructor_zeroMaxRaiseBps_reverts() public {
+    /// maxRaiseBuffers 0 would block every raise: refused at deploy.
+    function test_CapsBorrowForwarder_constructor_zeroMaxRaiseBuffers_reverts() public {
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
         new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), riskCouncil, 0, 1 days);
     }
@@ -390,7 +392,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// Two borrowers in one call: one cap raise for the sum (+1 buffer), each gets its own tokens and debt.
     function test_raiseCapAndBorrowBatch_oneRaise_eachBorrowerPaid() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         _delegateFrom(borrower, address(usdc), 5000e6);
         _delegateFrom(updater, address(usdc), 3000e6);
         MockVariableDebtToken vdt = _debtToken(address(usdc));
@@ -425,7 +427,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// One failed borrow (second delegation 1 USDC short) reverts the whole batch: no cap change, no borrow.
     function test_raiseCapAndBorrowBatch_oneFails_revertsAll() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         _delegateFrom(borrower, address(usdc), 5000e6);
         _delegateFrom(updater, address(usdc), 2999e6);
 
@@ -443,9 +445,10 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(fwd.lastRaiseAt(address(usdc)), 0, "timer rolled back");
     }
 
-    /// The per-raise limit applies to the sum: each request fits 1% of the cap, the sum does not.
+    /// The per-raise limit applies to the sum: each request fits one buffer, the sum does not.
     function test_raiseCapAndBorrowBatch_limitOnSum() public {
-        _setLimits(100, 1); // max +10,000
+        capsRvm.setHeadroomTarget(address(usdc), 10_000);
+        _setLimits(1, 1); // max +10,000
         _delegateFrom(borrower, address(usdc), 6000e6);
         _delegateFrom(updater, address(usdc), 6000e6);
 
@@ -472,7 +475,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// A batch counts as one raise for the delay.
     function test_raiseCapAndBorrowBatch_sharesTheDelay() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         _delegateFrom(borrower, address(usdc), 5000e6);
         _delegateFrom(updater, address(usdc), 3000e6);
         vm.prank(riskCouncil);
@@ -704,12 +707,13 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PER-RAISE LIMIT (maxRaiseBps of the live cap)
+    // PER-RAISE LIMIT (maxRaiseBuffers of the asset's RVM headroomTarget)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// maxRaiseBps 100 (1%) of a 1,000,000 cap: an increase of 10,000 passes, 10,001 reverts with no change.
-    function test_maxRaiseBps_boundary() public {
-        _setLimits(100, 1);
+    /// One buffer of 10,000 on a 1,000,000 cap: an increase of 10,000 passes, 10,001 reverts with no change.
+    function test_maxRaiseBuffers_boundary() public {
+        capsRvm.setHeadroomTarget(address(usdc), 10_000);
+        _setLimits(1, 1);
         _delegate(address(usdc), 10_000e6);
 
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10_001, 10_000));
@@ -721,23 +725,45 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 10_000, "exactly at the limit passes");
     }
 
-    /// The limit floors: 1% of a 999 cap is 9 tokens, so +9 passes and +10 reverts.
-    function test_maxRaiseBps_floors() public {
+    /// The limit is the count times the buffer: 3 buffers of 3,000 allow +9,000.
+    function test_maxRaiseBuffers_multipliesTheBuffer() public {
+        capsRvm.setHeadroomTarget(address(usdc), 3000);
+        _setLimits(3, 1);
+        _delegate(address(usdc), 9000e6);
+
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 9001, 9000));
+        _run(address(usdc), 9000e6);
+        _run(address(usdc), 8999e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 9000);
+    }
+
+    /// One setting fits small and large markets: each asset gets the same number of its own buffers, whatever
+    /// its cap. A 999 WETH cap with a buffer of 600 takes +1,200 (above 100% of the cap); the 1,000,000 USDC cap
+    /// with a buffer of 1,000 takes +2,000 (0.2% of the cap).
+    function test_maxRaiseBuffers_followsEachAssetsBuffer() public {
         pool.setBorrowCap(address(weth), 999);
-        _setLimits(100, 1);
-        _delegate(address(weth), 10e18);
+        capsRvm.setHeadroomTarget(address(weth), 600);
+        capsRvm.setHeadroomTarget(address(usdc), 1000);
+        _setLimits(2, 1);
+        _delegate(address(weth), 1200e18);
+        _delegate(address(usdc), 2000e6);
 
-        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10, 9));
-        _run(address(weth), 9e18);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 1201, 1200));
+        _run(address(weth), 1200e18);
+        _run(address(weth), 1199e18);
+        assertEq(_liveBorrowCap(address(weth)), 999 + 1200);
 
-        _run(address(weth), 8e18);
-        assertEq(_liveBorrowCap(address(weth)), 1008);
+        vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 2001, 2000));
+        _run(address(usdc), 2000e6);
+        _run(address(usdc), 1999e6);
+        assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 2000);
     }
 
     /// The increase counts from the live cap, so a debt overshoot above the cap counts toward the limit.
-    function test_maxRaiseBps_countsDebtOvershoot() public {
+    function test_maxRaiseBuffers_countsDebtOvershoot() public {
         _setDebt(address(usdc), 1_000_500, 1); // ceil = 1,000,501
-        _setLimits(100, 1); // max +10,000
+        capsRvm.setHeadroomTarget(address(usdc), 10_000);
+        _setLimits(1, 1); // max +10,000
         _delegate(address(usdc), 9500e6);
         // 1,000,501 + 9,499 + 1 = 1,010,001: increase 10,001 over the cap.
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 10_001, 10_000));
@@ -746,31 +772,33 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(_liveBorrowCap(address(usdc)), LIVE_CAP + 10_000);
     }
 
-    /// Fuzzed: the raise passes iff the increase is at most floor(oldCap * bps / 10,000).
-    function testFuzz_maxRaiseBps(uint256 bps, uint256 amountTokens) public {
-        bps = bound(bps, 1, 20_000);
+    /// Fuzzed: the raise passes iff the increase is at most buffers * headroomTarget.
+    function testFuzz_maxRaiseBuffers(uint256 buffers, uint256 headroomTarget, uint256 amountTokens) public {
+        buffers = bound(buffers, 1, 20);
+        headroomTarget = bound(headroomTarget, 1, 100_000);
         amountTokens = bound(amountTokens, 1, 1_000_000);
-        _setLimits(bps, 1);
+        capsRvm.setHeadroomTarget(address(usdc), headroomTarget);
+        _setLimits(buffers, 1);
         uint256 amount = _wei(address(usdc), amountTokens);
         _delegate(address(usdc), amount);
 
         uint256 increase = amountTokens + 1; // the rounding buffer
-        uint256 maxIncrease = LIVE_CAP * bps / 10_000;
         vm.prank(riskCouncil);
         (bool ok,) =
             address(fwd).call(abi.encodeCall(ICapsBorrowForwarder.raiseCapAndBorrow, (address(usdc), amount, borrower)));
-        assertEq(ok, increase <= maxIncrease, "passes iff within the limit");
+        assertEq(ok, increase <= buffers * headroomTarget, "passes iff within the limit");
         assertEq(_liveBorrowCap(address(usdc)), ok ? LIVE_CAP + increase : LIVE_CAP);
     }
 
-    /// setLimits is owner only, emits LimitsSet, refuses maxRaiseBps 0, and the new value applies to the next raise.
+    /// setLimits is owner only, emits LimitsSet, refuses maxRaiseBuffers 0, and the new value applies to the next
+    /// raise.
     function test_setLimits_ownerOnly_andApplies() public {
         vm.prank(riskCouncil);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, riskCouncil));
         fwd.setLimits(1, 1);
         vm.prank(attacker);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
-        fwd.setLimits(20_000, 1);
+        fwd.setLimits(20, 1);
 
         vm.prank(governance);
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
@@ -779,13 +807,14 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         vm.expectRevert(ICapsBorrowForwarder.InvalidInput.selector);
         fwd.setLimits(1, 0);
 
+        capsRvm.setHeadroomTarget(address(usdc), 2500);
         vm.expectEmit(false, false, false, true, address(fwd));
-        emit ICapsBorrowForwarder.LimitsSet(50, 2 days);
-        _setLimits(50, 2 days);
-        assertEq(fwd.maxRaiseBps(), 50);
+        emit ICapsBorrowForwarder.LimitsSet(2, 2 days);
+        _setLimits(2, 2 days);
+        assertEq(fwd.maxRaiseBuffers(), 2);
         assertEq(fwd.minRaiseDelay(), 2 days);
 
-        // 0.5% of 1,000,000 = 5,000: 5,000 + 1 is now above it.
+        // 2 buffers of 2,500 = 5,000: 5,000 + 1 is now above it.
         _delegate(address(usdc), 5000e6);
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseAboveLimit.selector, 5001, 5000));
         _run(address(usdc), 5000e6);
@@ -800,7 +829,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     /// minRaiseDelay 1 day: a second raise of the same asset at +1 day - 1 s reverts RaiseTooSoon with nothing
     /// changed; at exactly +1 day it passes.
     function test_minRaiseDelay_boundary() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         uint256 t0 = block.timestamp;
         _delegate(address(usdc), 5000e6);
         _run(address(usdc), 5000e6);
@@ -822,7 +851,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// The delay is per asset: a raise of USDC does not delay WETH.
     function test_minRaiseDelay_perAsset() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         pool.setBorrowCap(address(weth), 1000);
         _delegate(address(usdc), 5000e6);
         _run(address(usdc), 5000e6);
@@ -833,7 +862,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// A raise that fails after the delay check (here the RVM maxCap) does not start the delay.
     function test_minRaiseDelay_failedRaiseDoesNotStartTimer() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         _setRvmMaxCap(address(usdc), 1);
         _delegate(address(usdc), 5000e6);
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, 1_005_001, 1));
@@ -848,7 +877,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
     /// An owner update of minRaiseDelay applies at once against the stored lastRaiseAt: shortening it lets the
     /// next raise through, lengthening it pushes the next raise out.
     function test_minRaiseDelay_ownerUpdateApplies() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         uint256 t0 = block.timestamp;
         _delegate(address(usdc), 5000e6);
         _run(address(usdc), 5000e6);
@@ -858,11 +887,11 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), t0 + 1 days));
         _run(address(usdc), 1000e6);
 
-        _setLimits(MAX_RAISE_BPS, 1 hours);
+        _setLimits(MAX_RAISE_BUFFERS, 1 hours);
         _run(address(usdc), 1000e6);
         uint256 t1 = block.timestamp;
 
-        _setLimits(MAX_RAISE_BPS, 3 days);
+        _setLimits(MAX_RAISE_BUFFERS, 3 days);
         vm.warp(t1 + 1 days);
         _delegate(address(usdc), 1000e6);
         vm.expectRevert(abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, address(usdc), t1 + 3 days));
@@ -923,7 +952,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
 
     /// CAP-ST-31: the borrow fails (delegation 1 USDC short): the cap raise and the raise timestamp roll back.
     function test_CAP_ST_31_raiseCapAndBorrow_borrowFails_revertsAll() public {
-        _setLimits(MAX_RAISE_BPS, 1 days);
+        _setLimits(MAX_RAISE_BUFFERS, 1 days);
         _delegate(address(usdc), 4999e6);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1039,7 +1068,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         Vm.AccountAccess[] memory acc = vm.stopAndReturnStateDiff();
 
         // 0 delegatecall, 1 getConfiguration, 2 getReserveData, 3 setBorrowCap, 4 borrow, 5 totalSupply,
-        // 6 renounceDelegation, 7 getKeyState, 8 balanceOf, 9 transfer
+        // 6 renounceDelegation, 7 getKeyState and getReserveState, 8 balanceOf, 9 transfer
         uint256[10] memory n;
         for (uint256 i = 0; i < acc.length; i++) {
             Vm.AccountAccess memory a = acc[i];
@@ -1065,7 +1094,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(n[4], 1, "one borrow");
         assertEq(n[5], 1, "one debt totalSupply");
         assertEq(n[6], 1, "one renounceDelegation");
-        assertEq(n[7], 1, "one RVM key read");
+        assertEq(n[7], 2, "two RVM reads: key state (maxCap) and reserve state (buffer)");
         assertEq(n[8], 2, "two forwarder balance reads");
         assertEq(n[9], 1, "one transfer");
     }
@@ -1104,8 +1133,15 @@ contract CapsBorrowForwarderTest is CapsTestBase {
             else if (h == keccak256(abi.encodeCall(MockVariableDebtToken.renounceDelegation, (borrower)))) n[6]++;
             else revert("unexpected debt token call");
         } else if (a.account == address(capsRvm)) {
-            if (h == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)))) n[7]++;
-            else revert("unexpected RVM call");
+            if (h == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)))) {
+                n[7]++;
+            } else if (
+                h == keccak256(abi.encodeCall(MockCapsRvm.getReserveState, (address(usdc), IRvm.CapKind.BORROW)))
+            ) {
+                n[7]++;
+            } else {
+                revert("unexpected RVM call");
+            }
         } else if (a.account == address(usdc)) {
             if (h == keccak256(abi.encodeCall(IERC20.balanceOf, (address(fwd))))) n[8]++;
             else if (h == keccak256(abi.encodeCall(IERC20.transfer, (borrower, amount)))) n[9]++;
@@ -1153,7 +1189,7 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(fwd.lastRaiseAt(address(usdc)), block.timestamp);
         assertEq(fwd.owner(), governance);
         assertTrue(fwd.isCaller(riskCouncil));
-        assertEq(fwd.maxRaiseBps(), MAX_RAISE_BPS);
+        assertEq(fwd.maxRaiseBuffers(), MAX_RAISE_BUFFERS);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

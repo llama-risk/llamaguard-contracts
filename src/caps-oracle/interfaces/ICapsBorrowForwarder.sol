@@ -9,7 +9,7 @@ pragma solidity 0.8.27;
  *         credit to the forwarder, and every borrowed token goes to the borrower.
  * @dev The config engine and the RVM are immutable, so the delegatecall target cannot change on a contract that
  *      holds credit delegations. Each raise is bounded by the RVM borrow `maxCap`, the per-raise limit
- *      `maxRaiseBps` and the per-asset delay `minRaiseDelay`.
+ *      `maxRaiseBuffers` and the per-asset delay `minRaiseDelay`.
  */
 interface ICapsBorrowForwarder {
     /// @notice One borrow of a batch: `amount` in token smallest units, with the debt on `onBehalfOf`.
@@ -31,7 +31,7 @@ interface ICapsBorrowForwarder {
     event CallerSet(address indexed account, bool allowed);
 
     /// @notice The per-raise and per-period limits were set.
-    event LimitsSet(uint256 maxRaiseBps, uint256 minRaiseDelay);
+    event LimitsSet(uint256 maxRaiseBuffers, uint256 minRaiseDelay);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ERRORS
@@ -53,7 +53,7 @@ interface ICapsBorrowForwarder {
     ///         The Risk Council sets or raises `maxCap` first.
     error NewCapAboveMaxCap(uint256 newCap, uint256 maxCap);
 
-    /// @notice The cap increase is above `maxRaiseBps` of the live cap.
+    /// @notice The cap increase is above `maxRaiseBuffers` buffers of the asset.
     error RaiseAboveLimit(uint256 increase, uint256 maxIncrease);
 
     /// @notice The last raise for the asset was less than `minRaiseDelay` ago.
@@ -81,8 +81,9 @@ interface ICapsBorrowForwarder {
     /// @notice Whether `account` may call `raiseCapAndBorrow`.
     function isCaller(address account) external view returns (bool);
 
-    /// @notice Max cap increase in one raise, in bps of the live cap.
-    function maxRaiseBps() external view returns (uint256);
+    /// @notice Max cap increase in one raise, in buffers: the asset's RVM `headroomTarget`, the room one
+    ///         automatic raise adds. One value fits every market.
+    function maxRaiseBuffers() external view returns (uint256);
 
     /// @notice Min seconds between two raises of the same asset.
     function minRaiseDelay() external view returns (uint256);
@@ -101,7 +102,7 @@ interface ICapsBorrowForwarder {
      *      The new cap is max(live cap, debt) + amount + 1 in whole tokens, the debt and the amount
      *      rounded up, so accrued interest above the cap cannot make the borrow fail.
      *      Reverts when the new cap is above the RVM borrow `maxCap` (an asset without an RVM entry has `maxCap`
-     *      0 and cannot be raised), or more than `maxRaiseBps` of the live cap above it, and when the last raise
+     *      0 and cannot be raised), or more than `maxRaiseBuffers` buffers above the live cap, and when the last raise
      *      of the asset was less than `minRaiseDelay` ago.
      *      Also reverts on a failed token transfer, on any config engine or Pool revert, and when the forwarder's
      *      balance changes.
@@ -129,8 +130,8 @@ interface ICapsBorrowForwarder {
     function setCaller(address account, bool allowed) external;
 
     /// @notice Set the per-raise limit and the per-period delay.
-    /// @dev Reverts InvalidInput when `maxRaiseBps_` is 0.
-    /// @param maxRaiseBps_ max cap increase in one raise, in bps of the live cap
+    /// @dev Reverts InvalidInput when `maxRaiseBuffers_` is 0.
+    /// @param maxRaiseBuffers_ max cap increase in one raise, in buffers of the asset
     /// @param minRaiseDelay_ min seconds between two raises of the same asset, above 0
-    function setLimits(uint256 maxRaiseBps_, uint256 minRaiseDelay_) external;
+    function setLimits(uint256 maxRaiseBuffers_, uint256 minRaiseDelay_) external;
 }

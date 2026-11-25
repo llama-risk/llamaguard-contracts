@@ -117,9 +117,7 @@ abstract contract AdversarialBase is CapsTestBase {
         capsRvm = new MockCapsRvm();
         capsRvm.setPool(address(pool));
         engine = new MockCapsEngine(pool);
-        fwd = new CapsBorrowForwarder(
-            governance, address(pool), address(engine), address(capsRvm), riskCouncil, 10_000, 1
-        );
+        fwd = new CapsBorrowForwarder(governance, address(pool), address(engine), address(capsRvm), riskCouncil, 1, 1);
 
         usdc.mint(address(pool), _wei(address(usdc), LIQUIDITY));
         weth.mint(address(pool), _wei(address(weth), LIQUIDITY));
@@ -140,6 +138,8 @@ abstract contract AdversarialBase is CapsTestBase {
         IRvm.RateLimitConfig memory c =
             IRvm.RateLimitConfig({ maxCap: RVM_MAX_CAP, maxHeadroom: 1, alphaBps: 0, cutBandBps: 0 });
         capsRvm.setRateLimitConfig(asset, IRvm.CapKind.BORROW, c);
+        // One buffer of LIVE_CAP: the forwarder allows +LIVE_CAP per raise.
+        capsRvm.setHeadroomTarget(asset, LIVE_CAP);
     }
 
     function _debtToken(address asset) internal view returns (MockVariableDebtToken) {

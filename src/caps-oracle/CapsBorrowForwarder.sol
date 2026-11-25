@@ -28,7 +28,6 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
     using SafeERC20 for IERC20;
 
     uint256 internal constant VARIABLE_RATE_MODE = 2;
-    uint256 internal constant BPS = 10_000;
     /// @dev Cap 1 is Aave's manual freeze of borrowing.
     uint256 internal constant FROZEN_CAP = 1;
     uint256 internal constant ROUNDING_BUFFER = 1;
@@ -47,7 +46,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
     mapping(address account => bool allowed) public isCaller;
 
     /// @inheritdoc ICapsBorrowForwarder
-    uint256 public maxRaiseBps;
+    uint256 public maxRaiseBuffers;
 
     /// @inheritdoc ICapsBorrowForwarder
     uint256 public minRaiseDelay;
@@ -65,7 +64,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
     /// @param configEngine config engine of the Pool
     /// @param rvm caps RVM of the Pool
     /// @param caller initial allowlisted caller
-    /// @param maxRaiseBps_ max increase per raise, bps of the live cap
+    /// @param maxRaiseBuffers_ max increase per raise, in buffers (the RVM `headroomTarget`) of the asset
     /// @param minRaiseDelay_ min seconds between raises of one asset
     constructor(
         address owner_,
@@ -73,7 +72,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
         address configEngine,
         address rvm,
         address caller,
-        uint256 maxRaiseBps_,
+        uint256 maxRaiseBuffers_,
         uint256 minRaiseDelay_
     )
         Ownable(owner_)
@@ -90,7 +89,7 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
         CONFIG_ENGINE = configEngine;
         RVM = rvm;
         _setCaller(caller, true);
-        _setLimits(maxRaiseBps_, minRaiseDelay_);
+        _setLimits(maxRaiseBuffers_, minRaiseDelay_);
     }
 
     /// @inheritdoc ICapsBorrowForwarder
@@ -126,8 +125,8 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
     }
 
     /// @inheritdoc ICapsBorrowForwarder
-    function setLimits(uint256 maxRaiseBps_, uint256 minRaiseDelay_) external onlyOwner {
-        _setLimits(maxRaiseBps_, minRaiseDelay_);
+    function setLimits(uint256 maxRaiseBuffers_, uint256 minRaiseDelay_) external onlyOwner {
+        _setLimits(maxRaiseBuffers_, minRaiseDelay_);
     }
 
     /// @dev Disabled.
@@ -165,14 +164,14 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
         emit CallerSet(account, allowed);
     }
 
-    function _setLimits(uint256 maxRaiseBps_, uint256 minRaiseDelay_) internal {
-        if (maxRaiseBps_ == 0 || minRaiseDelay_ == 0) revert InvalidInput();
-        maxRaiseBps = maxRaiseBps_;
+    function _setLimits(uint256 maxRaiseBuffers_, uint256 minRaiseDelay_) internal {
+        if (maxRaiseBuffers_ == 0 || minRaiseDelay_ == 0) revert InvalidInput();
+        maxRaiseBuffers = maxRaiseBuffers_;
         minRaiseDelay = minRaiseDelay_;
-        emit LimitsSet(maxRaiseBps_, minRaiseDelay_);
+        emit LimitsSet(maxRaiseBuffers_, minRaiseDelay_);
     }
 
-    /// @dev Live cap and new cap, after the RVM `maxCap` and `maxRaiseBps` checks.
+    /// @dev Live cap and new cap, after the RVM `maxCap` and `maxRaiseBuffers` checks.
     function _checkedNewCap(address asset, uint256 amount) internal view returns (uint256 oldCap, uint256 newCap) {
         DataTypes.ReserveConfigurationMap memory config = IPool(POOL).getConfiguration(asset);
         oldCap = config.getBorrowCap();
@@ -186,7 +185,9 @@ contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGu
             ICapsRangeValidationModule(RVM).getKeyState(asset, ICapsRangeValidationModule.CapKind.BORROW).maxCap;
         if (newCap > maxCap) revert NewCapAboveMaxCap(newCap, maxCap);
 
-        uint256 maxIncrease = oldCap * maxRaiseBps / BPS;
+        uint256 maxIncrease = ICapsRangeValidationModule(RVM)
+            .getReserveState(asset, ICapsRangeValidationModule.CapKind.BORROW)
+            .headroomTarget * maxRaiseBuffers;
         if (newCap - oldCap > maxIncrease) revert RaiseAboveLimit(newCap - oldCap, maxIncrease);
     }
 

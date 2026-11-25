@@ -38,7 +38,8 @@ contract CapsForkEthereumCore is Test {
     address internal constant USDC_V_TOKEN = AaveV3EthereumAssets.USDC_V_TOKEN;
 
     /// Placeholder limits: +100% per raise, one raise per asset per day.
-    uint256 internal constant MAX_RAISE_BPS = 10_000;
+    /// One buffer: 10% of the live USDC debt under the RVM entry below.
+    uint256 internal constant MAX_RAISE_BUFFERS = 1;
     uint256 internal constant MIN_RAISE_DELAY = 1 days;
 
     bool internal forked;
@@ -67,7 +68,7 @@ contract CapsForkEthereumCore is Test {
             AaveV3Ethereum.CONFIG_ENGINE,
             address(forwarderRvm),
             riskCouncil,
-            MAX_RAISE_BPS,
+            MAX_RAISE_BUFFERS,
             MIN_RAISE_DELAY
         );
 
