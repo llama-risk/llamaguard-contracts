@@ -201,6 +201,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE (a no-op if not registered).
     /// @dev The kind comes from an exact match of the agentId's AgentHub update type. Reverts InvalidAgent.
+    ///      The agent is checked only here: re-run setAgent after AgentHub `setAgentAddress` points the agentId at
+    ///      another contract, in the same AIP.
     function setAgent(uint256 agentId, Direction direction) external;
 
     /// @notice Set the global bounds of a kind. Reverts InvalidBounds on a bps field above 10_000 or a cooldown
