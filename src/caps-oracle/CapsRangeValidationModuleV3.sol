@@ -37,7 +37,9 @@ import { IAaveCapAgent } from "./interfaces/IAaveCapAgent.sol";
  *        can be raised back and an increase above hi cut back, unless maxCap or a hold changes with it.
  *      A hold also blocks the cut down to maxCap, so a Risk Steward raise above maxCap under a hold stays until
  *      the hold ends, leaving time to fit maxCap to it. Only the Risk Council Safe writes holds, for at most
- *      MAX_HOLD_DURATION each.
+ *      MAX_HOLD_DURATION each, and only on an existing entry, so a hold cannot protect a new listing.
+ *      A new listing is protected by onboarding: the owner sets it with the entry, and it blocks cuts like a hold
+ *      until it ends or the cap goes above the cap it was set at, for at most MAX_ONBOARDING_DURATION.
  */
 contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
@@ -46,6 +48,9 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
 
     /// @inheritdoc ICapsRangeValidationModule
     uint256 public constant MAX_HOLD_DURATION = 24 hours;
+
+    /// @inheritdoc ICapsRangeValidationModule
+    uint256 public constant MAX_ONBOARDING_DURATION = 30 days;
 
     /// @dev Floor of L = ceilDiv(maxHeadroom, MIN_HEADROOM_DIVISOR). A live entry has maxHeadroom > 0, so L >= 1.
     uint256 internal constant MIN_HEADROOM_DIVISOR = 25;
@@ -333,6 +338,22 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
         emit HoldSet(asset, kind, until);
     }
 
+    /// @inheritdoc ICapsRangeValidationModule
+    function setOnboarding(address asset, CapKind kind, uint40 until) external {
+        if (msg.sender != owner() && (msg.sender != riskCouncil || until != 0)) {
+            revert OnlyRiskCouncilOrOwner(msg.sender);
+        }
+        KeyState storage key = _keys[asset][kind];
+        if (key.maxCap == 0) revert RateLimitConfigNotFound(asset, kind);
+        uint256 maxUntil = block.timestamp + MAX_ONBOARDING_DURATION;
+        if (until > maxUntil) revert OnboardingTooLong(until, maxUntil);
+        ReserveState memory state;
+        _readReserve(asset, kind, state);
+        key.onboardingUntil = until;
+        key.listingCap = uint64(state.cap);
+        emit OnboardingSet(asset, kind, until, key.listingCap);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // GETTERS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -391,7 +412,8 @@ contract CapsRangeValidationModuleV3 is ICapsRangeValidationModule, Ownable2Step
         state.usage = usage;
         state.supplyBound = supplyBound;
         state.maxCap = maxCap;
-        state.holdUntil = key.holdUntil;
+        state.holdUntil =
+            state.cap <= key.listingCap && key.onboardingUntil > key.holdUntil ? key.onboardingUntil : key.holdUntil;
         state.headroomTarget = headroom;
         state.raiseCap = Math.min(Math.min(usagePlusHeadroom, maxCap), supplyBound);
         state.cutFloor =

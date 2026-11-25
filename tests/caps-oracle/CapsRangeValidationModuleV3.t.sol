@@ -323,6 +323,68 @@ contract CapsRangeValidationModuleV3StateTest is RvmTestBase {
         assertFalse(_cut(w, 1100));
     }
 
+    // ─── Onboarding
+    // ───────────────────────────────────────────────────────────
+
+    /// No cut while onboarding and the cap is at most the listing cap, then cuts resume at the end.
+    function test_onboarding_blocksCutsUntilItEnds() public {
+        _useF1(1200);
+        uint40 until = uint40(block.timestamp + 7 days);
+        vm.expectEmit(address(rvm));
+        emit IRvm.OnboardingSet(w, IRvm.CapKind.BORROW, until, 1200);
+        _setOnboarding(governance, until);
+        assertEq(_keyState(w).listingCap, 1200);
+        assertEq(_state(w).holdUntil, until);
+        assertFalse(_cut(w, 1100));
+        (bool due,,) = _previewCut(w);
+        assertFalse(due);
+
+        vm.warp(until);
+        assertTrue(_cut(w, 1100));
+    }
+
+    /// A cap above the listing cap ends onboarding early; back at or below it, cuts wait again.
+    function test_onboarding_endsWhenCapGoesAboveListingCap() public {
+        _useF1(1200);
+        _setOnboarding(governance, uint40(block.timestamp + 7 days));
+        _applyFixture(w, _f1(), 1201);
+        assertTrue(_cut(w, 1100), "above the listing cap");
+        _applyFixture(w, _f1(), 1200);
+        assertFalse(_cut(w, 1100), "back at the listing cap");
+    }
+
+    function test_onboarding_bounds_andRoles() public {
+        _useF1(1200);
+        uint256 maxUntil = block.timestamp + rvm.MAX_ONBOARDING_DURATION();
+        vm.expectRevert(abi.encodeWithSelector(IRvm.OnboardingTooLong.selector, uint40(maxUntil + 1), maxUntil));
+        _setOnboarding(governance, uint40(maxUntil + 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRvm.RateLimitConfigNotFound.selector, address(usdc), IRvm.CapKind.BORROW)
+        );
+        vm.prank(governance);
+        rvm.setOnboarding(address(usdc), IRvm.CapKind.BORROW, 1);
+
+        _setOnboarding(governance, uint40(maxUntil));
+        // The Risk Council may only end it; nobody else may touch it.
+        vm.expectRevert(abi.encodeWithSelector(IRvm.OnlyRiskCouncilOrOwner.selector, riskCouncil));
+        _setOnboarding(riskCouncil, uint40(block.timestamp + 1));
+        vm.expectRevert(abi.encodeWithSelector(IRvm.OnlyRiskCouncilOrOwner.selector, attacker));
+        _setOnboarding(attacker, 0);
+        _setOnboarding(riskCouncil, 0);
+        assertTrue(_cut(w, 1100));
+
+        // Retiring the entry clears it.
+        _setOnboarding(governance, uint40(maxUntil));
+        vm.prank(riskCouncil);
+        rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, IRvm.RateLimitConfig(0, 0, 0, 0));
+        assertEq(_keyState(w).onboardingUntil, 0);
+    }
+
+    function _setOnboarding(address caller, uint40 until) internal {
+        vm.prank(caller);
+        rvm.setOnboarding(w, IRvm.CapKind.BORROW, until);
+    }
+
     // ─── Frozen and paused
     // ────────────────────────────────────
 
@@ -631,6 +693,8 @@ contract CapsRangeValidationModuleV3AccessTest is RvmTestBase {
         vm.startPrank(caller);
         vm.expectRevert(abi.encodeWithSelector(IRvm.OnlyRiskCouncilOrOwner.selector, caller));
         rvm.setRateLimitConfig(w, IRvm.CapKind.BORROW, e);
+        vm.expectRevert(abi.encodeWithSelector(IRvm.OnlyRiskCouncilOrOwner.selector, caller));
+        rvm.setOnboarding(w, IRvm.CapKind.BORROW, 0);
         vm.expectRevert(_unauthorized(caller));
         rvm.setBounds(IRvm.CapKind.BORROW, b);
         vm.expectRevert(_unauthorized(caller));
