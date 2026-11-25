@@ -41,7 +41,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint16 cutBandBps; // a cut needs headroom above (1 + band) * headroomTarget
     }
 
-    /// @notice Stored state of one key, one slot (240 bits). `maxCap` 0 means no entry.
+    /// @notice Stored state of one key. `maxCap` 0 means no entry.
     struct KeyState {
         uint64 maxCap; // whole tokens
         uint64 maxHeadroom; // whole tokens
@@ -49,6 +49,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint16 cutBandBps; // bps
         uint40 holdUntil; // unix seconds, cuts are rejected before it
         uint40 lastIncreaseAt; // unix seconds of the last Risk Council maxCap or maxHeadroom raise
+        uint40 onboardingUntil; // unix seconds, no cuts before it while the cap is at most listingCap
+        uint64 listingCap; // the live cap when onboarding was set, whole tokens
     }
 
     /// @notice Global limits of a kind, set by the owner.
@@ -68,7 +70,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint256 raiseCap; // highest accepted raise
         uint256 cutFloor; // lowest accepted cut
         uint256 cutTrigger; // a cut needs cap > cutTrigger
-        uint40 holdUntil; // end of the hold, unix seconds. 0 or past means no hold
+        uint40 holdUntil; // end of the hold or of onboarding, unix seconds. 0 or past means no hold
         bool raiseBlocked; // reserve frozen or paused
         uint256 maxCap; // the maxCap the rule uses, at most the largest cap Aave stores
     }
@@ -90,6 +92,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice The Risk Council Safe wrote or cleared (`until` 0) the hold of a key.
     event HoldSet(address indexed asset, CapKind indexed kind, uint40 until);
+
+    /// @notice The owner set, or the owner or Risk Council ended (`until` 0), the onboarding of a key.
+    event OnboardingSet(address indexed asset, CapKind indexed kind, uint40 until, uint64 listingCap);
 
     /// @notice The owner changed the Risk Council Safe address.
     event RiskCouncilChanged(address indexed previousRiskCouncil, address indexed newRiskCouncil);
@@ -126,6 +131,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice The hold ends more than MAX_HOLD_DURATION after block.timestamp.
     error HoldTooLong(uint40 until, uint256 maxUntil);
 
+    /// @notice Onboarding ends more than MAX_ONBOARDING_DURATION after block.timestamp.
+    error OnboardingTooLong(uint40 until, uint256 maxUntil);
+
     /// @notice Zero address passed for a role or an immutable.
     error ZeroAddress();
 
@@ -153,6 +161,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Longest hold, 24 hours, in seconds.
     function MAX_HOLD_DURATION() external view returns (uint256);
+
+    /// @notice Longest onboarding, 30 days, in seconds.
+    function MAX_ONBOARDING_DURATION() external view returns (uint256);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PREVIEWS: anyone, view
@@ -241,6 +252,14 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @dev The hold also blocks the cut down to maxCap. Raises are not held.
     ///      Reverts OnlyRiskCouncil, HoldTooLong, RateLimitConfigNotFound.
     function setHold(address asset, CapKind kind, uint40 until) external;
+
+    /**
+     * @notice Start the onboarding of a listed key: no cuts before `until` while the live cap is at most the cap
+     *         read now (`listingCap`). A raise or a Risk Steward increase above it ends onboarding early.
+     * @dev Owner, in the listing AIP. The Risk Council may only end it (`until` 0).
+     *      Reverts OnlyRiskCouncilOrOwner, OnboardingTooLong, RateLimitConfigNotFound.
+     */
+    function setOnboarding(address asset, CapKind kind, uint40 until) external;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // GETTERS
