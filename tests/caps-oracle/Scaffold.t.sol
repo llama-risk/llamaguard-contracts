@@ -7,7 +7,6 @@ import {
 import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
 import { CapsTestBase } from "./CapsTestBase.sol";
 import { MockCapsRvm } from "./mocks/MockCapsRvm.sol";
-import { MockSafe } from "./mocks/MockSafe.sol";
 import { MockVariableDebtToken } from "./mocks/MockPoolV3.sol";
 import { ICapsRangeValidationModule as IRvm } from "../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
@@ -80,15 +79,6 @@ contract ScaffoldTest is CapsTestBase {
         vm.stopPrank();
     }
 
-    function test_Scaffold_safeDelegatecallRunsInSafeContext() public {
-        _etchSafeAtRiskCouncil();
-        // delegatecall to the MockSafe code itself would be recursion; use a plain target
-        Ctx ctx = new Ctx();
-        bytes memory ret = MockSafe(riskCouncil).execDelegatecall(address(ctx), abi.encodeCall(Ctx.who, ()));
-        assertEq(abi.decode(ret, (address)), riskCouncil);
-        assertEq(MockSafe(riskCouncil).nonce(), 1);
-    }
-
     function test_Scaffold_mockRvmServesReducerReads() public {
         MockCapsRvm rvm = new MockCapsRvm();
         rvm.setCut(address(weth), IRvm.CapKind.BORROW, true, 1200, 1100);
@@ -108,11 +98,5 @@ contract ScaffoldTest is CapsTestBase {
         assertEq((uint256(MAX_HEADROOM) + 24) / 25, F1_LMIN);
         // F2: alpha * D = 1,000 clamps to maxHeadroom = 500
         assertEq(F2_DEBT + F2_L, F2_RAISE_BOUND);
-    }
-}
-
-contract Ctx {
-    function who() external view returns (address) {
-        return address(this);
     }
 }

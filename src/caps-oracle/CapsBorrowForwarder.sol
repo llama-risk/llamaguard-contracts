@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.27;
 
+import { Ownable, Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IPool } from "aave-v3-origin/src/contracts/interfaces/IPool.sol";
+import { ICreditDelegationToken } from "aave-v3-origin/src/contracts/interfaces/ICreditDelegationToken.sol";
 import { DataTypes } from "aave-v3-origin/src/contracts/protocol/libraries/types/DataTypes.sol";
 import {
     ReserveConfiguration
@@ -15,140 +19,197 @@ import {
 import { EngineFlags } from "aave-v3-origin/src/contracts/extensions/v3-config-engine/EngineFlags.sol";
 import { ICapsBorrowForwarder } from "./interfaces/ICapsBorrowForwarder.sol";
 import { ICapsRangeValidationModule } from "./interfaces/ICapsRangeValidationModule.sol";
-import { IRiskSteward } from "aave-v3-risk-stewards/interfaces/IRiskSteward.sol";
 
 /// @title CapsBorrowForwarder
-/// @notice Raises an Aave V3 borrow cap through the Risk Steward and borrows in one transaction, with the
-///         debt on the borrower. The Risk Council Safe calls `raiseCapAndBorrow` by delegatecall, which raises
-///         the cap as the Safe and then calls `borrowFor` on this deployed contract. The borrower delegates credit
-///         to this contract, so the borrowed tokens can only reach the borrower.
-/// @dev No storage. The immutables are read from code, so they resolve inside the delegatecall.
-contract CapsBorrowForwarder is ICapsBorrowForwarder {
+/// @notice Raises an Aave V3 borrow cap and borrows for a borrower in one transaction. Holds RISK_ADMIN and
+///         the borrowers' credit delegations. Borrowed tokens only reach the borrower.
+contract CapsBorrowForwarder is ICapsBorrowForwarder, Ownable2Step, ReentrancyGuard {
     using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
     using SafeERC20 for IERC20;
 
-    /// @notice Variable interest rate mode for `IPool.borrow`.
     uint256 internal constant VARIABLE_RATE_MODE = 2;
+    /// @dev Cap 1 is Aave's manual freeze of borrowing.
+    uint256 internal constant FROZEN_CAP = 1;
+    uint256 internal constant ROUNDING_BUFFER = 1;
+    uint256 internal constant MAX_BATCH_SIZE = 20;
 
     /// @inheritdoc ICapsBorrowForwarder
     address public immutable POOL;
 
     /// @inheritdoc ICapsBorrowForwarder
-    address public immutable RISK_STEWARD;
-
-    /// @inheritdoc ICapsBorrowForwarder
-    address public immutable RISK_COUNCIL;
+    address public immutable CONFIG_ENGINE;
 
     /// @inheritdoc ICapsBorrowForwarder
     address public immutable RVM;
 
     /// @inheritdoc ICapsBorrowForwarder
-    address public immutable SELF;
+    mapping(address account => bool allowed) public isCaller;
 
-    /// @param pool the Aave V3 Pool
-    /// @param riskSteward the Risk Steward whose `RISK_COUNCIL` is `riskCouncil`
-    /// @param riskCouncil the Risk Council Safe, the only context in which `raiseCapAndBorrow` runs
-    /// @param rvm the rate-limiter RVM of the Pool, whose borrow `maxCap` bounds the new cap
-    /// @dev Reverts InvalidInput on a zero address, when the Steward's `POOL()` or `RISK_COUNCIL()` differs, or
-    ///      when the RVM's `POOL()` differs.
-    constructor(address pool, address riskSteward, address riskCouncil, address rvm) {
-        if (pool == address(0) || riskSteward == address(0) || riskCouncil == address(0) || rvm == address(0)) {
-            revert InvalidInput();
-        }
+    /// @inheritdoc ICapsBorrowForwarder
+    uint256 public maxRaiseBuffers;
+
+    /// @inheritdoc ICapsBorrowForwarder
+    uint256 public minRaiseDelay;
+
+    /// @inheritdoc ICapsBorrowForwarder
+    mapping(address asset => uint256 timestamp) public lastRaiseAt;
+
+    modifier onlyCaller() {
+        _checkCaller();
+        _;
+    }
+
+    /// @param owner_ same owner as the AgentHub
+    /// @param pool Aave V3 Pool
+    /// @param configEngine config engine of the Pool
+    /// @param rvm caps RVM of the Pool
+    /// @param caller initial allowlisted caller
+    /// @param maxRaiseBuffers_ max increase per raise, in buffers (the RVM `headroomTarget`) of the asset
+    /// @param minRaiseDelay_ min seconds between raises of one asset
+    constructor(
+        address owner_,
+        address pool,
+        address configEngine,
+        address rvm,
+        address caller,
+        uint256 maxRaiseBuffers_,
+        uint256 minRaiseDelay_
+    )
+        Ownable(owner_)
+    {
+        if (pool == address(0) || configEngine == address(0) || rvm == address(0)) revert InvalidInput();
+        if (ICapsRangeValidationModule(rvm).POOL() != pool) revert InvalidInput();
+        if (address(IEngine(configEngine).POOL()) != pool) revert InvalidInput();
         if (
-            address(IRiskSteward(riskSteward).POOL()) != pool || IRiskSteward(riskSteward).RISK_COUNCIL() != riskCouncil
-                || ICapsRangeValidationModule(rvm).POOL() != pool
+            address(IEngine(configEngine).POOL_CONFIGURATOR()) != IPool(pool).ADDRESSES_PROVIDER().getPoolConfigurator()
         ) {
             revert InvalidInput();
         }
         POOL = pool;
-        RISK_STEWARD = riskSteward;
-        RISK_COUNCIL = riskCouncil;
+        CONFIG_ENGINE = configEngine;
         RVM = rvm;
-        SELF = address(this);
+        _setCaller(caller, true);
+        _setLimits(maxRaiseBuffers_, minRaiseDelay_);
     }
 
     /// @inheritdoc ICapsBorrowForwarder
-    function raiseCapAndBorrow(
-        address asset,
-        uint256 amount,
-        address onBehalfOf,
-        uint256 extraCapTokens,
-        uint256 maxNewCap
-    )
-        external
-    {
-        // 1. Only the Risk Council Safe's context, with valid inputs.
-        if (address(this) != RISK_COUNCIL) revert NotRiskCouncilContext(address(this));
-        if (amount == 0 || onBehalfOf == address(0) || onBehalfOf == RISK_COUNCIL) revert InvalidInput();
-
-        // 2. Read the live borrow cap and decimals.
-        DataTypes.ReserveConfigurationMap memory config = IPool(POOL).getConfiguration(asset);
-        uint256 oldCap = config.getBorrowCap();
-        if (oldCap == 0) revert BorrowCapNotSet(asset);
-
-        // 3. newCap = the larger of the live cap and the debt, plus the amount and extraCapTokens, at most
-        //    maxNewCap. Whole tokens, the debt and the amount rounded up. Starting from the debt keeps room for
-        //    the amount when accrued interest has pushed the debt above the cap.
-        uint256 newCap = _newCap(asset, oldCap, config.getDecimals(), amount, extraCapTokens);
-        if (newCap > maxNewCap) revert NewCapAboveMax(newCap, maxNewCap);
-
-        // 4. At most the RVM max cap, so a later cut never sets the cap below the debt. 0: no rate limit entry.
-        uint256 maxCap =
-            ICapsRangeValidationModule(RVM).getKeyState(asset, ICapsRangeValidationModule.CapKind.BORROW).maxCap;
-        if (maxCap != 0 && newCap > maxCap) revert NewCapAboveMaxCap(newCap, maxCap);
-
-        // 5. Raise the borrow cap through the Risk Steward, which sees the Safe as caller.
-        IEngine.CapsUpdate[] memory updates = new IEngine.CapsUpdate[](1);
-        updates[0] = IEngine.CapsUpdate({ asset: asset, supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: newCap });
-        IRiskSteward(RISK_STEWARD).updateCaps(updates);
-
-        // 6. Borrow through the deployed forwarder, which holds the borrower's credit delegation and sends the
-        //    tokens to the borrower. No token passes through the Safe.
-        ICapsBorrowForwarder(SELF).borrowFor(asset, amount, onBehalfOf);
-
+    function raiseCapAndBorrow(address asset, uint256 amount, address onBehalfOf) external nonReentrant onlyCaller {
+        _checkBorrow(amount, onBehalfOf);
+        (uint256 oldCap, uint256 newCap) = _raiseCap(asset, amount);
+        _borrowFor(asset, amount, onBehalfOf);
         emit CapRaisedAndBorrowed(asset, onBehalfOf, amount, oldCap, newCap);
     }
 
     /// @inheritdoc ICapsBorrowForwarder
-    function borrowFor(address asset, uint256 amount, address onBehalfOf) external {
-        // 1. Only a plain call from the Risk Council Safe, with valid inputs.
-        if (address(this) != SELF) revert NotDirectCall(address(this));
-        if (msg.sender != RISK_COUNCIL) revert NotRiskCouncil(msg.sender);
-        if (amount == 0 || onBehalfOf == address(0) || onBehalfOf == RISK_COUNCIL || onBehalfOf == SELF) {
-            revert InvalidInput();
+    function raiseCapAndBorrowBatch(address asset, BorrowRequest[] calldata requests) external nonReentrant onlyCaller {
+        uint256 count = requests.length;
+        if (count == 0 || count > MAX_BATCH_SIZE) revert InvalidInput();
+
+        uint256 total = 0;
+        for (uint256 i; i < count; ++i) {
+            _checkBorrow(requests[i].amount, requests[i].onBehalfOf);
+            total += requests[i].amount;
         }
 
-        // 2. Borrow with the debt on the borrower, under its credit delegation to this contract. The Pool sends
-        //    the tokens here.
-        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
-        // The balance check around the borrow is the point: any balance change, re-entrant or not, reverts.
-        // slither-disable-next-line reentrancy-balance
-        IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
+        // One raise for the sum, then one borrow per request. Any failure reverts the whole batch.
+        (uint256 oldCap, uint256 newCap) = _raiseCap(asset, total);
+        for (uint256 i; i < count; ++i) {
+            _borrowFor(asset, requests[i].amount, requests[i].onBehalfOf);
+            emit CapRaisedAndBorrowed(asset, requests[i].onBehalfOf, requests[i].amount, oldCap, newCap);
+        }
+    }
 
-        // 3. Send the tokens to the borrower and require this contract to keep nothing.
+    /// @inheritdoc ICapsBorrowForwarder
+    function setCaller(address account, bool allowed) external onlyOwner {
+        _setCaller(account, allowed);
+    }
+
+    /// @inheritdoc ICapsBorrowForwarder
+    function setLimits(uint256 maxRaiseBuffers_, uint256 minRaiseDelay_) external onlyOwner {
+        _setLimits(maxRaiseBuffers_, minRaiseDelay_);
+    }
+
+    /// @dev Disabled.
+    function renounceOwnership() public view override onlyOwner {
+        revert NotSupported();
+    }
+
+    function _checkCaller() internal view {
+        if (!isCaller[msg.sender]) revert NotCaller(msg.sender);
+    }
+
+    function _checkBorrow(uint256 amount, address onBehalfOf) internal view {
+        if (amount == 0 || onBehalfOf == address(0) || onBehalfOf == address(this) || onBehalfOf == msg.sender) {
+            revert InvalidInput();
+        }
+    }
+
+    /// @dev Checks the delay and the limits, then raises the borrow cap to cover `amount`.
+    function _raiseCap(address asset, uint256 amount) internal returns (uint256 oldCap, uint256 newCap) {
+        uint256 nextRaiseAt = lastRaiseAt[asset] + minRaiseDelay;
+        if (lastRaiseAt[asset] != 0 && block.timestamp < nextRaiseAt) revert RaiseTooSoon(asset, nextRaiseAt);
+        lastRaiseAt[asset] = block.timestamp;
+
+        (oldCap, newCap) = _checkedNewCap(asset, amount);
+
+        // The engine runs by delegatecall, so the PoolConfigurator sees this contract (RISK_ADMIN).
+        IEngine.CapsUpdate[] memory updates = new IEngine.CapsUpdate[](1);
+        updates[0] = IEngine.CapsUpdate({ asset: asset, supplyCap: EngineFlags.KEEP_CURRENT, borrowCap: newCap });
+        Address.functionDelegateCall(CONFIG_ENGINE, abi.encodeCall(IEngine.updateCaps, (updates)));
+    }
+
+    function _setCaller(address account, bool allowed) internal {
+        if (account == address(0)) revert InvalidInput();
+        isCaller[account] = allowed;
+        emit CallerSet(account, allowed);
+    }
+
+    function _setLimits(uint256 maxRaiseBuffers_, uint256 minRaiseDelay_) internal {
+        if (maxRaiseBuffers_ == 0 || minRaiseDelay_ == 0) revert InvalidInput();
+        maxRaiseBuffers = maxRaiseBuffers_;
+        minRaiseDelay = minRaiseDelay_;
+        emit LimitsSet(maxRaiseBuffers_, minRaiseDelay_);
+    }
+
+    /// @dev Live cap and new cap, after the RVM `maxCap` and `maxRaiseBuffers` checks.
+    function _checkedNewCap(address asset, uint256 amount) internal view returns (uint256 oldCap, uint256 newCap) {
+        DataTypes.ReserveConfigurationMap memory config = IPool(POOL).getConfiguration(asset);
+        oldCap = config.getBorrowCap();
+        if (oldCap == 0) revert BorrowCapNotSet(asset);
+        if (oldCap == FROZEN_CAP) revert BorrowCapFrozen(asset);
+
+        newCap = _newCap(asset, oldCap, config.getDecimals(), amount);
+
+        // An asset with no RVM entry has maxCap 0 and always reverts here.
+        uint256 maxCap =
+            ICapsRangeValidationModule(RVM).getKeyState(asset, ICapsRangeValidationModule.CapKind.BORROW).maxCap;
+        if (newCap > maxCap) revert NewCapAboveMaxCap(newCap, maxCap);
+
+        uint256 maxIncrease = ICapsRangeValidationModule(RVM)
+            .getReserveState(asset, ICapsRangeValidationModule.CapKind.BORROW)
+            .headroomTarget * maxRaiseBuffers;
+        if (newCap - oldCap > maxIncrease) revert RaiseAboveLimit(newCap - oldCap, maxIncrease);
+    }
+
+    /// @dev Borrows under the borrower's delegation, forwards the tokens, then renounces the rest of the delegation.
+    function _borrowFor(address asset, uint256 amount, address onBehalfOf) internal {
+        ICreditDelegationToken debtToken =
+            ICreditDelegationToken(IPool(POOL).getReserveData(asset).variableDebtTokenAddress);
+        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        IPool(POOL).borrow(asset, amount, VARIABLE_RATE_MODE, 0, onBehalfOf);
         IERC20(asset).safeTransfer(onBehalfOf, amount);
         uint256 balanceAfter = IERC20(asset).balanceOf(address(this));
         if (balanceAfter != balanceBefore) revert ForwarderBalanceChanged(balanceBefore, balanceAfter);
 
-        emit BorrowedFor(asset, onBehalfOf, amount);
+        debtToken.renounceDelegation(onBehalfOf);
     }
 
-    /// @dev max(live cap, debt) + amount + extraCapTokens, in whole tokens. The debt and the amount round up.
-    function _newCap(
-        address asset,
-        uint256 oldCap,
-        uint256 decimals,
-        uint256 amount,
-        uint256 extraCapTokens
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    /// @dev max(live cap, debt) + amount + 1, whole tokens, debt and amount rounded up.
+    function _newCap(address asset, uint256 oldCap, uint256 decimals, uint256 amount) internal view returns (uint256) {
         uint256 unit = 10 ** decimals;
         uint256 debt =
             Math.ceilDiv(IERC20(IPool(POOL).getReserveData(asset).variableDebtTokenAddress).totalSupply(), unit);
-        return Math.max(oldCap, debt) + Math.ceilDiv(amount, unit) + extraCapTokens;
+        // +1 token: Aave rounds the new debt up, which can land 1 unit above an exact cap.
+        return Math.max(oldCap, debt) + Math.ceilDiv(amount, unit) + ROUNDING_BUFFER;
     }
 }

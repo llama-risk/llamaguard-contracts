@@ -19,23 +19,9 @@ import { ICapsBorrowForwarder } from "../../../src/caps-oracle/interfaces/ICapsB
 import { CapsRangeValidationModuleV3 } from "../../../src/caps-oracle/CapsRangeValidationModuleV3.sol";
 import { ICapsRangeValidationModule as IRvm } from "../../../src/caps-oracle/interfaces/ICapsRangeValidationModule.sol";
 
-/// @notice Etched at the Risk Council Safe address: delegatecalls a target, as a Safe `DelegateCall` operation
-///         does. No storage, so the Safe's slots stay untouched.
-contract DelegatecallShim {
-    function execDelegatecall(address target, bytes calldata data) external returns (bytes memory ret) {
-        bool ok;
-        (ok, ret) = target.delegatecall(data);
-        if (!ok) {
-            assembly {
-                revert(add(ret, 32), mload(ret))
-            }
-        }
-    }
-}
-
 /// @title CapsForkEthereumCore
-/// @notice CapsBorrowForwarder on the live Aave V3 Ethereum Core Pool and the live Risk Steward, and the RVM
-///         reads on the live Pool.
+/// @notice The standalone CapsBorrowForwarder on the live Aave V3 Ethereum Core Pool and config engine, with
+///         RISK_ADMIN granted to the forwarder on the live ACL Manager, and the RVM reads on the live Pool.
 /// @dev Skips unless `ETH_RPC_URL` is set and the profile is `fork` (the live config engine needs a
 ///      post-shanghai EVM, see EthereumCoreForkTest):
 ///        ETH_RPC_URL=... FOUNDRY_PROFILE=fork forge test --match-path 'tests/caps-oracle/fork/**'
@@ -47,14 +33,20 @@ contract CapsForkEthereumCore is Test {
     uint256 internal constant FORK_BLOCK = 26_344_000;
 
     IPool internal constant POOL = AaveV3Ethereum.POOL;
-    address internal constant STEWARD = AaveV3Ethereum.RISK_STEWARD;
     address internal constant USDC = AaveV3EthereumAssets.USDC_UNDERLYING;
     address internal constant WETH = AaveV3EthereumAssets.WETH_UNDERLYING;
+    address internal constant USDC_V_TOKEN = AaveV3EthereumAssets.USDC_V_TOKEN;
+
+    /// Placeholder limits: +100% per raise, one raise per asset per day.
+    /// One buffer: 10% of the live USDC debt under the RVM entry below.
+    uint256 internal constant MAX_RAISE_BUFFERS = 1;
+    uint256 internal constant MIN_RAISE_DELAY = 1 days;
 
     bool internal forked;
     address internal riskCouncil;
     CapsBorrowForwarder internal forwarder;
     CapsRangeValidationModuleV3 internal forwarderRvm;
+    address internal owner = makeAddr("agentHubOwner");
     address internal rvmOwner = makeAddr("rvmOwner");
     address internal borrower = makeAddr("borrower");
 
@@ -65,22 +57,35 @@ contract CapsForkEthereumCore is Test {
         vm.createSelectFork(rpc, FORK_BLOCK);
         forked = true;
 
-        riskCouncil = IRiskSteward(STEWARD).RISK_COUNCIL();
+        // The live Risk Council Safe, as the one allowlisted caller. A plain call, so no Safe code is needed.
+        riskCouncil = IRiskSteward(AaveV3Ethereum.RISK_STEWARD).RISK_COUNCIL();
         forwarderRvm = new CapsRangeValidationModuleV3(
             rvmOwner, makeAddr("agentHub"), address(POOL), riskCouncil, "BorrowCapUpdate_Core", "SupplyCapUpdate_Core"
         );
-        forwarder = new CapsBorrowForwarder(address(POOL), STEWARD, riskCouncil, address(forwarderRvm));
-        vm.etch(riskCouncil, address(new DelegatecallShim()).code);
+        forwarder = new CapsBorrowForwarder(
+            owner,
+            address(POOL),
+            AaveV3Ethereum.CONFIG_ENGINE,
+            address(forwarderRvm),
+            riskCouncil,
+            MAX_RAISE_BUFFERS,
+            MIN_RAISE_DELAY
+        );
 
-        // Past any running cap debounce of the Steward.
-        vm.warp(block.timestamp + 30 days);
+        // The AIP grants RISK_ADMIN to the forwarder: the engine runs by delegatecall, so the PoolConfigurator
+        // sees the forwarder as caller.
+        vm.prank(AaveV3Ethereum.ACL_ADMIN);
+        AaveV3Ethereum.ACL_MANAGER.addRiskAdmin(address(forwarder));
 
-        // Borrower: 100 WETH collateral, credit delegation of USDC to the Safe.
+        // RVM borrow entry for USDC with room above the live cap.
+        _setRvmMaxCap(uint64(_borrowCap(USDC) * 2));
+
+        // Borrower: 100 WETH collateral, credit delegation of USDC to the forwarder.
         deal(WETH, borrower, 100 ether);
         vm.startPrank(borrower);
         IERC20(WETH).approve(address(POOL), 100 ether);
         POOL.supply(WETH, 100 ether, borrower, 0);
-        ICreditDelegationToken(AaveV3EthereumAssets.USDC_V_TOKEN).approveDelegation(address(forwarder), 100_000e6);
+        ICreditDelegationToken(USDC_V_TOKEN).approveDelegation(address(forwarder), 100_000e6);
         vm.stopPrank();
     }
 
@@ -93,98 +98,120 @@ contract CapsForkEthereumCore is Test {
         return POOL.getConfiguration(asset).getBorrowCap();
     }
 
-    function _raise(uint256 amount, uint256 extra) internal {
-        DelegatecallShim(riskCouncil)
-            .execDelegatecall(
-                address(forwarder),
-                abi.encodeCall(
-                    CapsBorrowForwarder.raiseCapAndBorrow, (USDC, amount, borrower, extra, type(uint256).max)
-                )
-            );
+    function _setRvmMaxCap(uint64 maxCap) internal {
+        IRvm.Bounds memory b =
+            IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 days });
+        IRvm.RateLimitConfig memory c =
+            IRvm.RateLimitConfig({ maxCap: maxCap, maxHeadroom: 1e9, alphaBps: 1000, cutBandBps: 1000 });
+        vm.startPrank(rvmOwner);
+        forwarderRvm.setBounds(IRvm.CapKind.BORROW, b);
+        forwarderRvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);
+        vm.stopPrank();
+    }
+
+    function _raise(uint256 amount) internal {
+        vm.prank(riskCouncil);
+        forwarder.raiseCapAndBorrow(USDC, amount, borrower);
+    }
+
+    function test_fork_forwarderIsRiskAdmin() public onlyForked {
+        assertTrue(AaveV3Ethereum.ACL_MANAGER.isRiskAdmin(address(forwarder)));
+        assertEq(forwarder.CONFIG_ENGINE(), AaveV3Ethereum.CONFIG_ENGINE);
+        assertEq(forwarder.owner(), owner);
     }
 
     function test_fork_raiseCapAndBorrow_raisesCapAndBorrows() public onlyForked {
         uint256 amount = 10_000e6;
         uint256 oldCap = _borrowCap(USDC);
-        uint256 debtBefore = IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower);
-        uint256 safeBefore = IERC20(USDC).balanceOf(riskCouncil);
+        uint256 debtBefore = IERC20(USDC_V_TOKEN).balanceOf(borrower);
+        uint256 callerBefore = IERC20(USDC).balanceOf(riskCouncil);
 
-        _raise(amount, 0);
+        _raise(amount);
 
-        assertEq(_borrowCap(USDC), oldCap + 10_000, "cap raised by the amount in whole tokens");
+        assertEq(_borrowCap(USDC), oldCap + 10_001, "cap raised by the amount in whole tokens, plus 1");
         assertEq(IERC20(USDC).balanceOf(borrower), amount, "borrower got the tokens");
         // Aave rounds the scaled debt and the balance up, so the debt can sit a few wei above the amount.
-        uint256 debtAfter = IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower);
+        uint256 debtAfter = IERC20(USDC_V_TOKEN).balanceOf(borrower);
         assertGe(debtAfter, debtBefore + amount, "debt on borrower");
         assertLe(debtAfter, debtBefore + amount + 2, "debt on borrower, rounding");
-        assertEq(IERC20(USDC).balanceOf(riskCouncil), safeBefore, "Safe keeps nothing");
+        assertEq(IERC20(USDC).balanceOf(riskCouncil), callerBefore, "caller keeps nothing");
+        assertEq(IERC20(USDC).balanceOf(address(forwarder)), 0, "forwarder keeps nothing");
+        // Needs renounceDelegation on the live debt token (Aave v3.6+).
+        assertEq(
+            ICreditDelegationToken(USDC_V_TOKEN).borrowAllowance(borrower, address(forwarder)), 0, "rest renounced"
+        );
     }
 
-    function test_fork_raiseCapAndBorrow_stewardDebounce_revertsAll() public onlyForked {
-        _raise(10_000e6, 0);
-        uint256 capAfterFirst = _borrowCap(USDC);
-        uint256 debtAfterFirst = IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower);
+    /// Without RISK_ADMIN the live PoolConfigurator refuses the engine's setBorrowCap: nothing changes.
+    function test_fork_raiseCapAndBorrow_withoutRiskAdmin_reverts() public onlyForked {
+        vm.prank(AaveV3Ethereum.ACL_ADMIN);
+        AaveV3Ethereum.ACL_MANAGER.removeRiskAdmin(address(forwarder));
+        uint256 oldCap = _borrowCap(USDC);
+        vm.expectRevert();
+        _raise(10_000e6);
+        assertEq(_borrowCap(USDC), oldCap, "cap unchanged");
+        assertEq(IERC20(USDC).balanceOf(borrower), 0, "no borrow");
+    }
 
-        vm.expectRevert(IRiskSteward.DebounceNotRespected.selector);
-        _raise(10_000e6, 0);
+    /// The per-asset delay: a second raise within MIN_RAISE_DELAY reverts with cap and debt unchanged.
+    function test_fork_raiseCapAndBorrow_minRaiseDelay_revertsAll() public onlyForked {
+        _raise(10_000e6);
+        uint256 capAfterFirst = _borrowCap(USDC);
+        uint256 debtAfterFirst = IERC20(USDC_V_TOKEN).balanceOf(borrower);
+
+        vm.prank(borrower);
+        ICreditDelegationToken(USDC_V_TOKEN).approveDelegation(address(forwarder), 10_000e6);
+        vm.expectRevert(
+            abi.encodeWithSelector(ICapsBorrowForwarder.RaiseTooSoon.selector, USDC, block.timestamp + MIN_RAISE_DELAY)
+        );
+        _raise(10_000e6);
 
         assertEq(_borrowCap(USDC), capAfterFirst, "cap unchanged");
-        assertEq(IERC20(AaveV3EthereumAssets.USDC_V_TOKEN).balanceOf(borrower), debtAfterFirst, "debt unchanged");
+        assertEq(IERC20(USDC_V_TOKEN).balanceOf(borrower), debtAfterFirst, "debt unchanged");
         assertEq(IERC20(USDC).balanceOf(borrower), 10_000e6, "no second transfer");
     }
 
     /// Accrued interest above the cap: the cap is set to the debt, then 30 days of interest push the debt above
     /// it. The new cap starts from the debt, so the borrow fits.
     function test_fork_raiseCapAndBorrow_debtAboveCap_startsFromDebt() public onlyForked {
-        address vToken = AaveV3EthereumAssets.USDC_V_TOKEN;
-        uint256 debt = Math.ceilDiv(IERC20(vToken).totalSupply(), 1e6);
+        uint256 debt = Math.ceilDiv(IERC20(USDC_V_TOKEN).totalSupply(), 1e6);
         vm.prank(AaveV3Ethereum.ACL_ADMIN);
         IPoolConfigurator(address(AaveV3Ethereum.POOL_CONFIGURATOR)).setBorrowCap(USDC, debt);
         vm.warp(block.timestamp + 30 days);
-        uint256 debtNow = Math.ceilDiv(IERC20(vToken).totalSupply(), 1e6);
+        uint256 debtNow = Math.ceilDiv(IERC20(USDC_V_TOKEN).totalSupply(), 1e6);
         assertGt(debtNow, debt, "interest pushed the debt above the cap");
 
-        _raise(10_000e6, 0);
-        assertEq(_borrowCap(USDC), debtNow + 10_000, "new cap = debt + amount");
+        _raise(10_000e6);
+        assertEq(_borrowCap(USDC), debtNow + 10_001, "new cap = debt + amount + 1");
         assertEq(IERC20(USDC).balanceOf(borrower), 10_000e6, "borrower got the tokens");
     }
 
     /// The live RVM borrow maxCap bounds the forwarder: 1 token below the new cap reverts, at it passes.
     function test_fork_raiseCapAndBorrow_aboveRvmMaxCap_reverts() public onlyForked {
         uint256 oldCap = _borrowCap(USDC);
-        IRvm.Bounds memory b =
-            IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 days });
-        IRvm.RateLimitConfig memory c = IRvm.RateLimitConfig({
-            maxCap: uint64(oldCap + 10_000 - 1), maxHeadroom: 1e9, alphaBps: 1000, cutBandBps: 1000
-        });
-        vm.startPrank(rvmOwner);
-        forwarderRvm.setBounds(IRvm.CapKind.BORROW, b);
-        forwarderRvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);
-        vm.stopPrank();
+        _setRvmMaxCap(uint64(oldCap + 10_000));
 
         vm.expectRevert(
-            abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, oldCap + 10_000, oldCap + 9999)
+            abi.encodeWithSelector(ICapsBorrowForwarder.NewCapAboveMaxCap.selector, oldCap + 10_001, oldCap + 10_000)
         );
-        _raise(10_000e6, 0);
+        _raise(10_000e6);
         assertEq(_borrowCap(USDC), oldCap, "cap unchanged");
 
-        c.maxCap = uint64(oldCap + 10_000);
-        vm.prank(rvmOwner);
-        forwarderRvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);
-        _raise(10_000e6, 0);
-        assertEq(_borrowCap(USDC), oldCap + 10_000, "at maxCap passes");
+        _setRvmMaxCap(uint64(oldCap + 10_001));
+        _raise(10_000e6);
+        assertEq(_borrowCap(USDC), oldCap + 10_001, "at maxCap passes");
     }
 
     function test_fork_rvm_getReserveState_matchesPool() public onlyForked {
-        address owner = makeAddr("owner");
+        address rvmOwner2 = makeAddr("owner");
         CapsRangeValidationModuleV3 rvm = new CapsRangeValidationModuleV3(
-            owner, makeAddr("agentHub"), address(POOL), riskCouncil, "BorrowCapUpdate_Core", "SupplyCapUpdate_Core"
+            rvmOwner2, makeAddr("agentHub"), address(POOL), riskCouncil, "BorrowCapUpdate_Core", "SupplyCapUpdate_Core"
         );
         IRvm.RateLimitConfig memory c =
             IRvm.RateLimitConfig({ maxCap: 1e10, maxHeadroom: 1e9, alphaBps: 1000, cutBandBps: 1000 });
         IRvm.Bounds memory b =
             IRvm.Bounds({ alphaBpsLimit: 10_000, cutBandBpsLimit: 10_000, maxIncreaseBps: 10_000, cooldown: 1 days });
-        vm.startPrank(owner);
+        vm.startPrank(rvmOwner2);
         rvm.setBounds(IRvm.CapKind.BORROW, b);
         rvm.setBounds(IRvm.CapKind.SUPPLY, b);
         rvm.setRateLimitConfig(USDC, IRvm.CapKind.BORROW, c);

@@ -61,6 +61,11 @@ contract CapsParameterRegistry is ICapsParameterRegistry, Ownable2Step {
         emit UpdaterChanged(previous, updater_);
     }
 
+    /// @notice Disabled: the updater can only be replaced while the registry has an owner.
+    function renounceOwnership() public view override onlyOwner {
+        revert NotSupported();
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // UPDATER: MARKETS
     // ═══════════════════════════════════════════════════════════════════════════

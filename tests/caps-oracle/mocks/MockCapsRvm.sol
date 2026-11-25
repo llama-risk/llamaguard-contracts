@@ -26,6 +26,24 @@ contract MockCapsRvm {
         address asset => mapping(ICapsRangeValidationModule.CapKind kind => ICapsRangeValidationModule.RateLimitConfig)
     ) internal _rateLimitConfigs;
 
+    mapping(address asset => uint256 headroomTarget) public headroomTargets;
+
+    function setHeadroomTarget(address asset, uint256 headroomTarget) external {
+        headroomTargets[asset] = headroomTarget;
+    }
+
+    /// @dev Fills only headroomTarget, the one field the forwarder reads.
+    function getReserveState(
+        address asset,
+        ICapsRangeValidationModule.CapKind
+    )
+        external
+        view
+        returns (ICapsRangeValidationModule.ReserveState memory s)
+    {
+        s.headroomTarget = headroomTargets[asset];
+    }
+
     function setPool(address pool) external {
         POOL = pool;
     }
