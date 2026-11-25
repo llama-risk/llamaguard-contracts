@@ -271,6 +271,17 @@ contract CapsParameterRegistryTest is RegistryTestBase {
         new CapsParameterRegistry(address(0), llamaRiskSafe);
     }
 
+    function test_CAP_ACL_14_renounceOwnership_reverts() public {
+        vm.prank(governance);
+        vm.expectRevert(IReg.NotSupported.selector);
+        registry.renounceOwnership();
+        assertEq(registry.owner(), governance);
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        registry.renounceOwnership();
+    }
+
     function test_CAP_ACL_14_ownership_twoStep() public {
         address newOwner = makeAddr("newOwner");
         vm.prank(governance);
