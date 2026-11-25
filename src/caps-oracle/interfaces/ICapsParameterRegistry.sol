@@ -97,6 +97,8 @@ interface ICapsParameterRegistry {
     error InvalidBps(uint16 value);
     /// @notice A non-zero RVM whose `POOL()` is not the market.
     error InvalidRvm(address rvm);
+    /// @notice renounceOwnership is disabled.
+    error NotSupported();
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNER
