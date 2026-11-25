@@ -1099,6 +1099,12 @@ contract CapsBorrowForwarderTest is CapsTestBase {
         assertEq(n[9], 1, "one transfer");
     }
 
+    /// @dev CAP-ACL-16: the forwarder's two RVM reads, the key state (maxCap) and the reserve state (buffer).
+    function _isRvmRead(bytes32 h) internal view returns (bool) {
+        return h == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)))
+            || h == keccak256(abi.encodeCall(MockCapsRvm.getReserveState, (address(usdc), IRvm.CapKind.BORROW)));
+    }
+
     /// @dev CAP-ACL-16: one access made in the forwarder's context, checked against its exact calldata.
     function _countForwarderCall(
         Vm.AccountAccess memory a,
@@ -1133,15 +1139,8 @@ contract CapsBorrowForwarderTest is CapsTestBase {
             else if (h == keccak256(abi.encodeCall(MockVariableDebtToken.renounceDelegation, (borrower)))) n[6]++;
             else revert("unexpected debt token call");
         } else if (a.account == address(capsRvm)) {
-            if (h == keccak256(abi.encodeCall(MockCapsRvm.getKeyState, (address(usdc), IRvm.CapKind.BORROW)))) {
-                n[7]++;
-            } else if (
-                h == keccak256(abi.encodeCall(MockCapsRvm.getReserveState, (address(usdc), IRvm.CapKind.BORROW)))
-            ) {
-                n[7]++;
-            } else {
-                revert("unexpected RVM call");
-            }
+            if (_isRvmRead(h)) n[7]++;
+            else revert("unexpected RVM call");
         } else if (a.account == address(usdc)) {
             if (h == keccak256(abi.encodeCall(IERC20.balanceOf, (address(fwd))))) n[8]++;
             else if (h == keccak256(abi.encodeCall(IERC20.transfer, (borrower, amount)))) n[9]++;
