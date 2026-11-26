@@ -1,0 +1,46 @@
+{
+  "label": "arbitrum-core-production",
+  "chainId": 42161,
+  "shadow": false,
+  "pool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+  "agentHub": "0xf4F2bc657abe96863dC1Ae17C9e9fFfc2B420e7B",
+  "configEngine": "0xFaEe011b679330A42fFc33c6444800F78b69Dc58",
+  "updateTypeSuffix": "_Core",
+  "riskOracleDescription": "LlamaGuard caps RiskOracle, Aave V3 Arbitrum Core",
+  "roles": {
+    "deployer": "TODO",
+    "agentHubOwner": "0xFF1137243698CaA18EE364Cc966CF0e02A4e6327",
+    "agentAdmin": "0xCb45E82419baeBCC9bA8b1e5c7858e48A3B26Ea6",
+    "shadowPoolOwner": "0x0000000000000000000000000000000000000000",
+    "riskOracleOwner": "0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471",
+    "routerOwner": "0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471",
+    "routerUpdater": "0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471",
+    "routerGuardian": "0xCb45E82419baeBCC9bA8b1e5c7858e48A3B26Ea6",
+    "registryOwner": "0xFF1137243698CaA18EE364Cc966CF0e02A4e6327",
+    "registryUpdater": "0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471",
+    "rvmOwner": "0xFF1137243698CaA18EE364Cc966CF0e02A4e6327",
+    "riskCouncil": "0x3Be327F22eB4BD8042e6944073b8826dCf357Aa2"
+  },
+  "agents": {
+    "expirationSeconds": 60,
+    "tauSeconds": 1800
+  },
+  "bounds": {
+    "alphaBpsLimit": 2000,
+    "cutBandBpsLimit": 2000,
+    "maxIncreaseBps": 5000,
+    "cooldownSeconds": 86400
+  },
+  "defaults": {
+    "enabled": true,
+    "triggerBps": 2000,
+    "marginBps": 100,
+    "minMarginTokens": "1"
+  },
+  "route": {
+    "forwarder": "0xF8344CFd5c43616a4366C34E3EEE75af79a74482",
+    "workflowOwner": "0x73494691C9B28b91A0b4C9dF213c1893fddA3a3B",
+    "maxReportAgeSeconds": 360
+  },
+  "assets": "arbitrum-core"
+}
