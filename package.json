@@ -9,7 +9,7 @@
   "dependencies": {
     "@aave-dao/aave-address-book": "4.65.5",
     "@aave-dao/aave-v3-horizon": "github:aave/aave-v3-horizon#6e2a51e",
-    "@aave-dao/aave-v3-origin": "3.6.0",
+    "@aave-dao/aave-v3-origin": "github:aave-dao/aave-v3-origin#cff15de6d1271b0c800fc001f4aea4c263e8a597",
     "@bgd-labs/solidity-utils": "1.1.2",
     "@chainlink/contracts": "1.4.0",
     "@openzeppelin/contracts": "5.3.0",
@@ -18,8 +18,8 @@
     "@openzeppelin/contracts-v5": "npm:@openzeppelin/contracts@5.1.0",
     "aave-agent-hub": "github:aave-dao/aave-agent-hub#71e6dbbadcc86e5eb1ce29d2111a9ca313ae90f3",
     "aave-price-feeds": "github:aave-dao/aave-price-feeds#85e6ca0298ed32b2d564eac1ad1e084f7573173a",
-    "aave-risk-agents": "github:aave-dao/aave-risk-agents#ec9525f0ceba9a233aa72b6c0cce2398e656e8f9",
-    "aave-v3-risk-stewards": "github:bgd-labs/aave-v3-risk-stewards#6de0b13a2ef75adae834ba4e70988528bedf109b",
+    "aave-risk-agents": "github:aave-dao/aave-risk-agents#dec4cc7254bfed47d7d73e142c60241f00865352",
+    "aave-v3-risk-stewards": "github:aave-dao/aave-v3-risk-stewards#d45f2fe329ae6f5f38dea18fba750dfc9ace7bfa",
     "viem": "2.34.0"
   },
   "devDependencies": {
