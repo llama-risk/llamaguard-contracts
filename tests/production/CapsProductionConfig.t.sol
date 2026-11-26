@@ -80,13 +80,14 @@ contract CapsProductionConfigTest is Test {
         assertEq(a.reserves[4].maxHeadroom, 6625, "$15M of wstETH");
     }
 
-    /// @dev Step 5 cannot run until the risk team sets both limits.
-    function test_production_forwarderLimitsAreTodo() public {
-        vm.expectRevert(bytes("CapsConfig: .forwarder.maxRaiseBuffers is TODO"));
-        this.loadForwarder();
-        string memory json = vm.readFile("script/risk-oracles/caps/config/arbitrum-core-production.json");
-        assertEq(vm.parseJsonAddress(json, ".forwarder.owner"), EXECUTOR, "same owner as the AgentHub");
-        assertEq(vm.parseJsonAddress(json, ".forwarder.caller"), RISK_COUNCIL);
+    /// @dev Like the Risk Steward's borrow cap limits on Arbitrum (+100% every 36 hours): 12 buffers is about one
+    ///      cap on the largest markets.
+    function test_production_forwarder() public view {
+        CapsConfig.Forwarder memory f = this.loadForwarder();
+        assertEq(f.owner, EXECUTOR, "same owner as the AgentHub");
+        assertEq(f.caller, RISK_COUNCIL);
+        assertEq(f.maxRaiseBuffers, 12);
+        assertEq(f.minRaiseDelay, 36 hours);
     }
 
     function loadForwarder() external view returns (CapsConfig.Forwarder memory) {

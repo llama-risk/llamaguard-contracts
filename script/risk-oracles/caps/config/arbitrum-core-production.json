@@ -46,7 +46,7 @@
   "forwarder": {
     "owner": "0xFF1137243698CaA18EE364Cc966CF0e02A4e6327",
     "caller": "0x3Be327F22eB4BD8042e6944073b8826dCf357Aa2",
-    "maxRaiseBuffers": "TODO",
-    "minRaiseDelaySeconds": "TODO"
+    "maxRaiseBuffers": "12",
+    "minRaiseDelaySeconds": "129600"
   }
 }
