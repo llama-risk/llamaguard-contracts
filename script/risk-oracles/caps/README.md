@@ -62,7 +62,8 @@ The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`.
 3. Step 3. Sends nothing; prints the RVM entries (AIP) and the registry reserves (admin Safe).
 4. Admin Safe, once it exists on Arbitrum: `acceptOwnership` on the Router, then the step 2 and 3 registry batches.
 5. Admin Safe: both routes and both throttles off. With the Safe as owner, step 4 prints the raise route and its
-   throttle as a Safe batch. The keeper route has the cut agent only and the empty-report selector:
+   throttle as a Safe batch. The keeper route has the cut agent only and the same bulk publish selector (it sends an
+   empty report):
 
    ```bash
    cast calldata 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
