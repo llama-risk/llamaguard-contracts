@@ -82,6 +82,14 @@ library CapsConfig {
         Assets assets;
     }
 
+    /// @notice The CapsBorrowForwarder, deployed by step 5: owner, first allowed caller and limits.
+    struct Forwarder {
+        address owner;
+        address caller;
+        uint256 maxRaiseBuffers; // max cap increase per raise, in buffers (the RVM headroomTarget) of the asset
+        uint256 minRaiseDelay; // seconds between two raises of one asset
+    }
+
     /// @notice The whole deployment. Reverts on any `"TODO"`.
     function load(string memory label) internal view returns (Config memory config) {
         string memory json = VM.readFile(string.concat(DIR, "config/", label, ".json"));
@@ -160,6 +168,15 @@ library CapsConfig {
         route.maxReportAgeSeconds = uint64(VM.parseJsonUint(json, ".route.maxReportAgeSeconds"));
     }
 
+    /// @notice The forwarder, read only by step 5. Reverts on any `"TODO"`, including the limits.
+    function loadForwarder(string memory label) internal view returns (Forwarder memory f) {
+        string memory json = VM.readFile(string.concat(DIR, "config/", label, ".json"));
+        f.owner = _address(json, ".forwarder.owner");
+        f.caller = _address(json, ".forwarder.caller");
+        f.maxRaiseBuffers = _uint(json, ".forwarder.maxRaiseBuffers");
+        f.minRaiseDelay = _uint(json, ".forwarder.minRaiseDelaySeconds");
+    }
+
     function _roles(string memory json) private pure returns (Roles memory r) {
         r.deployer = _address(json, ".roles.deployer");
         r.agentHubOwner = _address(json, ".roles.agentHubOwner");
@@ -179,6 +196,12 @@ library CapsConfig {
         string memory value = VM.parseJsonString(json, key);
         if (_eq(value, "TODO")) revert(string.concat("CapsConfig: ", key, " is TODO"));
         return VM.parseAddress(value);
+    }
+
+    function _uint(string memory json, string memory key) private pure returns (uint256) {
+        string memory value = VM.parseJsonString(json, key);
+        if (_eq(value, "TODO")) revert(string.concat("CapsConfig: ", key, " is TODO"));
+        return VM.parseUint(value);
     }
 
     function _length(string memory json, string memory key) private view returns (uint256 count) {

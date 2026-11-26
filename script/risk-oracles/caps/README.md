@@ -3,13 +3,14 @@
 One set of steps for every caps deployment. Each step reads `config/<label>.json`, the asset values file it names in
 `assets/`, and the deployment so far in `deployments/<label>.json`.
 
-| Step | Script                    | What it does                                                                                          |
-| ---- | ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 0    | `0_DeployShadow.s.sol`    | Shadow deployments only: our own AgentHub and a ShadowPool in front of the real Pool                  |
-| 1    | `1_DeployCaps.s.sol`      | RiskOracle, Router, registry, RVM, reducer, raise and cut agents. Constructors only                   |
-| 2    | `2_WireCaps.s.sol`        | One-time connections: RiskOracle, Router roles, both agents on the hub, RVM agents and bounds, market |
-| 3    | `3_ConfigureAssets.s.sol` | First values of each borrow cap key: RVM entry, then registry key. Checks coverage of the reserves    |
-| 4    | `4_AddRoute.s.sol`        | Router route and throttle off, in the same sitting as `cre workflow deploy`                           |
+| Step | Script                    | What it does                                                                                                                      |
+| ---- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | `0_DeployShadow.s.sol`    | Shadow deployments only: our own AgentHub and a ShadowPool in front of the real Pool                                              |
+| 1    | `1_DeployCaps.s.sol`      | RiskOracle, Router, registry, RVM, reducer, raise and cut agents. Constructors only                                               |
+| 2    | `2_WireCaps.s.sol`        | One-time connections: RiskOracle, Router roles, both agents on the hub, RVM agents and bounds, market                             |
+| 3    | `3_ConfigureAssets.s.sol` | First values of each borrow cap key: RVM entry, then registry key. Checks coverage of the reserves                                |
+| 4    | `4_AddRoute.s.sol`        | Router route and throttle off, in the same sitting as `cre workflow deploy`                                                       |
+| 5    | `5_DeployForwarder.s.sol` | Production only: the CapsBorrowForwarder (owner, first caller, `maxRaiseBuffers`, `minRaiseDelay`); RISK_ADMIN comes from the AIP |
 
 A call is sent when the broadcaster holds the role on chain, and printed as a Safe batch otherwise. On staging the hot
 wallet holds every role. On production the same steps print the batches for the Safes and the AIP.
@@ -73,7 +74,9 @@ The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`.
 
    Workflow ids come from `cre workflow hash --public_key <workflowOwner>` with the production configs.
 
-6. Aave's CRE owner deploys both workflows; the AIP executes.
+6. Step 5, once the risk team sets `forwarder.maxRaiseBuffers` and `forwarder.minRaiseDelaySeconds` (both `"TODO"` until
+   then): the forwarder, owned by the executor with the Risk Council Safe as caller.
+7. Aave's CRE owner deploys both workflows; the AIP executes and grants the forwarder RISK_ADMIN.
 
 ## Shadow deployments
 

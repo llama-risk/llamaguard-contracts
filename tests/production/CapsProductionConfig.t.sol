@@ -79,4 +79,17 @@ contract CapsProductionConfigTest is Test {
         assertEq(a.reserves[4].symbol, "wstETH");
         assertEq(a.reserves[4].maxHeadroom, 6625, "$15M of wstETH");
     }
+
+    /// @dev Step 5 cannot run until the risk team sets both limits.
+    function test_production_forwarderLimitsAreTodo() public {
+        vm.expectRevert(bytes("CapsConfig: .forwarder.maxRaiseBuffers is TODO"));
+        this.loadForwarder();
+        string memory json = vm.readFile("script/risk-oracles/caps/config/arbitrum-core-production.json");
+        assertEq(vm.parseJsonAddress(json, ".forwarder.owner"), EXECUTOR, "same owner as the AgentHub");
+        assertEq(vm.parseJsonAddress(json, ".forwarder.caller"), RISK_COUNCIL);
+    }
+
+    function loadForwarder() external view returns (CapsConfig.Forwarder memory) {
+        return CapsConfig.loadForwarder(LABEL);
+    }
 }

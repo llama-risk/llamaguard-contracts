@@ -23,6 +23,7 @@ library CapsDeployment {
         address cutAgent;
         uint256 raiseAgentId;
         uint256 cutAgentId;
+        address forwarder; // step 5, production only
     }
 
     function path(string memory label) internal pure returns (string memory) {
@@ -45,6 +46,7 @@ library CapsDeployment {
         d.cutAgent = VM.parseJsonAddress(json, ".cutAgent");
         d.raiseAgentId = VM.parseJsonUint(json, ".raiseAgentId");
         d.cutAgentId = VM.parseJsonUint(json, ".cutAgentId");
+        if (VM.keyExistsJson(json, ".forwarder")) d.forwarder = VM.parseJsonAddress(json, ".forwarder");
     }
 
     function write(string memory label, Deployment memory d) internal {
@@ -59,6 +61,7 @@ library CapsDeployment {
         VM.serializeAddress(key, "raiseAgent", d.raiseAgent);
         VM.serializeAddress(key, "cutAgent", d.cutAgent);
         VM.serializeUint(key, "raiseAgentId", d.raiseAgentId);
-        VM.writeJson(VM.serializeUint(key, "cutAgentId", d.cutAgentId), path(label));
+        VM.serializeUint(key, "cutAgentId", d.cutAgentId);
+        VM.writeJson(VM.serializeAddress(key, "forwarder", d.forwarder), path(label));
     }
 }
