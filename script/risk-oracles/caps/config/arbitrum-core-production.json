@@ -42,5 +42,5 @@
     "workflowOwner": "0x73494691C9B28b91A0b4C9dF213c1893fddA3a3B",
     "maxReportAgeSeconds": 360
   },
-  "assets": "arbitrum-core"
+  "assets": "arbitrum-core-production"
 }

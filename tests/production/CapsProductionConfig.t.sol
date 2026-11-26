@@ -35,7 +35,7 @@ contract CapsProductionConfigTest is Test {
         assertEq(m.defaults.triggerBps, 2000, "theta 20%, as in the ARFC");
         assertEq(m.defaults.marginBps, 100);
         assertEq(m.defaults.minMarginTokens, 1);
-        assertEq(m.assets, "arbitrum-core", "same asset values as staging");
+        assertEq(m.assets, "arbitrum-core-production");
     }
 
     function test_production_route() public view {
@@ -57,5 +57,21 @@ contract CapsProductionConfigTest is Test {
         assertEq(r.routerUpdater, ADMIN_SAFE);
         assertEq(r.registryUpdater, ADMIN_SAFE);
         assertEq(r.riskCouncil, RISK_COUNCIL);
+    }
+
+    /// @dev Every reserve borrowable globally or through an eMode, GHO excepted.
+    function test_production_assets() public view {
+        CapsConfig.Assets memory a = CapsConfig.loadAssets(CapsConfig.loadMarket(LABEL).assets);
+        assertEq(a.reserves.length, 5);
+        assertEq(a.skip.length, 15);
+        assertEq(a.skip[0], 0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33, "GHO stays out of the rate limiter");
+        for (uint256 i; i < a.reserves.length; ++i) {
+            assertTrue(a.reserves[i].currentCap, a.reserves[i].symbol);
+            assertEq(a.reserves[i].alphaBps, 1000, "alpha 10%");
+            assertEq(a.reserves[i].cutBandBps, 1000, "delta 10%");
+        }
+        assertEq(a.reserves[4].symbol, "wstETH");
+        assertEq(a.reserves[4].asset, 0x5979D7b546E38E414F7E9822514be443A4800529);
+        assertEq(a.reserves[4].maxHeadroom, 6625, "$15M of wstETH");
     }
 }
