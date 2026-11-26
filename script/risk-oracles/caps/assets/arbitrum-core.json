@@ -32,17 +32,14 @@
       "maxHeadroom": "15003601",
       "alphaBps": 1000,
       "cutBandBps": 1000
-    },
-    {
-      "symbol": "GHO",
-      "asset": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
-      "maxCap": "current",
-      "maxHeadroom": "15000000",
-      "alphaBps": 1000,
-      "cutBandBps": 1000
     }
   ],
   "skip": [
+    {
+      "symbol": "GHO",
+      "asset": "0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33",
+      "reason": "excluded from the rate limiter, its caps stay with the Risk Stewards"
+    },
     {
       "symbol": "DAI",
       "asset": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",

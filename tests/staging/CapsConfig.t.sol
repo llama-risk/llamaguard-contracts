@@ -53,8 +53,9 @@ contract CapsConfigTest is Test {
 
     function test_staging_assets() public view {
         CapsConfig.Assets memory a = CapsConfig.loadAssets(CapsConfig.loadMarket(LABEL).assets);
-        assertEq(a.reserves.length, 5);
-        assertEq(a.skip.length, 15);
+        assertEq(a.reserves.length, 4);
+        assertEq(a.skip.length, 16);
+        assertEq(a.skip[0], 0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33, "GHO stays out of the rate limiter");
         for (uint256 i; i < a.reserves.length; ++i) {
             assertTrue(a.reserves[i].currentCap, a.reserves[i].symbol);
             assertGt(a.reserves[i].maxHeadroom, 0, a.reserves[i].symbol);
