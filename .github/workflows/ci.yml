@@ -164,3 +164,8 @@ jobs:
 
       - name: "Run the risk-oracle fork tests"
         run: "forge test --match-path 'tests/risk-oracles/script/**' -vv"
+
+      - name: "Run the caps fork tests"
+        env:
+          ETH_RPC_URL: "${{ env.MAINNET_RPC_URL }}"
+        run: "forge test --match-path 'tests/caps-oracle/fork/**' -vv"

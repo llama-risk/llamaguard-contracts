@@ -26,6 +26,24 @@ contract MockCapsRvm {
         address asset => mapping(ICapsRangeValidationModule.CapKind kind => ICapsRangeValidationModule.RateLimitConfig)
     ) internal _rateLimitConfigs;
 
+    mapping(address asset => uint256 headroomTarget) public headroomTargets;
+
+    function setHeadroomTarget(address asset, uint256 headroomTarget) external {
+        headroomTargets[asset] = headroomTarget;
+    }
+
+    /// @dev Fills only headroomTarget, the one field the forwarder reads.
+    function getReserveState(
+        address asset,
+        ICapsRangeValidationModule.CapKind
+    )
+        external
+        view
+        returns (ICapsRangeValidationModule.ReserveState memory s)
+    {
+        s.headroomTarget = headroomTargets[asset];
+    }
+
     function setPool(address pool) external {
         POOL = pool;
     }
@@ -67,6 +85,22 @@ contract MockCapsRvm {
         external
     {
         _rateLimitConfigs[asset][kind] = rateLimitConfig;
+    }
+
+    /// @dev The stored entry as a KeyState, with no hold and no increase time.
+    function getKeyState(
+        address asset,
+        ICapsRangeValidationModule.CapKind kind
+    )
+        external
+        view
+        returns (ICapsRangeValidationModule.KeyState memory s)
+    {
+        ICapsRangeValidationModule.RateLimitConfig memory c = _rateLimitConfigs[asset][kind];
+        s.maxCap = c.maxCap;
+        s.maxHeadroom = c.maxHeadroom;
+        s.alphaBps = c.alphaBps;
+        s.cutBandBps = c.cutBandBps;
     }
 
     function getRateLimitConfig(

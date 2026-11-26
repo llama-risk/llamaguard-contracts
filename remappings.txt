@@ -9,6 +9,7 @@ llamaguard-contracts/=./
 aave-risk-agents/=node_modules/aave-risk-agents/
 aave-price-feeds/=node_modules/aave-price-feeds/src/
 aave-v3-risk-stewards/=node_modules/aave-v3-risk-stewards/src/
+aave-capo/=node_modules/aave-price-feeds/src/
 aave-address-book/=node_modules/@aave-dao/aave-address-book/src/
 aave-v3-origin/src/=node_modules/@aave-dao/aave-v3-origin/src/
 aave-v3-origin/contracts/=node_modules/@aave-dao/aave-v3-origin/src/contracts/
