@@ -360,7 +360,8 @@ contract CapsArbitrumStagingForkTest is Test {
     function _borrowUntilRaiseIsDue(address asset) internal {
         IRvm.ReserveState memory s = rvm.getReserveState(asset, IRvm.CapKind.BORROW);
         uint256 room = s.cap > s.usage ? s.cap - s.usage : 0;
-        uint256 dueAt = s.headroomTarget * 2000 / 10_000;
+        uint256 theta = ICapsParameterRegistry(d.registry).getMarketParams(d.shadowPool).defaultParams.triggerBps;
+        uint256 dueAt = s.headroomTarget * theta / 10_000;
         if (room > dueAt) _borrowTokens(asset, room - dueAt + 1);
     }
 

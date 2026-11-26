@@ -33,7 +33,7 @@
   },
   "defaults": {
     "enabled": true,
-    "triggerBps": 2000,
+    "triggerBps": 9000,
     "marginBps": 100,
     "minMarginTokens": "1"
   },

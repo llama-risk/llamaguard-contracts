@@ -45,7 +45,7 @@ contract CapsConfigTest is Test {
         assertEq(CapsConfig.borrowUpdateType(m), "BorrowCapUpdate_Core");
         assertEq(m.expirationSeconds, 60, "pending raises expire after one minute");
         assertEq(m.tauSeconds, 1800, "tau 30 min");
-        assertEq(m.defaults.triggerBps, 2000, "theta 20%");
+        assertEq(m.defaults.triggerBps, 9000, "theta 90%");
         assertEq(m.defaults.marginBps, 100);
         assertEq(m.defaults.minMarginTokens, 1);
         assertGt(m.bounds.cooldown, 0, "the RVM rejects a zero cooldown");
