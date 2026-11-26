@@ -53,7 +53,7 @@ and the Router until it hands them over, so most calls print instead of sending:
 | `LLAMARISK_RISK_ORACLE_ADMIN_SAFE` | RiskOracle and Router owner, Router updater, registry updater | registry market and reserves, Router `acceptOwnership`, route throttle and routes  |
 | Protocol Guardian                  | agent admin, Router guardian                                  | nothing at deployment                                                              |
 
-`roles.deployer` is `"TODO"` until the prod EOA is chosen, so nothing runs before that. Order:
+The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`. Order:
 
 1. Step 1 from the prod EOA, `--broadcast --verify`. Commit `deployments/arbitrum-core-production.json`.
 2. Step 2. The deployer sends the RiskOracle and Router calls and starts both hand-overs. It prints the AIP batch

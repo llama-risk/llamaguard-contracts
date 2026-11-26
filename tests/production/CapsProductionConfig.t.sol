@@ -13,10 +13,9 @@ contract CapsProductionConfigTest is Test {
     address internal constant ADMIN_SAFE = 0x1a0267E9E5929a5914Ae9DbBf23Bc07B14365471; // LLAMARISK_RISK_ORACLE_ADMIN_SAFE
     address internal constant RISK_COUNCIL = 0x3Be327F22eB4BD8042e6944073b8826dCf357Aa2;
 
-    /// @dev Nothing deploys until the prod EOA is filled in.
-    function test_production_deployerIsTodo() public {
-        vm.expectRevert(bytes("CapsConfig: .roles.deployer is TODO"));
-        this.loadRoles();
+    /// @dev The fresh production EOA. It only holds the RiskOracle and the Router until the hand-over.
+    function test_production_deployer() public view {
+        assertEq(CapsConfig.load(LABEL).roles.deployer, 0x95e6dEEb6863Adb187969De2f8B163E6536B52BA);
     }
 
     function test_production_market() public view {
@@ -46,22 +45,17 @@ contract CapsProductionConfigTest is Test {
         assertEq(route.maxReportAgeSeconds, 360);
     }
 
-    /// @dev Read key by key: `CapsConfig.load` stops on the TODO deployer.
     function test_production_roles() public view {
-        string memory json = vm.readFile("script/risk-oracles/caps/config/arbitrum-core-production.json");
-        assertEq(vm.parseJsonAddress(json, ".roles.agentHubOwner"), EXECUTOR);
-        assertEq(vm.parseJsonAddress(json, ".roles.rvmOwner"), EXECUTOR);
-        assertEq(vm.parseJsonAddress(json, ".roles.registryOwner"), EXECUTOR);
-        assertEq(vm.parseJsonAddress(json, ".roles.agentAdmin"), PROTOCOL_GUARDIAN);
-        assertEq(vm.parseJsonAddress(json, ".roles.routerGuardian"), PROTOCOL_GUARDIAN);
-        assertEq(vm.parseJsonAddress(json, ".roles.riskOracleOwner"), ADMIN_SAFE);
-        assertEq(vm.parseJsonAddress(json, ".roles.routerOwner"), ADMIN_SAFE);
-        assertEq(vm.parseJsonAddress(json, ".roles.routerUpdater"), ADMIN_SAFE);
-        assertEq(vm.parseJsonAddress(json, ".roles.registryUpdater"), ADMIN_SAFE);
-        assertEq(vm.parseJsonAddress(json, ".roles.riskCouncil"), RISK_COUNCIL);
-    }
-
-    function loadRoles() external view returns (CapsConfig.Roles memory) {
-        return CapsConfig.load(LABEL).roles;
+        CapsConfig.Roles memory r = CapsConfig.load(LABEL).roles;
+        assertEq(r.agentHubOwner, EXECUTOR);
+        assertEq(r.rvmOwner, EXECUTOR);
+        assertEq(r.registryOwner, EXECUTOR);
+        assertEq(r.agentAdmin, PROTOCOL_GUARDIAN);
+        assertEq(r.routerGuardian, PROTOCOL_GUARDIAN);
+        assertEq(r.riskOracleOwner, ADMIN_SAFE);
+        assertEq(r.routerOwner, ADMIN_SAFE);
+        assertEq(r.routerUpdater, ADMIN_SAFE);
+        assertEq(r.registryUpdater, ADMIN_SAFE);
+        assertEq(r.riskCouncil, RISK_COUNCIL);
     }
 }
