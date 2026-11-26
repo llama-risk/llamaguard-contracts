@@ -43,7 +43,7 @@ contract CapsConfigTest is Test {
         assertTrue(m.shadow);
         assertEq(m.pool, 0x794a61358D6845594F94dc1DB02A252b5b4814aD, "Aave V3 Arbitrum Pool");
         assertEq(CapsConfig.borrowUpdateType(m), "BorrowCapUpdate_Core");
-        assertEq(m.expirationSeconds, 600, "within the workflow's 600 s limit");
+        assertEq(m.expirationSeconds, 60, "pending raises expire after one minute");
         assertEq(m.tauSeconds, 1800, "tau 30 min");
         assertEq(m.defaults.triggerBps, 2000, "theta 20%");
         assertEq(m.defaults.marginBps, 100);

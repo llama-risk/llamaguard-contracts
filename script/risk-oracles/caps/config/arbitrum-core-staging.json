@@ -22,7 +22,7 @@
     "riskCouncil": "0xdBb36783D324cb1dabea7ccb61647623aA85BcCC"
   },
   "agents": {
-    "expirationSeconds": 600,
+    "expirationSeconds": 60,
     "tauSeconds": 1800
   },
   "bounds": {

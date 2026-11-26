@@ -111,7 +111,7 @@ contract CapsArbitrumStagingForkTest is Test {
         assertEq(hub.getRiskOracle(d.raiseAgentId), d.riskOracle, "raise agent oracle");
         assertEq(hub.getRiskOracle(d.cutAgentId), d.reducer, "cut agent oracle");
         assertTrue(hub.isPermissionedSender(d.raiseAgentId, d.router), "only the Router kicks the raise agent");
-        assertFalse(hub.isAgentPermissioned(d.cutAgentId), "any keeper kicks the cut agent");
+        assertTrue(hub.isPermissionedSender(d.cutAgentId, d.router), "only the Router kicks the cut agent");
         assertTrue(hub.isMarketsFromAgentEnabled(d.raiseAgentId), "markets from the Pool");
         assertLe(hub.getExpirationPeriod(d.raiseAgentId), 600, "expiry within the workflow's limit");
         assertEq(hub.getMinimumDelay(d.raiseAgentId), 1800, "tau");

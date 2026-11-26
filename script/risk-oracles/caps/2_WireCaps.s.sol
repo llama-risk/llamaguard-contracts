@@ -102,13 +102,12 @@ contract WireCaps is CapsScript {
         router[0] = d.router;
         IAgentConfigurator.AgentRegistrationInput memory raise =
             _agentInput(config, d, d.raiseAgent, d.riskOracle, config.market.tauSeconds, router);
-        IAgentConfigurator.AgentRegistrationInput memory cut =
-            _agentInput(config, d, d.cutAgent, d.reducer, 0, new address[](0));
+        IAgentConfigurator.AgentRegistrationInput memory cut = _agentInput(config, d, d.cutAgent, d.reducer, 0, router);
         _registerAgent("AgentHub: raise agent", owner, hub, raise, d.raiseAgentId);
         _registerAgent("AgentHub: cut agent", owner, hub, cut, d.cutAgentId);
     }
 
-    /// @dev The raise agent is permissioned to the Router; the cut agent has no sender list, so any keeper runs it.
+    /// @dev Both agents are permissioned to the Router, so only a routed workflow report can execute them.
     function _agentInput(
         CapsConfig.Config memory config,
         CapsDeployment.Deployment memory d,
