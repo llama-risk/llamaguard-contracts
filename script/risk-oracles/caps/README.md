@@ -48,7 +48,7 @@ and the Router until it hands them over, so most calls print instead of sending:
 
 | Who                                | Holds                                                         | Signs                                                                              |
 | ---------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Deployer (prod EOA)                | RiskOracle and Router until the hand-over                     | step 1, the RiskOracle and Router calls of step 2, the route of step 4             |
+| Deployer (prod EOA)                | RiskOracle and Router until the hand-over                     | step 1, the RiskOracle and Router calls of step 2                                  |
 | Aave Executor lvl 1                | AgentHub, RVM and registry owner                              | the AIP: agent registration, RVM agents, bounds and entries (printed by steps 2-3) |
 | `LLAMARISK_RISK_ORACLE_ADMIN_SAFE` | RiskOracle and Router owner, Router updater, registry updater | registry market and reserves, Router `acceptOwnership`, route throttle and routes  |
 | Protocol Guardian                  | agent admin, Router guardian                                  | nothing at deployment                                                              |
@@ -60,19 +60,18 @@ The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`.
    (executor) and the admin Safe batch (registry market). The agent ids are predicted from the hub's agent count; the
    AIP reverts if they differ.
 3. Step 3. Sends nothing; prints the RVM entries (AIP) and the registry reserves (admin Safe).
-4. Step 4 for the raise workflow, before the admin Safe accepts the Router: the deployer is still the owner and adds the
-   route, and the throttle prints for the admin Safe. The keeper route has the cut agent only and goes through the same
-   owner:
+4. Admin Safe, once it exists on Arbitrum: `acceptOwnership` on the Router, then the step 2 and 3 registry batches.
+5. Admin Safe: both routes and both throttles off. With the Safe as owner, step 4 prints the raise route and its
+   throttle as a Safe batch. The keeper route has the cut agent only and the empty-report selector:
 
    ```bash
-   cast send <router> 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
+   cast calldata 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
      <keeperWorkflowId> <forwarder> <workflowOwner> <keeperWorkflowName> <riskOracle> 0x031ed79c <agentHub> \
      '[<cutAgentId>]' 360
    ```
 
    Workflow ids come from `cre workflow hash --public_key <workflowOwner>` with the production configs.
 
-5. Admin Safe: the step 2 and 3 batches, both throttles off, then `acceptOwnership` on the Router.
 6. Aave's CRE owner deploys both workflows; the AIP executes.
 
 ## Shadow deployments
