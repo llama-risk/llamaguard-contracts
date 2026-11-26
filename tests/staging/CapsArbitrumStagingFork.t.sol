@@ -232,7 +232,7 @@ contract CapsArbitrumStagingForkTest is Test {
     function test_agentNotAWriter_theCutReverts() public onlyForked {
         vm.prank(eoa);
         shadow.setWriter(d.cutAgent, false);
-        vm.prank(keeper);
+        vm.prank(d.router);
         vm.expectRevert(abi.encodeWithSelector(ShadowPool.NotWriter.selector, d.cutAgent));
         IAgentHub(d.agentHub).execute(_actions(d.cutAgentId, WETH));
     }
@@ -325,8 +325,14 @@ contract CapsArbitrumStagingForkTest is Test {
         IPoolConfigurator(address(AaveV3Arbitrum.POOL_CONFIGURATOR)).setBorrowCap(asset, cap);
     }
 
-    function _cut(address asset) internal {
+    function test_cutFromAnotherSender_isSkippedByTheHub() public onlyForked {
         vm.prank(keeper);
+        vm.expectRevert(IAgentHub.NoActionCanBePerformed.selector);
+        IAgentHub(d.agentHub).execute(_actions(d.cutAgentId, WETH));
+    }
+
+    function _cut(address asset) internal {
+        vm.prank(d.router);
         IAgentHub(d.agentHub).execute(_actions(d.cutAgentId, asset));
     }
 
