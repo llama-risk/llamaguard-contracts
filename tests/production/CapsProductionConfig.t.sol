@@ -59,19 +59,24 @@ contract CapsProductionConfigTest is Test {
         assertEq(r.riskCouncil, RISK_COUNCIL);
     }
 
-    /// @dev Every reserve borrowable globally or through an eMode, GHO excepted.
+    /// @dev Every reserve of the Pool except GHO, so one re-enabled later is already rate limited.
     function test_production_assets() public view {
         CapsConfig.Assets memory a = CapsConfig.loadAssets(CapsConfig.loadMarket(LABEL).assets);
-        assertEq(a.reserves.length, 5);
-        assertEq(a.skip.length, 15);
+        assertEq(a.reserves.length, 19);
+        assertEq(a.skip.length, 1);
         assertEq(a.skip[0], 0x7dfF72693f6A4149b17e7C6314655f6A9F7c8B33, "GHO stays out of the rate limiter");
         for (uint256 i; i < a.reserves.length; ++i) {
-            assertTrue(a.reserves[i].currentCap, a.reserves[i].symbol);
+            assertGt(a.reserves[i].maxHeadroom, 0, a.reserves[i].symbol);
             assertEq(a.reserves[i].alphaBps, 1000, "alpha 10%");
             assertEq(a.reserves[i].cutBandBps, 1000, "delta 10%");
+            if (a.reserves[i].asset == 0xba5DdD1f9d7F570dc94a51479a000E3BCE967196) {
+                assertFalse(a.reserves[i].currentCap, "AAVE has no cap, so its hard maximum is set");
+                assertEq(a.reserves[i].maxCap, 1);
+            } else {
+                assertTrue(a.reserves[i].currentCap, a.reserves[i].symbol);
+            }
         }
         assertEq(a.reserves[4].symbol, "wstETH");
-        assertEq(a.reserves[4].asset, 0x5979D7b546E38E414F7E9822514be443A4800529);
         assertEq(a.reserves[4].maxHeadroom, 6625, "$15M of wstETH");
     }
 }
