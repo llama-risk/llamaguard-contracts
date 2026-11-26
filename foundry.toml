@@ -5,6 +5,11 @@
   block_timestamp = 1_738_368_000 # Feb 1, 2025 at 00:00 GMT
   bytecode_hash = "none"
   evm_version = "shanghai"
+  fs_permissions = [
+    { access = "read", path = "./out" },
+    { access = "read", path = "./script/risk-oracles/caps" },
+    { access = "read-write", path = "./script/risk-oracles/caps/deployments" },
+  ]
   fuzz = { runs = 1_000 }
   gas_reports = ["*"]
   optimizer = true
@@ -25,6 +30,7 @@ libs = ["node_modules", "lib"]
   out = "out/prague"
 
 [etherscan]
+  arbitrum = { key = "${API_KEY_ARBISCAN}", chain = 42161 }
   mainnet = { key = "${API_KEY_ETHERSCAN}" }
   sepolia = { key = "${API_KEY_ETHERSCAN}", url = "https://api-sepolia.etherscan.io/api" }
 
