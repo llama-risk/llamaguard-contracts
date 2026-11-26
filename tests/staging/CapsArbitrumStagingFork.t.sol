@@ -175,6 +175,15 @@ contract CapsArbitrumStagingForkTest is Test {
     /// @dev AgentHub's minimumDelay is the only pacing of raises: a second report inside tau publishes to the
     ///      RiskOracle, but the agent skips it and the cap stays.
     function test_raise_withinTau_isSkippedByTheHub() public onlyForked {
+        // Two raises must fit under the ceiling and Aave's cap; step 3 sets the ceiling to Aave's cap.
+        IRvm.KeyState memory key = rvm.getKeyState(WETH, IRvm.CapKind.BORROW);
+        _setRealCap(WETH, key.maxCap * 2);
+        vm.prank(eoa);
+        rvm.setRateLimitConfig(
+            WETH,
+            IRvm.CapKind.BORROW,
+            IRvm.RateLimitConfig(key.maxCap * 2, key.maxHeadroom, key.alphaBps, key.cutBandBps)
+        );
         _cut(WETH);
         _borrowUntilRaiseIsDue(WETH);
         (,, uint256 first) = rvm.previewRaise(WETH, IRvm.CapKind.BORROW);
