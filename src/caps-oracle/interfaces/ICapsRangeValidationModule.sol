@@ -35,13 +35,13 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice Entry written by the owner or the Risk Council Safe. `maxCap` 0 retires the key.
     struct RateLimitConfig {
-        uint64 maxCap; // hard maximum cap, whole tokens
-        uint64 maxHeadroom; // ceiling of headroomTarget, whole tokens. Floor is maxHeadroom / 25
+        uint64 maxCap; // hard maximum cap, whole tokens, at most 2^36 - 1
+        uint64 maxHeadroom; // ceiling of headroomTarget, whole tokens, non-zero. Floor is ceil(maxHeadroom / 25)
         uint16 alphaBps; // headroomTarget as a share of usage
         uint16 cutBandBps; // a cut needs headroom above (1 + band) * headroomTarget
     }
 
-    /// @notice Stored state of one key, one slot (240 bits). `maxCap` 0 means no entry.
+    /// @notice Stored state of one key. `maxCap` 0 means no entry.
     struct KeyState {
         uint64 maxCap; // whole tokens
         uint64 maxHeadroom; // whole tokens
@@ -49,6 +49,8 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint16 cutBandBps; // bps
         uint40 holdUntil; // unix seconds, cuts are rejected before it
         uint40 lastIncreaseAt; // unix seconds of the last Risk Council maxCap or maxHeadroom raise
+        uint40 onboardingUntil; // unix seconds, no cuts before it while the cap is at most listingCap
+        uint64 listingCap; // the live cap when onboarding was set, whole tokens
     }
 
     /// @notice Global limits of a kind, set by the owner.
@@ -56,7 +58,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint16 alphaBpsLimit; // bps, max alphaBps
         uint16 cutBandBpsLimit; // bps, max cutBandBps
         uint16 maxIncreaseBps; // bps, max Risk Council raise of maxCap or maxHeadroom per cooldown
-        uint40 cooldown; // seconds between two Risk Council raises
+        uint40 cooldown; // seconds between two Risk Council raises, non-zero
     }
 
     /// @notice Live view of one key, read from Aave in the current block.
@@ -68,7 +70,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
         uint256 raiseCap; // highest accepted raise
         uint256 cutFloor; // lowest accepted cut
         uint256 cutTrigger; // a cut needs cap > cutTrigger
-        uint40 holdUntil; // end of the hold, unix seconds. 0 or past means no hold
+        uint40 holdUntil; // end of the hold or of onboarding, unix seconds. 0 or past means no hold
         bool raiseBlocked; // reserve frozen or paused
         uint256 maxCap; // the maxCap the rule uses, at most the largest cap Aave stores
     }
@@ -91,6 +93,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice The Risk Council Safe wrote or cleared (`until` 0) the hold of a key.
     event HoldSet(address indexed asset, CapKind indexed kind, uint40 until);
 
+    /// @notice The owner set, or the owner or Risk Council ended (`until` 0), the onboarding of a key.
+    event OnboardingSet(address indexed asset, CapKind indexed kind, uint40 until, uint64 listingCap);
+
     /// @notice The owner changed the Risk Council Safe address.
     event RiskCouncilChanged(address indexed previousRiskCouncil, address indexed newRiskCouncil);
 
@@ -107,10 +112,11 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice The agent at `agentId` is not a cap agent of this RVM, AgentHub and Pool.
     error InvalidAgent(uint256 agentId);
 
-    /// @notice A bps field of the bounds is above 10_000.
+    /// @notice A bps field of the bounds is above 10_000, or the cooldown is 0.
     error InvalidBounds();
 
-    /// @notice alphaBps or cutBandBps is above the global limit of the kind.
+    /// @notice alphaBps or cutBandBps is above the global limit of the kind, maxHeadroom is 0, or maxCap is
+    ///         above 2^36 - 1.
     error RateLimitConfigOutOfBounds();
 
     /// @notice The key has no entry (max cap 0).
@@ -124,6 +130,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
 
     /// @notice The hold ends more than MAX_HOLD_DURATION after block.timestamp.
     error HoldTooLong(uint40 until, uint256 maxUntil);
+
+    /// @notice Onboarding ends more than MAX_ONBOARDING_DURATION after block.timestamp.
+    error OnboardingTooLong(uint40 until, uint256 maxUntil);
 
     /// @notice Zero address passed for a role or an immutable.
     error ZeroAddress();
@@ -153,6 +162,9 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     /// @notice Longest hold, 24 hours, in seconds.
     function MAX_HOLD_DURATION() external view returns (uint256);
 
+    /// @notice Longest onboarding, 30 days, in seconds.
+    function MAX_ONBOARDING_DURATION() external view returns (uint256);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // PREVIEWS: anyone, view
     // ═══════════════════════════════════════════════════════════════════════════
@@ -164,7 +176,7 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
      * @param kind the cap kind
      * @return allowed true if a raise to `newCap` is accepted now
      * @return currentCap live cap, whole tokens
-     * @return newCap highest accepted raise, whole tokens
+     * @return newCap highest accepted raise, whole tokens. 0 when `allowed` is false, so check `allowed`
      */
     function previewRaise(
         address asset,
@@ -198,11 +210,14 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // OWNER
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE.
+    /// @notice Register an agentId of AGENT_HUB with a direction, or clear it with NONE (a no-op if not registered).
     /// @dev The kind comes from an exact match of the agentId's AgentHub update type. Reverts InvalidAgent.
+    ///      The agent is checked only here: re-run setAgent after AgentHub `setAgentAddress` points the agentId at
+    ///      another contract, in the same AIP.
     function setAgent(uint256 agentId, Direction direction) external;
 
-    /// @notice Set the global bounds of a kind. Reverts InvalidBounds.
+    /// @notice Set the global bounds of a kind. Reverts InvalidBounds on a bps field above 10_000 or a cooldown
+    ///         of 0.
     function setBounds(CapKind kind, Bounds calldata bounds) external;
 
     /// @notice Set the Risk Council Safe address. Reverts ZeroAddress.
@@ -213,10 +228,14 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * @notice Set the entry of a key. `maxCap` 0 retires the key and clears its slot.
-     * @dev The owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing entry, and a
-     *      raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once per
-     *      cooldown shared by both fields. Lowering is free.
+     * @notice Set the entry of a key. `maxCap` 0 retires the key and clears its slot, and reverts
+     *         RateLimitConfigNotFound for both callers if the key has no entry.
+     * @dev A live entry needs a non-zero maxHeadroom and a maxCap of at most 2^36 - 1, for both callers.
+     *      Within that, the owner may set any maxCap and maxHeadroom. The Risk Council Safe needs an existing
+     *      entry, and a raise of maxCap or maxHeadroom must stay within maxIncreaseBps of the current value, once
+     *      per cooldown shared by both fields. alphaBps and cutBandBps have no cooldown: either caller may set
+     *      them up to the kind's alphaBpsLimit and cutBandBpsLimit. Lowering is free, including retiring the key;
+     *      only the owner adds a key back.
      *      Reverts OnlyRiskCouncilOrOwner, RateLimitConfigOutOfBounds, RateLimitConfigNotFound,
      *      IncreaseTooLarge, CooldownActive.
      * @param asset the token address
@@ -230,8 +249,17 @@ interface ICapsRangeValidationModule is IRangeValidationModule {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Write the hold of a key. Cuts are rejected while block.timestamp < until. `until` 0 clears it.
-    /// @dev Reverts OnlyRiskCouncil, HoldTooLong, RateLimitConfigNotFound.
+    /// @dev The hold also blocks the cut down to maxCap. Raises are not held.
+    ///      Reverts OnlyRiskCouncil, HoldTooLong, RateLimitConfigNotFound.
     function setHold(address asset, CapKind kind, uint40 until) external;
+
+    /**
+     * @notice Start the onboarding of a listed key: no cuts before `until` while the live cap is at most the cap
+     *         read now (`listingCap`). A raise or a Risk Steward increase above it ends onboarding early.
+     * @dev Owner, in the listing AIP. The Risk Council may only end it (`until` 0).
+     *      Reverts OnlyRiskCouncilOrOwner, OnboardingTooLong, RateLimitConfigNotFound.
+     */
+    function setOnboarding(address asset, CapKind kind, uint40 until) external;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // GETTERS
