@@ -3,13 +3,14 @@
 One set of steps for every caps deployment. Each step reads `config/<label>.json`, the asset values file it names in
 `assets/`, and the deployment so far in `deployments/<label>.json`.
 
-| Step | Script                    | What it does                                                                                          |
-| ---- | ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 0    | `0_DeployShadow.s.sol`    | Shadow deployments only: our own AgentHub and a ShadowPool in front of the real Pool                  |
-| 1    | `1_DeployCaps.s.sol`      | RiskOracle, Router, registry, RVM, reducer, raise and cut agents. Constructors only                   |
-| 2    | `2_WireCaps.s.sol`        | One-time connections: RiskOracle, Router roles, both agents on the hub, RVM agents and bounds, market |
-| 3    | `3_ConfigureAssets.s.sol` | First values of each borrow cap key: RVM entry, then registry key. Checks coverage of the reserves    |
-| 4    | `4_AddRoute.s.sol`        | Router route and throttle off, in the same sitting as `cre workflow deploy`                           |
+| Step | Script                    | What it does                                                                                                                      |
+| ---- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | `0_DeployShadow.s.sol`    | Shadow deployments only: our own AgentHub and a ShadowPool in front of the real Pool                                              |
+| 1    | `1_DeployCaps.s.sol`      | RiskOracle, Router, registry, RVM, reducer, raise and cut agents. Constructors only                                               |
+| 2    | `2_WireCaps.s.sol`        | One-time connections: RiskOracle, Router roles, both agents on the hub, RVM agents and bounds, market                             |
+| 3    | `3_ConfigureAssets.s.sol` | First values of each borrow cap key: RVM entry, then registry key. Checks coverage of the reserves                                |
+| 4    | `4_AddRoute.s.sol`        | Router route and throttle off, in the same sitting as `cre workflow deploy`                                                       |
+| 5    | `5_DeployForwarder.s.sol` | Production only: the CapsBorrowForwarder (owner, first caller, `maxRaiseBuffers`, `minRaiseDelay`); RISK_ADMIN comes from the AIP |
 
 A call is sent when the broadcaster holds the role on chain, and printed as a Safe batch otherwise. On staging the hot
 wallet holds every role. On production the same steps print the batches for the Safes and the AIP.
@@ -40,6 +41,52 @@ forge script script/risk-oracles/caps/4_AddRoute.s.sol --sig "run(bytes32,bytes1
   `maxHeadroom` in whole tokens, `alphaBps`, `cutBandBps`. Reserves that are not borrowable go in `skip`. Step 3 reverts
   if a borrowable reserve is in neither list. Later changes go through llamaguard-ci with the same fields.
 - **Deployments.** Written by steps 0 to 2 on a real broadcast only.
+
+## Production: Arbitrum Core
+
+`config/arbitrum-core-production.json` runs on the real Pool and Aave's AgentHub. The deployer only holds the RiskOracle
+and the Router until it hands them over, so most calls print instead of sending:
+
+| Who                                | Holds                                                         | Signs                                                                              |
+| ---------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Deployer (prod EOA)                | RiskOracle and Router until the hand-over                     | step 1, the RiskOracle and Router calls of step 2                                  |
+| Aave Executor lvl 1                | AgentHub, RVM and registry owner                              | the AIP: agent registration, RVM agents, bounds and entries (printed by steps 2-3) |
+| `LLAMARISK_RISK_ORACLE_ADMIN_SAFE` | RiskOracle and Router owner, Router updater, registry updater | registry market and reserves, Router `acceptOwnership`, route throttle and routes  |
+| Protocol Guardian                  | agent admin, Router guardian                                  | nothing at deployment                                                              |
+
+The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`. Order:
+
+1. Step 1 from the prod EOA, `--broadcast --verify`. Commit `deployments/arbitrum-core-production.json`.
+2. Step 2. The deployer sends the RiskOracle and Router calls and starts both hand-overs. It prints the AIP batch
+   (executor) and the admin Safe batch (registry market). The agent ids are predicted from the hub's agent count; the
+   AIP reverts if they differ.
+3. Step 3. Sends nothing; prints the RVM entries (AIP) and the registry reserves (admin Safe).
+4. Step 5: the forwarder, owned by the executor with the Risk Council Safe as caller (12 buffers per raise, 36 hours
+   between raises).
+
+Activation, in this order. The keeper route goes last: once it is live it cuts every cap above debt plus one buffer, so
+raises must already be landing.
+
+1. Admin Safe: `acceptOwnership` on the Router, before the AIP is submitted.
+2. The AIP executes: agents 3 and 4, RISK_ADMIN for both agents and the forwarder, the RVM entries.
+3. Admin Safe: the registry market and reserves, through a llamaguard-ci request. CI refuses a reserve without an RVM
+   entry, so this comes after the AIP.
+4. Aave CRE Safe: secrets and the raise workflow deploy (llamaguard-risk-oracles,
+   `deployments/arbitrum-core-caps-production`). Admin Safe: the raise route and its throttle off. Check that the first
+   runs land before going on.
+5. Aave CRE Safe: the cut keeper deploy. Admin Safe: the keeper route and its throttle off. The first keeper run cuts
+   the day-one caps.
+
+With the Safe as owner, step 4 of the scripts prints the raise route and its throttle as a Safe batch. The keeper route
+has the cut agent only and the same bulk publish selector (it sends an empty report):
+
+```bash
+cast calldata 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
+  <keeperWorkflowId> <forwarder> <workflowOwner> <keeperWorkflowName> <riskOracle> 0x031ed79c <agentHub> \
+  '[<cutAgentId>]' 360
+```
+
+Workflow ids come from `cre workflow hash --public_key <workflowOwner>` with the production configs.
 
 ## Shadow deployments
 

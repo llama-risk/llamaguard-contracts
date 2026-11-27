@@ -80,7 +80,7 @@ contract ConfigureAssets is CapsScript {
     function checkCoverage(IPool pool, CapsConfig.Assets memory assets) public view {
         address[] memory listed = pool.getReservesList();
         for (uint256 i; i < listed.length; ++i) {
-            if (_borrowable(pool.getConfiguration(listed[i])) && !_covered(assets, listed[i])) {
+            if (_borrowable(pool, listed[i]) && !_covered(assets, listed[i])) {
                 revert(
                     string.concat(
                         "ConfigureAssets: borrowable reserve not in the asset values file: ", vm.toString(listed[i])
@@ -95,9 +95,17 @@ contract ConfigureAssets is CapsScript {
         }
     }
 
-    function _borrowable(DataTypes.ReserveConfigurationMap memory c) private pure returns (bool) {
-        return c.getActive() && c.getBorrowingEnabled() && !c.getFrozen() && !c.getPaused()
-            && c.getBorrowCap() != FROZEN_BORROW_CAP;
+    /// @dev Borrowable globally, or through an eMode: an eMode user is checked against the category's borrowable
+    ///      bitmap only, not the reserve's borrowing flag.
+    function _borrowable(IPool pool, address asset) private view returns (bool) {
+        DataTypes.ReserveConfigurationMap memory c = pool.getConfiguration(asset);
+        if (!c.getActive() || c.getFrozen() || c.getPaused() || c.getBorrowCap() == FROZEN_BORROW_CAP) return false;
+        if (c.getBorrowingEnabled()) return true;
+        uint256 id = pool.getReserveData(asset).id;
+        for (uint256 category = 1; category <= type(uint8).max; ++category) {
+            if ((pool.getEModeCategoryBorrowableBitmap(uint8(category)) >> id) & 1 == 1) return true;
+        }
+        return false;
     }
 
     function _covered(CapsConfig.Assets memory assets, address asset) private pure returns (bool) {
