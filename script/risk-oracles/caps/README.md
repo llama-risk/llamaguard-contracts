@@ -61,22 +61,32 @@ The deployer is the fresh prod EOA `0x95e6dEEb6863Adb187969De2f8B163E6536B52BA`.
    (executor) and the admin Safe batch (registry market). The agent ids are predicted from the hub's agent count; the
    AIP reverts if they differ.
 3. Step 3. Sends nothing; prints the RVM entries (AIP) and the registry reserves (admin Safe).
-4. Admin Safe, once it exists on Arbitrum: `acceptOwnership` on the Router, then the step 2 and 3 registry batches.
-5. Admin Safe: both routes and both throttles off. With the Safe as owner, step 4 prints the raise route and its
-   throttle as a Safe batch. The keeper route has the cut agent only and the same bulk publish selector (it sends an
-   empty report):
+4. Step 5: the forwarder, owned by the executor with the Risk Council Safe as caller (12 buffers per raise, 36 hours
+   between raises).
 
-   ```bash
-   cast calldata 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
-     <keeperWorkflowId> <forwarder> <workflowOwner> <keeperWorkflowName> <riskOracle> 0x031ed79c <agentHub> \
-     '[<cutAgentId>]' 360
-   ```
+Activation, in this order. The keeper route goes last: once it is live it cuts every cap above debt plus one buffer, so
+raises must already be landing.
 
-   Workflow ids come from `cre workflow hash --public_key <workflowOwner>` with the production configs.
+1. Admin Safe: `acceptOwnership` on the Router, before the AIP is submitted.
+2. The AIP executes: agents 3 and 4, RISK_ADMIN for both agents and the forwarder, the RVM entries.
+3. Admin Safe: the registry market and reserves, through a llamaguard-ci request. CI refuses a reserve without an RVM
+   entry, so this comes after the AIP.
+4. Aave CRE Safe: secrets and the raise workflow deploy (llamaguard-risk-oracles,
+   `deployments/arbitrum-core-caps-production`). Admin Safe: the raise route and its throttle off. Check that the first
+   runs land before going on.
+5. Aave CRE Safe: the cut keeper deploy. Admin Safe: the keeper route and its throttle off. The first keeper run cuts
+   the day-one caps.
 
-6. Step 5, once the risk team sets `forwarder.maxRaiseBuffers` and `forwarder.minRaiseDelaySeconds` (both `"TODO"` until
-   then): the forwarder, owned by the executor with the Risk Council Safe as caller.
-7. Aave's CRE owner deploys both workflows; the AIP executes and grants the forwarder RISK_ADMIN.
+With the Safe as owner, step 4 of the scripts prints the raise route and its throttle as a Safe batch. The keeper route
+has the cut agent only and the same bulk publish selector (it sends an empty report):
+
+```bash
+cast calldata 'addRoute(bytes32,address,address,bytes10,address,bytes4,address,uint256[],uint64)' \
+  <keeperWorkflowId> <forwarder> <workflowOwner> <keeperWorkflowName> <riskOracle> 0x031ed79c <agentHub> \
+  '[<cutAgentId>]' 360
+```
+
+Workflow ids come from `cre workflow hash --public_key <workflowOwner>` with the production configs.
 
 ## Shadow deployments
 
